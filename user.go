@@ -2,7 +2,7 @@ package configcat
 
 import "strings"
 
-// An object containing attributes to properly identify a given user for rollout evaluation.
+// User is an object containing attributes to properly identify a given user for rollout evaluation.
 type User struct {
 	identifier string
 	attributes map[string]string
@@ -31,7 +31,7 @@ func NewUserWithAdditionalAttributes(identifier string, email string, country st
 	}
 
 	if len(custom) > 0 {
-		for k,v := range custom {
+		for k, v := range custom {
 			user.attributes[strings.ToLower(k)] = v
 		}
 	}

@@ -4,17 +4,17 @@ import (
 	"encoding/json"
 )
 
-// Describing JSON parsing related errors
+// ParseError describes JSON parsing related errors
 type ParseError struct {
 	msg string
 }
 
-// The error message
+// Error is the error message
 func (p *ParseError) Error() string {
 	return p.msg
 }
 
-// Describing a JSON configuration parser
+// ConfigParser describes a JSON configuration parser
 type ConfigParser struct {
 	evaluator rolloutEvaluator
 }

@@ -1,6 +1,6 @@
 package configcat
 
-// Represents a configuration fetch response.
+// FetchResponse represents a configuration fetch response.
 type FetchResponse struct {
 	Status FetchStatus
 	Body   string

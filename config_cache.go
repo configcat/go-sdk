@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// A cache API used to make custom cache implementations.
+// ConfigCache is a cache API used to make custom cache implementations.
 type ConfigCache interface {
 	// Get reads the configuration from the cache.
 	Get() (string, error)
@@ -18,21 +18,21 @@ type inMemoryConfigCache struct {
 	value string
 }
 
-// A structure which is used to maintain the cached configuration.
+// ConfigStore is used to maintain the cached configuration.
 type ConfigStore struct {
-	cache 			ConfigCache
-	logger 			*log.Logger
-	inMemoryValue 	string
+	cache         ConfigCache
+	logger        *log.Logger
+	inMemoryValue string
 	sync.RWMutex
 }
 
 func newConfigStore(cache ConfigCache) *ConfigStore {
-	return &ConfigStore{ cache: cache, logger: log.New(os.Stderr, "[ConfigCat - Config Cache]", log.LstdFlags) }
+	return &ConfigStore{cache: cache, logger: log.New(os.Stderr, "[ConfigCat - Config Cache]", log.LstdFlags)}
 }
 
 // NewInMemoryConfigCache creates an in-memory cache implementation used to store the fetched configurations.
 func NewInMemoryConfigCache() *inMemoryConfigCache {
-	return &inMemoryConfigCache{ value: "" }
+	return &inMemoryConfigCache{value: ""}
 }
 
 // Get reads the configuration from the cache.
@@ -69,4 +69,3 @@ func (store *ConfigStore) Set(value string) {
 		store.logger.Printf("Saving into the cache failed, %s", err)
 	}
 }
-

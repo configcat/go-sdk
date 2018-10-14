@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Describes an object which used to control asynchronous operations with return value.
+// AsyncResult describes an object which used to control asynchronous operations with return value.
 // Allows the chaining of these operations after each other.
 // Usage:
 // async := NewAsync()
@@ -18,17 +18,17 @@ import (
 // })
 // go func() { async.Complete("success") }()
 type AsyncResult struct {
-	state 			uint32
-	completions 	[]func(result interface{})
-	done       		chan struct{}
-	result 			interface{}
+	state       uint32
+	completions []func(result interface{})
+	done        chan struct{}
+	result      interface{}
 	*Async
 	sync.RWMutex
 }
 
 // NewAsyncResult initializes a new async object with result.
 func NewAsyncResult() *AsyncResult {
-	return &AsyncResult{ state:pending, completions: []func(result interface{}){}, done:make(chan struct{}), Async: NewAsync() }
+	return &AsyncResult{state: pending, completions: []func(result interface{}){}, done: make(chan struct{}), Async: NewAsync()}
 }
 
 // AsCompletedAsyncResult creates an already completed async object.
@@ -58,7 +58,7 @@ func (asyncResult *AsyncResult) Apply(completion func(result interface{})) *Asyn
 	return asyncResult
 }
 
-// Apply allows the chaining of the async operations after each other and subscribes a
+// Accept allows the chaining of the async operations after each other and subscribes a
 // callback function which gets the operation result as argument and called when the async
 // operation completed. Returns an Async object. For example:
 // async.Accept(func(result interface{}) {
@@ -70,7 +70,7 @@ func (asyncResult *AsyncResult) Accept(completion func(result interface{})) *Asy
 	})
 }
 
-// Apply allows the chaining of the async operations after each other and subscribes a
+// ApplyThen allows the chaining of the async operations after each other and subscribes a
 // callback function which gets the operation result as argument and called when the async
 // operation completed. Returns an AsyncResult object which returns a different result type.
 // For example:
@@ -122,7 +122,7 @@ func (asyncResult *AsyncResult) Get() interface{} {
 // GetOrTimeout blocks until the async operation is completed or until
 // the given timeout duration expires, then returns the result of the operation.
 func (asyncResult *AsyncResult) GetOrTimeout(duration time.Duration) (interface{}, error) {
-	timer:= time.NewTimer(duration)
+	timer := time.NewTimer(duration)
 	defer timer.Stop()
 
 	select {

@@ -7,36 +7,37 @@ import (
 	"time"
 )
 
-// A client for handling configurations provided by ConfigCat.
+// Client is an object for handling configurations provided by ConfigCat.
 type Client struct {
-	configProvider				ConfigProvider
-	store						*ConfigStore
-	parser 						*ConfigParser
-	refreshPolicy 				RefreshPolicy
-	maxWaitTimeForSyncCalls 	time.Duration
-	logger 						*log.Logger
+	configProvider          ConfigProvider
+	store                   *ConfigStore
+	parser                  *ConfigParser
+	refreshPolicy           RefreshPolicy
+	maxWaitTimeForSyncCalls time.Duration
+	logger                  *log.Logger
 }
 
-// Describes custom configuration options for the Client.
+// ClientConfig describes custom configuration options for the Client.
 type ClientConfig struct {
 	// The factory delegate used to produce custom RefreshPolicy implementations.
-	PolicyFactory 				func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy
+	PolicyFactory func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy
 	// The custom cache implementation used to store the configuration.
-	Cache						ConfigCache
+	Cache ConfigCache
 	// The maximum time how long at most the synchronous calls (e.g. client.Get(...)) should block the caller.
 	// If it's 0 then the caller will be blocked in case of sync calls, until the operation succeeds or fails.
-	MaxWaitTimeForSyncCalls		time.Duration
+	MaxWaitTimeForSyncCalls time.Duration
 	// The maximum wait time for a http response.
-	HttpTimeout					time.Duration
+	HttpTimeout time.Duration
 }
 
+// DefaultClientConfig prepares a default configuration for the ConfigCat Client.
 func DefaultClientConfig() ClientConfig {
 	return ClientConfig{
 		Cache: NewInMemoryConfigCache(),
 		MaxWaitTimeForSyncCalls: 0,
-		HttpTimeout: time.Second * 15,
+		HttpTimeout:             time.Second * 15,
 		PolicyFactory: func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
-			return NewAutoPollingPolicy(configProvider, store, time.Second * 120)
+			return NewAutoPollingPolicy(configProvider, store, time.Second*120)
 		},
 	}
 }
@@ -58,20 +59,20 @@ func newInternal(apiKey string, config ClientConfig, fetcher ConfigProvider) *Cl
 
 	store := newConfigStore(config.Cache)
 	policy := config.PolicyFactory(fetcher, store)
-	return &Client{ configProvider: fetcher,
-		store:store,
-		parser:newParser(),
-		refreshPolicy:policy,
-		maxWaitTimeForSyncCalls:config.MaxWaitTimeForSyncCalls,
-		logger: log.New(os.Stderr, "[ConfigCat - Config Cat Client]", log.LstdFlags)}
+	return &Client{configProvider: fetcher,
+		store:                   store,
+		parser:                  newParser(),
+		refreshPolicy:           policy,
+		maxWaitTimeForSyncCalls: config.MaxWaitTimeForSyncCalls,
+		logger:                  log.New(os.Stderr, "[ConfigCat - Config Cat Client]", log.LstdFlags)}
 }
 
-// Get returns a value synchronously as interface{} from the configuration identified by the given key.
+// GetValue returns a value synchronously as interface{} from the configuration identified by the given key.
 func (client *Client) GetValue(key string, defaultValue interface{}) interface{} {
 	return client.GetValueForUser(key, defaultValue, nil)
 }
 
-// GetAsync reads and sends a value asynchronously to a callback function as interface{} from the configuration identified by the given key.
+// GetValueAsync reads and sends a value asynchronously to a callback function as interface{} from the configuration identified by the given key.
 func (client *Client) GetValueAsync(key string, defaultValue interface{}, completion func(result interface{})) {
 	client.GetValueAsyncForUser(key, defaultValue, nil, completion)
 }
@@ -96,7 +97,7 @@ func (client *Client) GetValueForUser(key string, defaultValue interface{}, user
 	return parsed
 }
 
-// GetAsyncForUser reads and sends a value asynchronously to a callback function as interface{} from the configuration identified by the given key.
+// GetValueAsyncForUser reads and sends a value asynchronously to a callback function as interface{} from the configuration identified by the given key.
 // Optional user argument can be passed to identify the caller.
 func (client *Client) GetValueAsyncForUser(key string, defaultValue interface{}, user *User, completion func(result interface{})) {
 	if len(key) == 0 {
@@ -157,4 +158,3 @@ func (client *Client) getDefault(key string, defaultValue interface{}, user *Use
 	}
 	return latest
 }
-

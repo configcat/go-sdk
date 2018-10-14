@@ -3,12 +3,12 @@ package configcat
 import "time"
 
 type fakeConfigProvider struct {
-	result 				FetchResponse
-	sleepDuration 		time.Duration
+	result        FetchResponse
+	sleepDuration time.Duration
 }
 
 func newFakeConfigProvider() *fakeConfigProvider {
-	return &fakeConfigProvider{ }
+	return &fakeConfigProvider{}
 }
 
 func (fetcher *fakeConfigProvider) GetConfigurationAsync() *AsyncResult {

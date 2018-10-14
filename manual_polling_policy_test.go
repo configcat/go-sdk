@@ -6,7 +6,7 @@ import (
 
 func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
-	fetcher.SetResponse(FetchResponse{ Status:Fetched, Body:"test" })
+	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test"})
 	policy := NewManualPollingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()))
 	config := policy.GetConfigurationAsync().Get().(string)
 
@@ -14,7 +14,7 @@ func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 		t.Error("Expecting test as result")
 	}
 
-	fetcher.SetResponse(FetchResponse{ Status:Fetched, Body:"test2" })
+	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test2"})
 	config = policy.GetConfigurationAsync().Get().(string)
 
 	if config != "test2" {

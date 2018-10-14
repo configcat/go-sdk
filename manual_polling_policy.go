@@ -1,15 +1,15 @@
 package configcat
 
-// Describes a RefreshPolicy which fetches the latest configuration over HTTP every time when a get configuration is called.
+// ManualPollingPolicy describes a RefreshPolicy which fetches the latest configuration over HTTP every time when a get configuration is called.
 type ManualPollingPolicy struct {
 	ConfigRefresher
 }
 
-// Initializes a new ManualPollingPolicy.
+// NewManualPollingPolicy initializes a new ManualPollingPolicy.
 func NewManualPollingPolicy(
 	fetcher ConfigProvider,
 	store *ConfigStore) *ManualPollingPolicy {
-	return &ManualPollingPolicy{ ConfigRefresher: ConfigRefresher{ Fetcher:fetcher, Store:store }}
+	return &ManualPollingPolicy{ConfigRefresher: ConfigRefresher{Fetcher: fetcher, Store: store}}
 }
 
 // GetConfigurationAsync reads the current configuration value.

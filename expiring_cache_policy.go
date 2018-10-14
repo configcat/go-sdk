@@ -7,17 +7,17 @@ import (
 	"time"
 )
 
-// Describes a RefreshPolicy which uses an expiring cache to maintain the internally stored configuration.
+// ExpiringCachePolicy describes a RefreshPolicy which uses an expiring cache to maintain the internally stored configuration.
 type ExpiringCachePolicy struct {
 	ConfigRefresher
-	cacheInterval 		time.Duration
-	isFetching 			uint32
-	initialized			uint32
-	useAsyncRefresh		bool
-	lastRefreshTime		time.Time
-	logger 				*log.Logger
-	fetching			*AsyncResult
-	init				*Async
+	cacheInterval   time.Duration
+	isFetching      uint32
+	initialized     uint32
+	useAsyncRefresh bool
+	lastRefreshTime time.Time
+	logger          *log.Logger
+	fetching        *AsyncResult
+	init            *Async
 }
 
 // NewExpiringCachePolicy initializes a new ExpiringCachePolicy.
@@ -26,14 +26,14 @@ func NewExpiringCachePolicy(
 	store *ConfigStore,
 	cacheInterval time.Duration,
 	useAsyncRefresh bool) *ExpiringCachePolicy {
-	return &ExpiringCachePolicy{ ConfigRefresher: ConfigRefresher{ Fetcher:fetcher, Store:store },
-		cacheInterval: cacheInterval,
-		isFetching: no,
-		initialized: no,
+	return &ExpiringCachePolicy{ConfigRefresher: ConfigRefresher{Fetcher: fetcher, Store: store},
+		cacheInterval:   cacheInterval,
+		isFetching:      no,
+		initialized:     no,
 		useAsyncRefresh: useAsyncRefresh,
 		lastRefreshTime: time.Time{},
-		init: NewAsync(),
-		logger: log.New(os.Stderr, "[ConfigCat - Expiring Cache Policy]", log.LstdFlags)}
+		init:            NewAsync(),
+		logger:          log.New(os.Stderr, "[ConfigCat - Expiring Cache Policy]", log.LstdFlags)}
 }
 
 // GetConfigurationAsync reads the current configuration value.

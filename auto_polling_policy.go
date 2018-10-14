@@ -7,17 +7,17 @@ import (
 	"time"
 )
 
-// Describes a RefreshPolicy which polls the latest configuration over HTTP and updates the local cache repeatedly.
+// AutoPollingPolicy describes a RefreshPolicy which polls the latest configuration over HTTP and updates the local cache repeatedly.
 type AutoPollingPolicy struct {
 	ConfigRefresher
-	autoPollInterval 	time.Duration
-	logger 				*log.Logger
-	init				*Async
-	initialized			uint32
-	stop                chan struct{}
-	closed				uint32
-	configChanged		func(config string, parser *ConfigParser)
-	parser				*ConfigParser
+	autoPollInterval time.Duration
+	logger           *log.Logger
+	init             *Async
+	initialized      uint32
+	stop             chan struct{}
+	closed           uint32
+	configChanged    func(config string, parser *ConfigParser)
+	parser           *ConfigParser
 }
 
 // NewAutoPollingPolicy initializes a new AutoPollingPolicy.
@@ -25,25 +25,26 @@ func NewAutoPollingPolicy(
 	fetcher ConfigProvider,
 	store *ConfigStore,
 	autoPollInterval time.Duration) *AutoPollingPolicy {
-		policy := NewAutoPollingPolicyWithChangeListener(fetcher, store, autoPollInterval, nil)
-		policy.startPolling()
-		return policy
+	policy := NewAutoPollingPolicyWithChangeListener(fetcher, store, autoPollInterval, nil)
+	policy.startPolling()
+	return policy
 }
 
-// NewAutoPollingPolicy initializes a new AutoPollingPolicy.
+// NewAutoPollingPolicyWithChangeListener initializes a new AutoPollingPolicy.
+// An optional configuration change listener callback can be passed.
 func NewAutoPollingPolicyWithChangeListener(
 	fetcher ConfigProvider,
 	store *ConfigStore,
 	autoPollInterval time.Duration,
 	configChanged func(config string, parser *ConfigParser)) *AutoPollingPolicy {
-	policy := &AutoPollingPolicy{ ConfigRefresher: ConfigRefresher{ Fetcher:fetcher, Store:store },
+	policy := &AutoPollingPolicy{ConfigRefresher: ConfigRefresher{Fetcher: fetcher, Store: store},
 		autoPollInterval: autoPollInterval,
-		logger: log.New(os.Stderr, "[ConfigCat - Auto Polling Policy]", log.LstdFlags),
-		init: NewAsync(),
-		initialized: no,
-		stop: make(chan struct{}),
-		configChanged: configChanged,
-		parser: newParser()}
+		logger:           log.New(os.Stderr, "[ConfigCat - Auto Polling Policy]", log.LstdFlags),
+		init:             NewAsync(),
+		initialized:      no,
+		stop:             make(chan struct{}),
+		configChanged:    configChanged,
+		parser:           newParser()}
 	policy.startPolling()
 	return policy
 }
@@ -66,7 +67,7 @@ func (policy *AutoPollingPolicy) Close() {
 	}
 }
 
-func (policy *AutoPollingPolicy) startPolling()  {
+func (policy *AutoPollingPolicy) startPolling() {
 	policy.logger.Printf("Auto polling started with %+v interval", policy.autoPollInterval)
 
 	ticker := time.NewTicker(policy.autoPollInterval)

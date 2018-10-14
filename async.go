@@ -6,15 +6,15 @@ import (
 	"time"
 )
 
-// Describes an error used when the given async operation is cancelled.
-type CancelledError struct { }
+// CancelledError describes an error used when the given async operation is cancelled.
+type CancelledError struct{}
 
 // Error returns with the error message.
 func (c *CancelledError) Error() string {
 	return "The task was cancelled!"
 }
 
-// Describes an object which used to control asynchronous operations.
+// Async describes an object which used to control asynchronous operations.
 // Usage:
 // async := NewAsync()
 // async.Accept(func() {
@@ -24,15 +24,15 @@ func (c *CancelledError) Error() string {
 //// })
 // go func() { async.Complete() }()
 type Async struct {
-	state 			uint32
-	completions 	[]func()
-	done       		chan struct{}
+	state       uint32
+	completions []func()
+	done        chan struct{}
 	sync.RWMutex
 }
 
 // NewAsync initializes a new async object.
 func NewAsync() *Async {
-	return &Async{ state:pending, completions: []func(){}, done:make(chan struct{}) }
+	return &Async{state: pending, completions: []func(){}, done: make(chan struct{})}
 }
 
 // AsCompletedAsync creates an already completed async object.
@@ -89,7 +89,7 @@ func (async *Async) Accept(completion func()) *Async {
 // })
 func (async *Async) Apply(completion func() interface{}) *AsyncResult {
 	asyncResult := NewAsyncResult()
-	async.Accept(func(){
+	async.Accept(func() {
 		newResult := completion()
 		asyncResult.Complete(newResult)
 	})
@@ -124,10 +124,10 @@ func (async *Async) Wait() {
 	<-async.done
 }
 
-// Wait blocks until the async operation is completed or until
+// WaitOrTimeout blocks until the async operation is completed or until
 // the given timeout duration expires.
-func (async *Async) WaitOrTimeout(duration time.Duration) (error) {
-	timer:= time.NewTimer(duration)
+func (async *Async) WaitOrTimeout(duration time.Duration) error {
+	timer := time.NewTimer(duration)
 	defer timer.Stop()
 
 	select {

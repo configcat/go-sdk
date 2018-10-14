@@ -16,7 +16,7 @@ func TestClient_RefreshAsync(t *testing.T) {
 		config,
 		fetcher)
 
-	fetcher.SetResponse(FetchResponse{ Status:Fetched, Body: fmt.Sprintf(jsonFormat, "key", "\"value\"")})
+	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "\"value\"")})
 	c := make(chan string, 1)
 	defer close(c)
 	client.GetValueAsync("key", "default", func(result interface{}) {
@@ -29,13 +29,13 @@ func TestClient_RefreshAsync(t *testing.T) {
 		t.Error("Expecting non default string value")
 	}
 
-	fetcher.SetResponse(FetchResponse{ Status:Fetched, Body: fmt.Sprintf(jsonFormat, "key", "\"value2\"")})
+	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "\"value2\"")})
 	c2 := make(chan string, 1)
 	defer close(c2)
 	client.RefreshAsync(func() {
 		c2 <- client.GetValue("key", "default").(string)
 	})
-	result = <- c2
+	result = <-c2
 	if result != "value2" {
 		t.Error("Expecting non default string value")
 	}
@@ -43,7 +43,7 @@ func TestClient_RefreshAsync(t *testing.T) {
 
 func TestClient_GetAsync(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(FetchResponse{ Status:Fetched, Body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "3213")})
 	c := make(chan interface{}, 1)
 	defer close(c)
 	client.GetValueAsync("key", 0, func(result interface{}) {
@@ -59,7 +59,7 @@ func TestClient_GetAsync(t *testing.T) {
 
 func TestClient_GetAsync_Default(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(FetchResponse{ Status:Failure, Body: ""})
+	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
 	c := make(chan interface{}, 1)
 	defer close(c)
 	client.GetValueAsync("key", 0, func(result interface{}) {
@@ -75,7 +75,7 @@ func TestClient_GetAsync_Default(t *testing.T) {
 
 func TestClient_GetAsync_Latest(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(FetchResponse{ Status:Fetched, Body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "3213")})
 	c := make(chan interface{}, 1)
 	defer close(c)
 	client.GetValueAsync("key", 0, func(result interface{}) {
@@ -88,7 +88,7 @@ func TestClient_GetAsync_Latest(t *testing.T) {
 		t.Error("Expecting non default value")
 	}
 
-	fetcher.SetResponse(FetchResponse{ Status:Failure, Body: ""})
+	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
 
 	c2 := make(chan interface{}, 1)
 	defer close(c2)

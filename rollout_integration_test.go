@@ -16,7 +16,7 @@ import (
 func TestRolloutIntegration(t *testing.T) {
 	config := DefaultClientConfig()
 	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
-		return NewExpiringCachePolicy(configProvider, store, time.Second * 120, false)
+		return NewExpiringCachePolicy(configProvider, store, time.Second*120, false)
 	}
 	client := NewCustomClient("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A",
 		config)
@@ -57,7 +57,7 @@ func TestRolloutIntegration(t *testing.T) {
 		var i = 0
 		for _, settingKey := range settingKeys {
 			val := client.GetValueForUser(settingKey, nil, user)
-			expected := line[i + 4]
+			expected := line[i+4]
 			boolVal, ok := val.(bool)
 			if ok {
 				expectedVal, err := strconv.ParseBool(strings.ToLower(expected))
@@ -69,7 +69,6 @@ func TestRolloutIntegration(t *testing.T) {
 				i++
 				continue
 			}
-
 
 			intVal, ok := val.(int)
 			if ok {
