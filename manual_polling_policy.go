@@ -7,14 +7,20 @@ type ManualPollingPolicy struct {
 
 // NewManualPollingPolicy initializes a new ManualPollingPolicy.
 func NewManualPollingPolicy(
-	fetcher ConfigProvider,
+	configProvider ConfigProvider,
 	store *ConfigStore) *ManualPollingPolicy {
-	return &ManualPollingPolicy{ConfigRefresher: ConfigRefresher{Fetcher: fetcher, Store: store}}
+
+	fetcher, ok := configProvider.(*ConfigFetcher)
+	if ok {
+		fetcher.mode = "m"
+	}
+
+	return &ManualPollingPolicy{ConfigRefresher: ConfigRefresher{ConfigProvider: configProvider, Store: store}}
 }
 
 // GetConfigurationAsync reads the current configuration value.
 func (policy *ManualPollingPolicy) GetConfigurationAsync() *AsyncResult {
-	return policy.Fetcher.GetConfigurationAsync().ApplyThen(func(result interface{}) interface{} {
+	return policy.ConfigProvider.GetConfigurationAsync().ApplyThen(func(result interface{}) interface{} {
 		response := result.(FetchResponse)
 
 		cached := policy.Store.Get()

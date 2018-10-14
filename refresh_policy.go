@@ -13,14 +13,14 @@ type RefreshPolicy interface {
 // ConfigRefresher describes a configuration refresher, holds a shared implementation of the RefreshAsync method on RefreshPolicy.
 type ConfigRefresher struct {
 	// The configuration provider implementation used to collect the latest configuration.
-	Fetcher ConfigProvider
+	ConfigProvider ConfigProvider
 	// The configuration store used to maintain the cached configuration.
 	Store *ConfigStore
 }
 
 // RefreshAsync initiates a force refresh on the cached configuration.
 func (refresher *ConfigRefresher) RefreshAsync() *Async {
-	return refresher.Fetcher.GetConfigurationAsync().Accept(func(result interface{}) {
+	return refresher.ConfigProvider.GetConfigurationAsync().Accept(func(result interface{}) {
 		response := result.(FetchResponse)
 		if result.(FetchResponse).IsFetched() {
 			refresher.Store.Set(response.Body)

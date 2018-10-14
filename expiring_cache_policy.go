@@ -22,11 +22,17 @@ type ExpiringCachePolicy struct {
 
 // NewExpiringCachePolicy initializes a new ExpiringCachePolicy.
 func NewExpiringCachePolicy(
-	fetcher ConfigProvider,
+	configProvider ConfigProvider,
 	store *ConfigStore,
 	cacheInterval time.Duration,
 	useAsyncRefresh bool) *ExpiringCachePolicy {
-	return &ExpiringCachePolicy{ConfigRefresher: ConfigRefresher{Fetcher: fetcher, Store: store},
+
+	fetcher, ok := configProvider.(*ConfigFetcher)
+	if ok {
+		fetcher.mode = "l"
+	}
+
+	return &ExpiringCachePolicy{ConfigRefresher: ConfigRefresher{ConfigProvider: configProvider, Store: store},
 		cacheInterval:   cacheInterval,
 		isFetching:      no,
 		initialized:     no,
@@ -73,7 +79,7 @@ func (policy *ExpiringCachePolicy) Close() {
 }
 
 func (policy *ExpiringCachePolicy) fetch() *AsyncResult {
-	return policy.Fetcher.GetConfigurationAsync().ApplyThen(func(result interface{}) interface{} {
+	return policy.ConfigProvider.GetConfigurationAsync().ApplyThen(func(result interface{}) interface{} {
 		defer atomic.StoreUint32(&policy.isFetching, no)
 
 		response := result.(FetchResponse)

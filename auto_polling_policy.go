@@ -22,27 +22,35 @@ type AutoPollingPolicy struct {
 
 // NewAutoPollingPolicy initializes a new AutoPollingPolicy.
 func NewAutoPollingPolicy(
-	fetcher ConfigProvider,
+	configProvider ConfigProvider,
 	store *ConfigStore,
 	autoPollInterval time.Duration) *AutoPollingPolicy {
-	return NewAutoPollingPolicyWithChangeListener(fetcher, store, autoPollInterval, nil)
+	return NewAutoPollingPolicyWithChangeListener(configProvider, store, autoPollInterval, nil)
 }
 
 // NewAutoPollingPolicyWithChangeListener initializes a new AutoPollingPolicy.
 // An optional configuration change listener callback can be passed.
 func NewAutoPollingPolicyWithChangeListener(
-	fetcher ConfigProvider,
+	configProvider ConfigProvider,
 	store *ConfigStore,
 	autoPollInterval time.Duration,
 	configChanged func(config string, parser *ConfigParser)) *AutoPollingPolicy {
-	policy := &AutoPollingPolicy{ConfigRefresher: ConfigRefresher{Fetcher: fetcher, Store: store},
+
+	fetcher, ok := configProvider.(*ConfigFetcher)
+	if ok {
+		fetcher.mode = "a"
+	}
+
+	policy := &AutoPollingPolicy{
+		ConfigRefresher:  ConfigRefresher{ConfigProvider: configProvider, Store: store},
 		autoPollInterval: autoPollInterval,
 		logger:           log.New(os.Stderr, "[ConfigCat - Auto Polling Policy]", log.LstdFlags),
 		init:             NewAsync(),
 		initialized:      no,
 		stop:             make(chan struct{}),
 		configChanged:    configChanged,
-		parser:           newParser()}
+		parser:           newParser(),
+	}
 	policy.startPolling()
 	return policy
 }
@@ -87,7 +95,7 @@ func (policy *AutoPollingPolicy) startPolling() {
 
 func (policy *AutoPollingPolicy) poll() {
 	policy.logger.Println("Polling the latest configuration")
-	response := policy.Fetcher.GetConfigurationAsync().Get().(FetchResponse)
+	response := policy.ConfigProvider.GetConfigurationAsync().Get().(FetchResponse)
 	cached := policy.Store.Get()
 	if response.IsFetched() && cached != response.Body {
 		policy.Store.Set(response.Body)
