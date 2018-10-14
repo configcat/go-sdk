@@ -2,6 +2,11 @@
 ConfigCat is a cloud based configuration as a service. It integrates with your apps, backends, websites, 
 and other programs, so you can configure them through [this](https://configcat.com) website even after they are deployed.
 
+[![Build Status](https://travis-ci.org/configcat/go-sdk.svg?branch=master)](https://travis-ci.org/configcat/go-sdk)
+[![Go Report Card](https://goreportcard.com/badge/github.com/configcat/go-sdk)](https://goreportcard.com/report/github.com/configcat/go-sdk)
+[![codecov](https://codecov.io/gh/configcat/go-sdk/branch/master/graph/badge.svg)](https://codecov.io/gh/configcat/go-sdk)
+[![GoDoc](https://godoc.org/github.com/configcat/go-sdk?status.svg)](https://godoc.org/github.com/configcat/go-sdk)
+
 ## Getting started
 
 **1. Get the SDK with `go`**
@@ -41,6 +46,9 @@ client.GetValueAsyncForUser("key-of-my-awesome-feature", false, func(result inte
     }
 })
 ```
+
+> To properly shut down the client you should call its `Close` method when the application exits.
+
 ## User object
 Percentage and targeted rollouts are calculated by the user object you can optionally pass to the configuration requests.
 The user object must be created with a **mandatory** identifier parameter which should uniquely identify each user:

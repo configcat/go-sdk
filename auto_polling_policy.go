@@ -25,9 +25,7 @@ func NewAutoPollingPolicy(
 	fetcher ConfigProvider,
 	store *ConfigStore,
 	autoPollInterval time.Duration) *AutoPollingPolicy {
-	policy := NewAutoPollingPolicyWithChangeListener(fetcher, store, autoPollInterval, nil)
-	policy.startPolling()
-	return policy
+	return NewAutoPollingPolicyWithChangeListener(fetcher, store, autoPollInterval, nil)
 }
 
 // NewAutoPollingPolicyWithChangeListener initializes a new AutoPollingPolicy.

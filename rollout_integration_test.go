@@ -10,17 +10,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestRolloutIntegration(t *testing.T) {
-	config := DefaultClientConfig()
-	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
-		return NewExpiringCachePolicy(configProvider, store, time.Second*120, false)
-	}
-	client := NewCustomClient("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A",
-		config)
-
+	client := NewClient("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A")
 	defer client.Close()
 
 	file, fileErr := os.Open("resources/testmatrix.csv")

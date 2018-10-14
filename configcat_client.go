@@ -1,7 +1,6 @@
 package configcat
 
 import (
-	"errors"
 	"log"
 	"os"
 	"time"
@@ -84,17 +83,18 @@ func (client *Client) GetValueForUser(key string, defaultValue interface{}, user
 		panic("key cannot be empty")
 	}
 
-	json, err := client.getJsonFromPolicy()
-	if err != nil {
-		return client.getDefault(key, defaultValue, user)
+	if client.maxWaitTimeForSyncCalls > 0 {
+		json, err := client.refreshPolicy.GetConfigurationAsync().GetOrTimeout(client.maxWaitTimeForSyncCalls)
+		if err != nil {
+			client.logger.Printf("Policy could not provide the configuration: %s", err.Error())
+			return client.getDefault(key, defaultValue, user)
+		}
+
+		return client.parseJson(json.(string), key, defaultValue, user)
 	}
 
-	parsed, err := client.parser.ParseWithUser(json, key, user)
-	if err != nil {
-		return client.getDefault(key, defaultValue, user)
-	}
-
-	return parsed
+	json, _ := client.refreshPolicy.GetConfigurationAsync().Get().(string)
+	return client.parseJson(json, key, defaultValue, user)
 }
 
 // GetValueAsyncForUser reads and sends a value asynchronously to a callback function as interface{} from the configuration identified by the given key.
@@ -132,23 +132,13 @@ func (client *Client) Close() {
 	client.refreshPolicy.Close()
 }
 
-func (client *Client) getJsonFromPolicy() (string, error) {
-	if client.maxWaitTimeForSyncCalls > 0 {
-		val, err := client.refreshPolicy.GetConfigurationAsync().GetOrTimeout(client.maxWaitTimeForSyncCalls)
-		if err != nil {
-			client.logger.Printf("Policy could not provide the configuration: %s", err.Error())
-			return "", err
-		}
-		return val.(string), nil
+func (client *Client) parseJson(json string, key string, defaultValue interface{}, user *User) interface{} {
+	parsed, err := client.parser.ParseWithUser(json, key, user)
+	if err != nil {
+		return client.getDefault(key, defaultValue, user)
 	}
 
-	val, ok := client.refreshPolicy.GetConfigurationAsync().Get().(string)
-	if !ok {
-		client.logger.Println("Policy could not provide the configuration")
-		return "", errors.New("policy could not provide the configuration")
-	}
-
-	return val, nil
+	return parsed
 }
 
 func (client *Client) getDefault(key string, defaultValue interface{}, user *User) interface{} {

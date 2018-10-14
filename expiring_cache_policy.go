@@ -55,14 +55,14 @@ func (policy *ExpiringCachePolicy) GetConfigurationAsync() *AsyncResult {
 				return policy.readCache()
 			}
 			return policy.fetching
-		} else {
-			if atomic.CompareAndSwapUint32(&policy.isFetching, no, yes) {
-				policy.fetching = policy.fetch()
-			}
-			return policy.init.Apply(func() interface{} {
-				return policy.Store.Get()
-			})
 		}
+
+		if atomic.CompareAndSwapUint32(&policy.isFetching, no, yes) {
+			policy.fetching = policy.fetch()
+		}
+		return policy.init.Apply(func() interface{} {
+			return policy.Store.Get()
+		})
 	}
 
 	return policy.readCache()
