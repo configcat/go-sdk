@@ -184,7 +184,7 @@ client := configcat.NewCustomClient("<PLACE-YOUR-API-KEY-HERE>", config)
 ```
 
 ### Maximum wait time for synchronous calls
-You have the option to set a timeout value for the synchronous methods of the library (`GetValue()`, `GetValueForUse()`, `Refresh()`) which means
+You have the option to set a timeout value for the synchronous methods of the library (`GetValue()`, `GetValueForUser()`, `Refresh()`) which means
 when a sync call takes longer than the timeout value, it'll return with the default.
 ```go      
 config := configcat.DefaultClientConfig()
