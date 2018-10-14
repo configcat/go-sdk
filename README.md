@@ -41,7 +41,7 @@ Or use the async APIs:
 ```go
 client.GetValueAsyncForUser("key-of-my-awesome-feature", false, func(result interface{}) {
     isMyAwesomeFeatureEnabled, ok := result.(bool)
-    if(ok && isMyAwesomeFeatureEnabled) {
+    if ok && isMyAwesomeFeatureEnabled {
         //show your awesome feature to the world! 
     }
 })
@@ -85,13 +85,13 @@ You have the option to configure the polling interval and an `configChanged` cal
 ```go
 config := DefaultClientConfig()
 config.PolicyFactory = func(configProvider configcat.ConfigProvider, store *configcat.ConfigStore) configcat.RefreshPolicy {
-    return configcat.NewAutoPollingPolicy(configProvider, store, 
+    return configcat.NewAutoPollingPolicyWithChangeListener(configProvider, store, 
     // The auto poll interval
     time.Second * 120,
     // The callback called when the configuration changes
     func(config string, parser *configcat.ConfigParser) { 
         isMyAwesomeFeatureEnabled, ok := parser.Parse(config, "key-of-my-awesome-feature").(bool)
-        if(ok && isMyAwesomeFeatureEnabled) {
+        if ok && isMyAwesomeFeatureEnabled {
             //show your awesome feature to the world!
         }
     })
