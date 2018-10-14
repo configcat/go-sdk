@@ -23,7 +23,7 @@ func TestRolloutIntegration(t *testing.T) {
 
 	defer client.Close()
 
-	file, fileErr := os.Open("c:\\Users\\pcsajtai\\OneDrive\\Documents\\go\\go\\src\\test\\testmatrix.csv")
+	file, fileErr := os.Open("resources/testmatrix.csv")
 	if fileErr != nil {
 		log.Fatal(fileErr)
 	}

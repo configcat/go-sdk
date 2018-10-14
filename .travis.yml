@@ -5,9 +5,6 @@ go:
 - 1.x
 - master
 
-before_install:
-- go get -t -v ./...
-
 before_script:
 - go vet ./...
 
