@@ -94,7 +94,7 @@ func (policy *ExpiringCachePolicy) fetch() *AsyncResult {
 			policy.lastRefreshTime = time.Now()
 		}
 
-		if fetched && atomic.CompareAndSwapUint32(&policy.initialized, no, yes) {
+		if atomic.CompareAndSwapUint32(&policy.initialized, no, yes) {
 			policy.init.Complete()
 		}
 

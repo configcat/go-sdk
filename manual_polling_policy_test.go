@@ -21,3 +21,14 @@ func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 		t.Error("Expecting test2 as result")
 	}
 }
+
+func TestManualPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
+	fetcher := newFakeConfigProvider()
+	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
+	policy := NewManualPollingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()))
+	config := policy.GetConfigurationAsync().Get().(string)
+
+	if config != "" {
+		t.Error("Expecting default")
+	}
+}

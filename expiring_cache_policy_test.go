@@ -32,6 +32,19 @@ func TestExpiringCachePolicy_GetConfigurationAsync_DoNotUseAsync(t *testing.T) {
 	}
 }
 
+func TestExpiringCachePolicy_GetConfigurationAsync_Fail(t *testing.T) {
+	fetcher := newFakeConfigProvider()
+
+	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
+
+	policy := NewExpiringCachePolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2, false)
+	config := policy.GetConfigurationAsync().Get().(string)
+
+	if config != "" {
+		t.Error("Expecting default")
+	}
+}
+
 func TestExpiringCachePolicy_GetConfigurationAsync_UseAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 

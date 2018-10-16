@@ -34,6 +34,21 @@ func TestAutoPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	}
 }
 
+func TestAutoPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
+	fetcher := newFakeConfigProvider()
+
+	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
+
+	policy := NewAutoPollingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2)
+	defer policy.Close()
+
+	config := policy.GetConfigurationAsync().Get().(string)
+
+	if config != "" {
+		t.Error("Expecting default")
+	}
+}
+
 func TestAutoPollingPolicy_GetConfigurationAsync_WithListener(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 

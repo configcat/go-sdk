@@ -104,7 +104,7 @@ func (policy *AutoPollingPolicy) poll() {
 		}
 	}
 
-	if atomic.CompareAndSwapUint32(&policy.initialized, no, yes) && !response.IsFailed() {
+	if atomic.CompareAndSwapUint32(&policy.initialized, no, yes) {
 		policy.init.Complete()
 	}
 }
