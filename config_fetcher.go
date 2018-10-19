@@ -46,6 +46,7 @@ func (fetcher *ConfigFetcher) GetConfigurationAsync() *AsyncResult {
 		if responseError != nil {
 			fetcher.logger.Printf("Config fetch failed: %s", responseError.Error())
 			result.Complete(FetchResponse{Status: Failure, Body: ""})
+			return
 		}
 
 		defer response.Body.Close()
@@ -53,17 +54,24 @@ func (fetcher *ConfigFetcher) GetConfigurationAsync() *AsyncResult {
 		if response.StatusCode == 304 {
 			fetcher.logger.Print("Config fetch succeeded: not modified")
 			result.Complete(FetchResponse{Status: NotModified})
+			return
 		}
 
 		if response.StatusCode >= 200 && response.StatusCode < 300 {
 			body, bodyError := ioutil.ReadAll(response.Body)
-			if bodyError == nil {
-				fetcher.logger.Print("Config fetch succeeded: new config fetched")
-				fetcher.eTag = response.Header.Get("Etag")
-				result.Complete(FetchResponse{Status: Fetched, Body: string(body)})
+			if bodyError != nil {
+				fetcher.logger.Printf("Config fetch failed: %s", bodyError.Error())
+				result.Complete(FetchResponse{Status: Failure})
+				return
 			}
+
+			fetcher.logger.Print("Config fetch succeeded: new config fetched")
+			fetcher.eTag = response.Header.Get("Etag")
+			result.Complete(FetchResponse{Status: Fetched, Body: string(body)})
+			return
 		}
 
+		fetcher.logger.Printf("Config fetch failed, non success status code: %v", response.StatusCode)
 		result.Complete(FetchResponse{Status: Failure})
 	}()
 
