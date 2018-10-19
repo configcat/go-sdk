@@ -34,6 +34,7 @@ func (fetcher *ConfigFetcher) GetConfigurationAsync() *AsyncResult {
 		request, requestError := http.NewRequest("GET", "https://cdn.configcat.com/configuration-files/"+fetcher.apiKey+"/config_v2.json", nil)
 		if requestError != nil {
 			result.Complete(FetchResponse{Status: Failure})
+			return
 		}
 
 		request.Header.Add("X-ConfigCat-UserAgent", "ConfigCat-Go/"+fetcher.mode+"-"+version)
