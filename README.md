@@ -1,198 +1,87 @@
-# ConfigCat Go SDK
-ConfigCat is a cloud based configuration as a service. It integrates with your apps, backends, websites, 
-and other programs, so you can configure them through [this](https://configcat.com) website even after they are deployed.
+# ConfigCat SDK for Go
+
+ConfigCat SDK for Go provides easy integration between ConfigCat service and applications using Go.
+
+ConfigCat is a feature flag, feature toggle, and configuration management service. That lets you launch new features and change your software configuration remotely without actually (re)deploying code. ConfigCat even helps you do controlled roll-outs like canary releases and blue-green deployments.
+https://configcat.com  
 
 [![Build Status](https://travis-ci.org/configcat/go-sdk.svg?branch=master)](https://travis-ci.org/configcat/go-sdk)
 [![Go Report Card](https://goreportcard.com/badge/github.com/configcat/go-sdk)](https://goreportcard.com/report/github.com/configcat/go-sdk)
 [![codecov](https://codecov.io/gh/configcat/go-sdk/branch/master/graph/badge.svg)](https://codecov.io/gh/configcat/go-sdk)
 [![GoDoc](https://godoc.org/github.com/configcat/go-sdk?status.svg)](https://godoc.org/github.com/configcat/go-sdk)
+![License](https://img.shields.io/github/license/configcat/go-sdk.svg)
 
 ## Getting started
 
-**1. Get the SDK with `go`**
-
+### 1. Install the package with `go`
 ```bash
 go get gopkg.in/configcat/go-sdk.v1
 ```
 
-**2. Get your Api Key from [ConfigCat.com](https://configcat.com) portal**
-![YourConnectionUrl](https://raw.githubusercontent.com/ConfigCat/java-sdk/master/media/readme01.png  "ApiKey")
+### 2. <a href="https://configcat.com/Account/Login" target="_blank">Log in to ConfigCat Management Console</a> and go to your *Project* to get your *API Key*:
+![API-KEY](https://raw.githubusercontent.com/ConfigCat/go-sdk/master/media/readme01.png  "API-KEY")
 
-**3. Import the ConfigCat package**
+
+### 3. Import the *ConfigCat* client package to your application
 ```go
 import gopkg.in/configcat/go-sdk.v1
 ```
-**4. Create a ConfigCatClient instance**
+
+### 4. Create a *ConfigCat* client instance:
 ```go
-client := configcat.NewClient("<PLACE-YOUR-API-KEY-HERE>")
+client := configcat.NewClient("#YOUR-API-KEY#")
 ```
-**5. (Optional) Prepare a User object for rollout calculation**
+
+### 5. Get your setting value:
 ```go
-user := configcat.NewUser("<PLACE-YOUR-USER-IDENTIFIER-HERE>")
-```
-**6. Get your config value**
-```go
-isMyAwesomeFeatureEnabled, ok := client.GetValueForUser("key-of-my-awesome-feature", false, user).(bool)
+isMyAwesomeFeatureEnabled, ok := client.GetValue("isMyAwesomeFeatureEnabled", false).(bool)
 if ok && isMyAwesomeFeatureEnabled {
-    //show your awesome feature to the world!
+    DoTheNewThing()
+} else {
+    DoTheOldThing()
 }
 ```
 Or use the async APIs:
 ```go
-client.GetValueAsyncForUser("key-of-my-awesome-feature", false, func(result interface{}) {
+client.GetValueAsync("isMyAwesomeFeatureEnabled", false, func(result interface{}) {
     isMyAwesomeFeatureEnabled, ok := result.(bool)
     if ok && isMyAwesomeFeatureEnabled {
-        //show your awesome feature to the world! 
+        DoTheNewThing()
+    } else {
+        DoTheOldThing()
     }
 })
 ```
 
-> To properly shut down the client you should call its `Close` method when the application exits.
-
-## User object
-Percentage and targeted rollouts are calculated by the user object you can optionally pass to the configuration requests.
-The user object must be created with a **mandatory** identifier parameter which should uniquely identify each user:
+### 6. Close *ConfigCat* client on application exit:
 ```go
-user := configcat.NewUser("<PLACE-YOUR-USER-IDENTIFIER-HERE>" /* mandatory */)
+client.Close()
 ```
-But you can also set other custom attributes if you'd like to calculate the rollout based on them:
+
+
+## Getting user specific setting values with Targeting
+Using this feature, you will be able to get different setting values for different users in your application by passing a `User Object` to the `getValue()` function.
+
+Read more about [Targeting here](https://docs.configcat.com/docs/advanced/targeting/).
 ```go
-custom := map[string]string{}
-custom["Subscription"] = "Free"
-custom["Role"] = "Knight of Awesomnia"
-user := configcat.NewUserWithAdditionalAttributes("<PLACE-YOUR-USER-IDENTIFIER-HERE>", // mandatory
-    "simple@but.awesome.com", "Awesomnia", custom)
-```
-## Configuration
-### Refresh policies
-The internal caching control and the communication between the client and ConfigCat are managed through a refresh policy. There are 3 predefined implementations built in the library.
-#### 1. Auto polling policy (default)
-This policy fetches the latest configuration and updates the cache repeatedly. 
+user := configcat.NewUser("#USER-IDENTIFIER#")
 
-```go
-config := DefaultClientConfig()
-config.PolicyFactory = func(configProvider configcat.ConfigProvider, store *configcat.ConfigStore) configcat.RefreshPolicy {
-    return configcat.NewAutoPollingPolicy(configProvider, store, 
-    // The auto poll interval
-    time.Second * 120)
-}
-       
-client := configcat.NewCustomClient("<PLACE-YOUR-API-KEY-HERE>", config)
-```
-
-You have the option to configure the polling interval and an `configChanged` callback that will be notified when a new configuration is fetched. The policy calls the given method only, when the new configuration is differs from the cached one.
-
-```go
-config := DefaultClientConfig()
-config.PolicyFactory = func(configProvider configcat.ConfigProvider, store *configcat.ConfigStore) configcat.RefreshPolicy {
-    return configcat.NewAutoPollingPolicyWithChangeListener(configProvider, store, 
-    // The auto poll interval
-    time.Second * 120,
-    // The callback called when the configuration changes
-    func(config string, parser *configcat.ConfigParser) { 
-        isMyAwesomeFeatureEnabled, ok := parser.Parse(config, "key-of-my-awesome-feature").(bool)
-        if ok && isMyAwesomeFeatureEnabled {
-            //show your awesome feature to the world!
-        }
-    })
-}
-       
-client := configcat.NewCustomClient("<PLACE-YOUR-API-KEY-HERE>", config)
-```
-
-#### 2. Expiring cache policy
-This policy uses an expiring cache to maintain the internally stored configuration. 
-##### Cache refresh interval 
-You can define the refresh rate of the cache in seconds, 
-after the initial cached value is set this value will be used to determine how much time must pass before initiating a new configuration fetch request through the `ConfigProvider`.
-##### Async / Sync refresh
-You can define how do you want to handle the expiration of the cached configuration. If you choose asynchronous refresh then 
-when a request is being made on the cache while it's expired, the previous value will be returned immediately 
-until the fetching of the new configuration is completed.
-```go
-config := DefaultClientConfig()
-config.PolicyFactory = func(configProvider configcat.ConfigProvider, store *configcat.ConfigStore) configcat.RefreshPolicy {
-    return configcat.NewExpiringCachePolicy(configProvider, store, 
-	// The cache expiration interval
-	time.Second * 120,
-	// True for async, false for sync refresh
-	true)
-}
-       
-client := configcat.NewCustomClient("<PLACE-YOUR-API-KEY-HERE>", config)
-```
-
-#### 3. Manual polling policy
-With this policy every new configuration request on the ConfigCatClient will trigger a new fetch over HTTP.
-```go
-config := configcat.DefaultClientConfig()
-config.PolicyFactory = func(configProvider configcat.ConfigProvider, store *configcat.ConfigStore) configcat.RefreshPolicy {
-    return configcat.NewManualPollingPolicy(configProvider, store)
-}
-       
-client := configcat.NewCustomClient("<PLACE-YOUR-API-KEY-HERE>", config)
-```
-
-#### Custom Policy
-You can also implement your custom refresh policy by satisfying the `RefreshPolicy` interface.
-```go
-type CustomPolicy struct {
-    configcat.ConfigRefresher
-}
-
-func NewCustomPolicy(fetcher configcat.ConfigProvider, store *configcat.ConfigStore) *NewCustomPolicy {
-    return &NewCustomPolicy{ ConfigRefresher: ConfigRefresher{ Fetcher:fetcher, Store:store }}
-}
-
-func (policy *NewCustomPolicy) GetConfigurationAsync() *configcat.AsyncResult {
-    // this method will be called when the configuration is requested from the ConfigCat client.
-    // you can access the config fetcher through the policy.Fetcher and the internal store via policy.Store
+isMyAwesomeFeatureEnabled, ok := client.GetValueForUser("isMyAwesomeFeatureEnabled", user, false).(bool)
+if ok && isMyAwesomeFeatureEnabled {
+    DoTheNewThing()
+} else {
+    DoTheOldThing()
 }
 ```
-> The `AsyncResult` and the `Async` are internal types used to signal back to the caller about the completion of a given task like [Futures](https://en.wikipedia.org/wiki/Futures_and_promises).
 
-Then you can simply inject your custom policy implementation into the ConfigCat client:
-```go
-config := configcat.DefaultClientConfig()
-config.PolicyFactory = func(configProvider configcat.ConfigProvider, store *configcat.ConfigStore) configcat.RefreshPolicy {
-    return NewCustomPolicy(configProvider, store)
-}
+## Polling Modes
+The ConfigCat SDK supports 3 different polling mechanisms to acquire the setting values from ConfigCat. After latest setting values are downloaded, they are stored in the internal cache then all requests are served from there. Read more about Polling Modes and how to use them at [ConfigCat Docs](https://docs.configcat.com/docs/sdk-reference/go/).
 
-client := configcat.NewCustomClient("<PLACE-YOUR-API-KEY-HERE>", config)
-```
+## Support
+If you need help how to use this SDK feel free to to contact the ConfigCat Staff on https://configcat.com. We're happy to help.
 
-### Custom Cache
-You have the option to inject your custom cache implementation into the client. All you have to do is to satisfy the `ConfigCache` interface:
-```go
-type CustomCache struct {
-}
+## Contributing
+Contributions are welcome.
 
-func (cache *CustomCache) Get() (string, error) {
-    // here you have to return with the cached value
-}
-
-func (cache *CustomCache) Set(value string) error {
-    // here you have to store the new value in the cache
-}
-```
-Then use your custom cache implementation:
-```go      
-config := configcat.DefaultClientConfig()
-config.Cache = CustomCache{}
-
-client := configcat.NewCustomClient("<PLACE-YOUR-API-KEY-HERE>", config)
-```
-
-### Maximum wait time for synchronous calls
-You have the option to set a timeout value for the synchronous methods of the library (`GetValue()`, `GetValueForUser()`, `Refresh()`) which means
-when a sync call takes longer than the timeout value, it'll return with the default.
-```go      
-config := configcat.DefaultClientConfig()
-config.MaxWaitTimeForSyncCalls = time.Seconds * 10
-
-client := configcat.NewCustomClient("<PLACE-YOUR-API-KEY-HERE>", config)
-```
-
-### Force refresh
-Any time you want to refresh the cached configuration with the latest one, you can call the `Refresh()` or `RefreshAsync()` method of the library,
-which will initiate a new fetch and will update the local cache.
+## License
+[MIT](https://raw.githubusercontent.com/ConfigCat/go-sdk/master/LICENSE)
