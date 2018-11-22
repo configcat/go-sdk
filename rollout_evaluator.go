@@ -74,7 +74,7 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 		hashCandidate := key + user.identifier
 		sha := sha1.New()
 		sha.Write([]byte(hashCandidate))
-		hash := hex.EncodeToString(sha.Sum(nil))[:15]
+		hash := hex.EncodeToString(sha.Sum(nil))[:7]
 		num, err := strconv.ParseInt(hash, 16, 64)
 		scaled := num % 100
 		if err == nil {

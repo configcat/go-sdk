@@ -5,12 +5,12 @@ import (
 	"time"
 )
 
-func TestExpiringCachePolicy_GetConfigurationAsync_DoNotUseAsync(t *testing.T) {
+func TestLazyLoadingPolicy_GetConfigurationAsync_DoNotUseAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test"})
 
-	policy := NewExpiringCachePolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2, false)
+	policy := NewLazyLoadingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2, false)
 	config := policy.GetConfigurationAsync().Get().(string)
 
 	if config != "test" {
@@ -32,12 +32,12 @@ func TestExpiringCachePolicy_GetConfigurationAsync_DoNotUseAsync(t *testing.T) {
 	}
 }
 
-func TestExpiringCachePolicy_GetConfigurationAsync_Fail(t *testing.T) {
+func TestLazyLoadingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
 	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
 
-	policy := NewExpiringCachePolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2, false)
+	policy := NewLazyLoadingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2, false)
 	config := policy.GetConfigurationAsync().Get().(string)
 
 	if config != "" {
@@ -45,12 +45,12 @@ func TestExpiringCachePolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	}
 }
 
-func TestExpiringCachePolicy_GetConfigurationAsync_UseAsync(t *testing.T) {
+func TestLazyLoadingPolicy_GetConfigurationAsync_UseAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test"})
 
-	policy := NewExpiringCachePolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2, true)
+	policy := NewLazyLoadingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2, true)
 	config := policy.GetConfigurationAsync().Get().(string)
 
 	if config != "test" {

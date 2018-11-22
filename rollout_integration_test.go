@@ -38,13 +38,26 @@ func TestRolloutIntegration(t *testing.T) {
 		}
 
 		var user *User
-		if len(line[0]) > 0 && line[0] != "##nouserobject##" {
+		if len(line[0]) > 0 && line[0] != "##null##" {
+
+			email := ""
+			country := ""
+			identifier := line[0]
+
+			if len(line[1]) > 0 && line[1] != "##null##" {
+				email = line[1]
+			}
+
+			if len(line[2]) > 0 && line[2] != "##null##" {
+				country = line[2]
+			}
+
 			custom := map[string]string{}
-			if len(line[3]) > 0 {
+			if len(line[3]) > 0 && line[3] != "##null##" {
 				custom["Custom1"] = line[3]
 			}
 
-			user = NewUserWithAdditionalAttributes(line[0], line[1], line[2], custom)
+			user = NewUserWithAdditionalAttributes(identifier, email, country, custom)
 		}
 
 		var i = 0

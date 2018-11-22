@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// ExpiringCachePolicy describes a RefreshPolicy which uses an expiring cache to maintain the internally stored configuration.
-type ExpiringCachePolicy struct {
+// LazyLoadingPolicy describes a RefreshPolicy which uses an expiring cache to maintain the internally stored configuration.
+type LazyLoadingPolicy struct {
 	ConfigRefresher
 	cacheInterval   time.Duration
 	isFetching      uint32
@@ -20,19 +20,19 @@ type ExpiringCachePolicy struct {
 	init            *Async
 }
 
-// NewExpiringCachePolicy initializes a new ExpiringCachePolicy.
-func NewExpiringCachePolicy(
+// NewLazyLoadingPolicy initializes a new ExpiringCachePolicy.
+func NewLazyLoadingPolicy(
 	configProvider ConfigProvider,
 	store *ConfigStore,
 	cacheInterval time.Duration,
-	useAsyncRefresh bool) *ExpiringCachePolicy {
+	useAsyncRefresh bool) *LazyLoadingPolicy {
 
 	fetcher, ok := configProvider.(*ConfigFetcher)
 	if ok {
 		fetcher.mode = "l"
 	}
 
-	return &ExpiringCachePolicy{ConfigRefresher: ConfigRefresher{ConfigProvider: configProvider, Store: store},
+	return &LazyLoadingPolicy{ConfigRefresher: ConfigRefresher{ConfigProvider: configProvider, Store: store},
 		cacheInterval:   cacheInterval,
 		isFetching:      no,
 		initialized:     no,
@@ -43,7 +43,7 @@ func NewExpiringCachePolicy(
 }
 
 // GetConfigurationAsync reads the current configuration value.
-func (policy *ExpiringCachePolicy) GetConfigurationAsync() *AsyncResult {
+func (policy *LazyLoadingPolicy) GetConfigurationAsync() *AsyncResult {
 	if time.Since(policy.lastRefreshTime) > policy.cacheInterval {
 		initialized := policy.init.IsCompleted()
 
@@ -75,10 +75,10 @@ func (policy *ExpiringCachePolicy) GetConfigurationAsync() *AsyncResult {
 }
 
 // Close shuts down the policy.
-func (policy *ExpiringCachePolicy) Close() {
+func (policy *LazyLoadingPolicy) Close() {
 }
 
-func (policy *ExpiringCachePolicy) fetch() *AsyncResult {
+func (policy *LazyLoadingPolicy) fetch() *AsyncResult {
 	return policy.ConfigProvider.GetConfigurationAsync().ApplyThen(func(result interface{}) interface{} {
 		defer atomic.StoreUint32(&policy.isFetching, no)
 
@@ -106,7 +106,7 @@ func (policy *ExpiringCachePolicy) fetch() *AsyncResult {
 	})
 }
 
-func (policy *ExpiringCachePolicy) readCache() *AsyncResult {
+func (policy *LazyLoadingPolicy) readCache() *AsyncResult {
 	policy.logger.Println("Reading from cache")
 	return AsCompletedAsyncResult(policy.Store.Get())
 }
