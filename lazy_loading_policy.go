@@ -20,7 +20,7 @@ type LazyLoadingPolicy struct {
 	init            *Async
 }
 
-// NewLazyLoadingPolicy initializes a new ExpiringCachePolicy.
+// NewLazyLoadingPolicy initializes a new LazyLoadingPolicy.
 func NewLazyLoadingPolicy(
 	configProvider ConfigProvider,
 	store *ConfigStore,
