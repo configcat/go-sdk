@@ -39,7 +39,7 @@ func NewLazyLoadingPolicy(
 		useAsyncRefresh: useAsyncRefresh,
 		lastRefreshTime: time.Time{},
 		init:            NewAsync(),
-		logger:          log.New(os.Stderr, "[ConfigCat - Expiring Cache Policy]", log.LstdFlags)}
+		logger:          log.New(os.Stderr, "[ConfigCat - Lazy Loading Policy]", log.LstdFlags)}
 }
 
 // GetConfigurationAsync reads the current configuration value.
