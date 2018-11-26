@@ -5,7 +5,7 @@ ConfigCat SDK for Go provides easy integration between ConfigCat service and app
 ConfigCat is a feature flag, feature toggle, and configuration management service. That lets you launch new features and change your software configuration remotely without actually (re)deploying code. ConfigCat even helps you do controlled roll-outs like canary releases and blue-green deployments.
 https://configcat.com  
 
-[![Build Status](https://travis-ci.org/configcat/go-sdk.svg?branch=master)](https://travis-ci.org/configcat/go-sdk)
+[![Build Status](https://travis-ci.com/configcat/go-sdk.svg?branch=master)](https://travis-ci.com/configcat/go-sdk)
 [![Go Report Card](https://goreportcard.com/badge/github.com/configcat/go-sdk)](https://goreportcard.com/report/github.com/configcat/go-sdk)
 [![codecov](https://codecov.io/gh/configcat/go-sdk/branch/master/graph/badge.svg)](https://codecov.io/gh/configcat/go-sdk)
 [![GoDoc](https://godoc.org/github.com/configcat/go-sdk?status.svg)](https://godoc.org/github.com/configcat/go-sdk)
