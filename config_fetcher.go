@@ -15,13 +15,14 @@ type ConfigProvider interface {
 
 // ConfigFetcher used to fetch the actual configuration over HTTP.
 type ConfigFetcher struct {
-	apiKey, eTag, mode string
-	client             *http.Client
-	logger             *log.Logger
+	apiKey, eTag, mode, baseUrl string
+	client             			*http.Client
+	logger             			*log.Logger
 }
 
 func newConfigFetcher(apiKey string, config ClientConfig) *ConfigFetcher {
 	return &ConfigFetcher{apiKey: apiKey,
+		baseUrl: config.BaseUrl,
 		logger: log.New(os.Stderr, "[ConfigCat - Config Fetcher]", log.LstdFlags),
 		client: &http.Client{Timeout: config.HttpTimeout}}
 }
@@ -31,7 +32,7 @@ func (fetcher *ConfigFetcher) GetConfigurationAsync() *AsyncResult {
 	result := NewAsyncResult()
 
 	go func() {
-		request, requestError := http.NewRequest("GET", "https://cdn.configcat.com/configuration-files/"+fetcher.apiKey+"/config_v2.json", nil)
+		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.apiKey+"/config_v2.json", nil)
 		if requestError != nil {
 			result.Complete(FetchResponse{Status: Failure})
 			return

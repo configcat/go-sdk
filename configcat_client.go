@@ -28,17 +28,20 @@ type ClientConfig struct {
 	MaxWaitTimeForSyncCalls time.Duration
 	// The maximum wait time for a http response.
 	HttpTimeout time.Duration
+	// The base ConfigCat CDN url.
+	BaseUrl string
 }
 
 // DefaultClientConfig prepares a default configuration for the ConfigCat Client.
 func DefaultClientConfig() ClientConfig {
 	return ClientConfig{
-		Cache: NewInMemoryConfigCache(),
+		BaseUrl: 				 "https://cdn.configcat.com",
+		Cache: 					 NewInMemoryConfigCache(),
 		MaxWaitTimeForSyncCalls: 0,
 		HttpTimeout:             time.Second * 15,
-		PolicyFactory: func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
-			return NewAutoPollingPolicy(configProvider, store, time.Second*120)
-		},
+		PolicyFactory: 			 func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
+									 return NewAutoPollingPolicy(configProvider, store, time.Second*120)
+								 },
 	}
 }
 
