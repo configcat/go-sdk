@@ -34,20 +34,31 @@ func (parser *ConfigParser) ParseWithUser(jsonBody string, key string, user *Use
 	return parser.parse(jsonBody, key, user)
 }
 
+// GetAllKeys retrieves all the setting keys from the given json config.
+func (parser *ConfigParser) GetAllKeys(jsonBody string) ([]string, error) {
+	rootNode, err := parser.deserialize(jsonBody)
+	if err != nil {
+		return nil, err
+	}
+
+	keys := make([]string, len(rootNode))
+	i := 0
+	for k := range rootNode {
+		keys[i] = k
+		i++
+	}
+
+	return keys, nil
+}
+
 func (parser *ConfigParser) parse(jsonBody string, key string, user *User) (interface{}, error) {
 	if len(key) == 0 {
 		panic("Key cannot be empty")
 	}
 
-	var root interface{}
-	err := json.Unmarshal([]byte(jsonBody), &root)
+	rootNode, err := parser.deserialize(jsonBody)
 	if err != nil {
 		return nil, err
-	}
-
-	rootNode, ok := root.(map[string]interface{})
-	if !ok {
-		return nil, &ParseError{"JSON parsing failed, json: " + jsonBody}
 	}
 
 	node := rootNode[key]
@@ -61,4 +72,19 @@ func (parser *ConfigParser) parse(jsonBody string, key string, user *User) (inte
 	}
 
 	return evaluated, nil
+}
+
+func (parser *ConfigParser) deserialize(jsonBody string) (map[string]interface{}, error) {
+	var root interface{}
+	err := json.Unmarshal([]byte(jsonBody), &root)
+	if err != nil {
+		return nil, err
+	}
+
+	rootNode, ok := root.(map[string]interface{})
+	if !ok {
+		return nil, &ParseError{"JSON parsing failed, json: " + jsonBody}
+	}
+
+	return rootNode, nil
 }

@@ -165,3 +165,18 @@ func TestClient_Get_WithFailingCache(t *testing.T) {
 		t.Error("Expecting non default value")
 	}
 }
+
+func TestClient_GetAllKeys(t *testing.T) {
+
+	client := NewClient("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A")
+
+	keys, err := client.GetAllKeys()
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(keys) != 16 {
+		t.Error("Expecting 16 items")
+	}
+}

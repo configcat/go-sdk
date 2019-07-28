@@ -112,8 +112,32 @@ func (client *Client) GetValueAsyncForUser(key string, defaultValue interface{},
 		parsed, err := client.parser.ParseWithUser(res.(string), key, user)
 		if err != nil {
 			completion(client.getDefault(key, defaultValue, user))
+			return
 		}
 		completion(parsed)
+	})
+}
+
+// GetAllKeys retrieves all the setting keys.
+func (client *Client) GetAllKeys() ([]string, error) {
+	if client.maxWaitTimeForSyncCalls > 0 {
+		json, err := client.refreshPolicy.GetConfigurationAsync().GetOrTimeout(client.maxWaitTimeForSyncCalls)
+		if err != nil {
+			client.logger.Printf("Policy could not provide the configuration: %s", err.Error())
+			return nil, err
+		}
+
+		return client.parser.GetAllKeys(json.(string))
+	}
+
+	json, _ := client.refreshPolicy.GetConfigurationAsync().Get().(string)
+	return client.parser.GetAllKeys(json)
+}
+
+// GetAllKeysAsync retrieves all the setting keys asynchronously.
+func (client *Client) GetAllKeysAsync(completion func(result []string, err error)) {
+	client.refreshPolicy.GetConfigurationAsync().Accept(func(res interface{}) {
+		completion(client.parser.GetAllKeys(res.(string)))
 	})
 }
 
