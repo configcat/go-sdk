@@ -7,7 +7,10 @@ import (
 func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test"})
-	policy := NewManualPollingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()))
+	policy := NewManualPollingPolicy(
+		fetcher,
+		newConfigStore(DefaultLogger("test"), NewInMemoryConfigCache()),
+	)
 	config := policy.GetConfigurationAsync().Get().(string)
 
 	if config != "test" {
@@ -25,7 +28,10 @@ func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 func TestManualPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
-	policy := NewManualPollingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()))
+	policy := NewManualPollingPolicy(
+		fetcher,
+		newConfigStore(DefaultLogger("test"), NewInMemoryConfigCache()),
+	)
 	config := policy.GetConfigurationAsync().Get().(string)
 
 	if config != "" {

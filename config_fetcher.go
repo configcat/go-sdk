@@ -2,9 +2,7 @@ package configcat
 
 import (
 	"io/ioutil"
-	"log"
 	"net/http"
-	"os"
 )
 
 // ConfigProvider describes a configuration provider which used to collect the actual configuration.
@@ -16,15 +14,15 @@ type ConfigProvider interface {
 // ConfigFetcher used to fetch the actual configuration over HTTP.
 type ConfigFetcher struct {
 	apiKey, eTag, mode, baseUrl string
-	client             			*http.Client
-	logger             			*log.Logger
+	client                      *http.Client
+	logger                      Logger
 }
 
 func newConfigFetcher(apiKey string, config ClientConfig) *ConfigFetcher {
 	return &ConfigFetcher{apiKey: apiKey,
 		baseUrl: config.BaseUrl,
-		logger: log.New(os.Stderr, "[ConfigCat - Config Fetcher]", log.LstdFlags),
-		client: &http.Client{Timeout: config.HttpTimeout}}
+		logger:  config.Logger.Prefix("ConfigCat - Config Fetcher"),
+		client:  &http.Client{Timeout: config.HttpTimeout}}
 }
 
 // GetConfigurationAsync collects the actual configuration over HTTP.

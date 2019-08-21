@@ -1,8 +1,6 @@
 package configcat
 
 import (
-	"log"
-	"os"
 	"sync/atomic"
 	"time"
 )
@@ -11,7 +9,7 @@ import (
 type AutoPollingPolicy struct {
 	ConfigRefresher
 	autoPollInterval time.Duration
-	logger           *log.Logger
+	logger           Logger
 	init             *Async
 	initialized      uint32
 	stop             chan struct{}
@@ -44,7 +42,7 @@ func NewAutoPollingPolicyWithChangeListener(
 	policy := &AutoPollingPolicy{
 		ConfigRefresher:  ConfigRefresher{ConfigProvider: configProvider, Store: store},
 		autoPollInterval: autoPollInterval,
-		logger:           log.New(os.Stderr, "[ConfigCat - Auto Polling Policy]", log.LstdFlags),
+		logger:           store.logger.Prefix("ConfigCat - Auto Polling Policy"),
 		init:             NewAsync(),
 		initialized:      no,
 		stop:             make(chan struct{}),
@@ -84,7 +82,7 @@ func (policy *AutoPollingPolicy) startPolling() {
 		for {
 			select {
 			case <-policy.stop:
-				policy.logger.Println("Auto polling stopped")
+				policy.logger.Print("Auto polling stopped")
 				return
 			case <-ticker.C:
 				policy.poll()
@@ -94,7 +92,7 @@ func (policy *AutoPollingPolicy) startPolling() {
 }
 
 func (policy *AutoPollingPolicy) poll() {
-	policy.logger.Println("Polling the latest configuration")
+	policy.logger.Print("Polling the latest configuration")
 	response := policy.ConfigProvider.GetConfigurationAsync().Get().(FetchResponse)
 	cached := policy.Store.Get()
 	if response.IsFetched() && cached != response.Body {
@@ -110,6 +108,6 @@ func (policy *AutoPollingPolicy) poll() {
 }
 
 func (policy *AutoPollingPolicy) readCache() *AsyncResult {
-	policy.logger.Println("Reading from cache")
+	policy.logger.Print("Reading from cache")
 	return AsCompletedAsyncResult(policy.Store.Get())
 }
