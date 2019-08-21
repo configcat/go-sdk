@@ -1,8 +1,6 @@
 package configcat
 
 import (
-	"log"
-	"os"
 	"sync"
 )
 
@@ -21,13 +19,13 @@ type inMemoryConfigCache struct {
 // ConfigStore is used to maintain the cached configuration.
 type ConfigStore struct {
 	cache         ConfigCache
-	logger        *log.Logger
+	logger        Logger
 	inMemoryValue string
 	sync.RWMutex
 }
 
-func newConfigStore(cache ConfigCache) *ConfigStore {
-	return &ConfigStore{cache: cache, logger: log.New(os.Stderr, "[ConfigCat - Config Cache]", log.LstdFlags)}
+func newConfigStore(log Logger, cache ConfigCache) *ConfigStore {
+	return &ConfigStore{cache: cache, logger: log.Prefix("ConfigCat - Config Cache")}
 }
 
 // NewInMemoryConfigCache creates an in-memory cache implementation used to store the fetched configurations.

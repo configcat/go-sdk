@@ -2,8 +2,6 @@
 package configcat
 
 import (
-	"log"
-	"os"
 	"time"
 )
 
@@ -14,11 +12,13 @@ type Client struct {
 	parser                  *ConfigParser
 	refreshPolicy           RefreshPolicy
 	maxWaitTimeForSyncCalls time.Duration
-	logger                  *log.Logger
+	logger                  Logger
 }
 
 // ClientConfig describes custom configuration options for the Client.
 type ClientConfig struct {
+	// Base logger used to create new loggers
+	Logger Logger
 	// The factory delegate used to produce custom RefreshPolicy implementations.
 	PolicyFactory func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy
 	// The custom cache implementation used to store the configuration.
@@ -35,13 +35,14 @@ type ClientConfig struct {
 // DefaultClientConfig prepares a default configuration for the ConfigCat Client.
 func DefaultClientConfig() ClientConfig {
 	return ClientConfig{
-		BaseUrl: 				 "https://cdn.configcat.com",
-		Cache: 					 NewInMemoryConfigCache(),
+		Logger:                  DefaultLogger("ConfigCat - Config Cat Client"),
+		BaseUrl:                 "https://cdn.configcat.com",
+		Cache:                   NewInMemoryConfigCache(),
 		MaxWaitTimeForSyncCalls: 0,
 		HttpTimeout:             time.Second * 15,
-		PolicyFactory: 			 func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
-									 return NewAutoPollingPolicy(configProvider, store, time.Second*120)
-								 },
+		PolicyFactory: func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
+			return NewAutoPollingPolicy(configProvider, store, time.Second*120)
+		},
 	}
 }
 
@@ -59,15 +60,18 @@ func newInternal(apiKey string, config ClientConfig, fetcher ConfigProvider) *Cl
 	if len(apiKey) == 0 {
 		panic("apiKey cannot be empty")
 	}
+	if config.Logger == nil {
+		config.Logger = DefaultLogger("ConfigCat - Config Cat Client")
+	}
 
-	store := newConfigStore(config.Cache)
+	store := newConfigStore(config.Logger, config.Cache)
 	policy := config.PolicyFactory(fetcher, store)
 	return &Client{configProvider: fetcher,
 		store:                   store,
 		parser:                  newParser(),
 		refreshPolicy:           policy,
 		maxWaitTimeForSyncCalls: config.MaxWaitTimeForSyncCalls,
-		logger:                  log.New(os.Stderr, "[ConfigCat - Config Cat Client]", log.LstdFlags)}
+		logger:                  config.Logger}
 }
 
 // GetValue returns a value synchronously as interface{} from the configuration identified by the given key.
