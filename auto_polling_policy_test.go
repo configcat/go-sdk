@@ -10,7 +10,11 @@ func TestAutoPollingPolicy_GetConfigurationAsync(t *testing.T) {
 
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test"})
 
-	policy := NewAutoPollingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2)
+	policy := NewAutoPollingPolicy(
+		fetcher,
+		newConfigStore(DefaultLogger("test"), NewInMemoryConfigCache()),
+		time.Second*2,
+	)
 	defer policy.Close()
 
 	config := policy.GetConfigurationAsync().Get().(string)
@@ -39,7 +43,11 @@ func TestAutoPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 
 	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
 
-	policy := NewAutoPollingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2)
+	policy := NewAutoPollingPolicy(
+		fetcher,
+		newConfigStore(DefaultLogger("test"), NewInMemoryConfigCache()),
+		time.Second*2,
+	)
 	defer policy.Close()
 
 	config := policy.GetConfigurationAsync().Get().(string)
@@ -55,9 +63,12 @@ func TestAutoPollingPolicy_GetConfigurationAsync_WithListener(t *testing.T) {
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test"})
 	c := make(chan string, 1)
 	defer close(c)
-	policy := NewAutoPollingPolicyWithChangeListener(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2, func(config string, parser *ConfigParser) {
-		c <- config
-	})
+	policy := NewAutoPollingPolicyWithChangeListener(
+		fetcher,
+		newConfigStore(DefaultLogger("test"), NewInMemoryConfigCache()),
+		time.Second*2,
+		func(config string, parser *ConfigParser) { c <- config },
+	)
 	defer policy.Close()
 	config := <-c
 

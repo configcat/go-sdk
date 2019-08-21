@@ -10,7 +10,12 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_DoNotUseAsync(t *testing.T) {
 
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test"})
 
-	policy := NewLazyLoadingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2, false)
+	policy := NewLazyLoadingPolicy(
+		fetcher,
+		newConfigStore(DefaultLogger("test"), NewInMemoryConfigCache()),
+		time.Second*2,
+		false,
+	)
 	config := policy.GetConfigurationAsync().Get().(string)
 
 	if config != "test" {
@@ -37,7 +42,12 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 
 	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
 
-	policy := NewLazyLoadingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2, false)
+	policy := NewLazyLoadingPolicy(
+		fetcher,
+		newConfigStore(DefaultLogger("test"), NewInMemoryConfigCache()),
+		time.Second*2,
+		false,
+	)
 	config := policy.GetConfigurationAsync().Get().(string)
 
 	if config != "" {
@@ -50,7 +60,12 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_UseAsync(t *testing.T) {
 
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test"})
 
-	policy := NewLazyLoadingPolicy(fetcher, newConfigStore(NewInMemoryConfigCache()), time.Second*2, true)
+	policy := NewLazyLoadingPolicy(
+		fetcher,
+		newConfigStore(DefaultLogger("test"), NewInMemoryConfigCache()),
+		time.Second*2,
+		true,
+	)
 	config := policy.GetConfigurationAsync().Get().(string)
 
 	if config != "test" {
