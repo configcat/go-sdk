@@ -39,7 +39,7 @@ func NewUserWithAdditionalAttributes(identifier string, email string, country st
 	return user
 }
 
-func (user *User) getAttribute(key string) string {
+func (user *User) GetAttribute(key string) string {
 	val := user.attributes[strings.ToLower(key)]
 	if len(val) > 0 {
 		return val
