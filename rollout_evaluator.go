@@ -31,7 +31,7 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 			comparisonAttribute, ok := rule["ComparisonAttribute"].(string)
 			comparisonValue, ok := rule["ComparisonValue"].(string)
 			comparator, ok := rule["Comparator"].(float64)
-			userValue := user.getAttribute(comparisonAttribute)
+			userValue := user.GetAttribute(comparisonAttribute)
 
 			if !ok || len(userValue) == 0 {
 				continue
