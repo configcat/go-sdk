@@ -38,9 +38,9 @@ type ClientConfig struct {
 // DefaultClientConfig prepares a default configuration for the ConfigCat Client.
 func DefaultClientConfig() ClientConfig {
 	return ClientConfig{
-		Logger:  DefaultLogger(),
-		BaseUrl: "https://cdn.configcat.com",
-		Cache:   NewInMemoryConfigCache(),
+		Logger:                  DefaultLogger(),
+		BaseUrl:                 "https://cdn.configcat.com",
+		Cache:                   NewInMemoryConfigCache(),
 		MaxWaitTimeForSyncCalls: 0,
 		HttpTimeout:             time.Second * 15,
 		Transport:               http.DefaultTransport,
