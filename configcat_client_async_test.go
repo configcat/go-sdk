@@ -8,8 +8,8 @@ import (
 func TestClient_RefreshAsync(t *testing.T) {
 
 	config := DefaultClientConfig()
-	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
-		return NewManualPollingPolicy(configProvider, store)
+	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
+		return NewManualPollingPolicy(configProvider, store, logger)
 	}
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",

@@ -8,14 +8,15 @@ type ManualPollingPolicy struct {
 // NewManualPollingPolicy initializes a new ManualPollingPolicy.
 func NewManualPollingPolicy(
 	configProvider ConfigProvider,
-	store *ConfigStore) *ManualPollingPolicy {
+	store *ConfigStore,
+	logger Logger) *ManualPollingPolicy {
 
 	fetcher, ok := configProvider.(*ConfigFetcher)
 	if ok {
 		fetcher.mode = "m"
 	}
 
-	return &ManualPollingPolicy{ConfigRefresher: ConfigRefresher{ConfigProvider: configProvider, Store: store}}
+	return &ManualPollingPolicy{ConfigRefresher: ConfigRefresher{ConfigProvider: configProvider, Store: store, Logger: logger}}
 }
 
 // GetConfigurationAsync reads the current configuration value.

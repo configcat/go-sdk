@@ -21,8 +21,8 @@ type ConfigFetcher struct {
 func newConfigFetcher(apiKey string, config ClientConfig) *ConfigFetcher {
 	return &ConfigFetcher{apiKey: apiKey,
 		baseUrl: config.BaseUrl,
-		logger:  config.Logger.Prefix("ConfigCat - Config Fetcher"),
-		client:  &http.Client{Timeout: config.HttpTimeout}}
+		logger:  config.Logger,
+		client:  &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport}}
 }
 
 // GetConfigurationAsync collects the actual configuration over HTTP.
@@ -30,7 +30,7 @@ func (fetcher *ConfigFetcher) GetConfigurationAsync() *AsyncResult {
 	result := NewAsyncResult()
 
 	go func() {
-		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.apiKey+"/config_v2.json", nil)
+		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.apiKey+"/config_v3.json", nil)
 		if requestError != nil {
 			result.Complete(FetchResponse{Status: Failure})
 			return
@@ -44,7 +44,7 @@ func (fetcher *ConfigFetcher) GetConfigurationAsync() *AsyncResult {
 
 		response, responseError := fetcher.client.Do(request)
 		if responseError != nil {
-			fetcher.logger.Printf("Config fetch failed: %s", responseError.Error())
+			fetcher.logger.Errorf("Config fetch failed: %s.", responseError.Error())
 			result.Complete(FetchResponse{Status: Failure, Body: ""})
 			return
 		}
@@ -52,7 +52,7 @@ func (fetcher *ConfigFetcher) GetConfigurationAsync() *AsyncResult {
 		defer response.Body.Close()
 
 		if response.StatusCode == 304 {
-			fetcher.logger.Print("Config fetch succeeded: not modified")
+			fetcher.logger.Debugln("Config fetch succeeded: not modified.")
 			result.Complete(FetchResponse{Status: NotModified})
 			return
 		}
@@ -60,18 +60,19 @@ func (fetcher *ConfigFetcher) GetConfigurationAsync() *AsyncResult {
 		if response.StatusCode >= 200 && response.StatusCode < 300 {
 			body, bodyError := ioutil.ReadAll(response.Body)
 			if bodyError != nil {
-				fetcher.logger.Printf("Config fetch failed: %s", bodyError.Error())
+				fetcher.logger.Errorf("Config fetch failed: %s.", bodyError.Error())
 				result.Complete(FetchResponse{Status: Failure})
 				return
 			}
 
-			fetcher.logger.Print("Config fetch succeeded: new config fetched")
+			fetcher.logger.Debugln("Config fetch succeeded: new config fetched.")
 			fetcher.eTag = response.Header.Get("Etag")
 			result.Complete(FetchResponse{Status: Fetched, Body: string(body)})
 			return
 		}
 
-		fetcher.logger.Printf("Config fetch failed, non success status code: %v", response.StatusCode)
+		fetcher.logger.Errorf("Double-check your API KEY at https://app.configcat.com/apikey. "+
+			"Received unexpected response: %v.", response.StatusCode)
 		result.Complete(FetchResponse{Status: Failure})
 	}()
 

@@ -6,10 +6,12 @@ import (
 
 func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
+	logger := DefaultLogger()
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test"})
 	policy := NewManualPollingPolicy(
 		fetcher,
-		newConfigStore(DefaultLogger("test"), NewInMemoryConfigCache()),
+		newConfigStore(logger, NewInMemoryConfigCache()),
+		logger,
 	)
 	config := policy.GetConfigurationAsync().Get().(string)
 
@@ -27,10 +29,12 @@ func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 
 func TestManualPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher := newFakeConfigProvider()
+	logger := DefaultLogger()
 	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
 	policy := NewManualPollingPolicy(
 		fetcher,
-		newConfigStore(DefaultLogger("test"), NewInMemoryConfigCache()),
+		newConfigStore(logger, NewInMemoryConfigCache()),
+		logger,
 	)
 	config := policy.GetConfigurationAsync().Get().(string)
 

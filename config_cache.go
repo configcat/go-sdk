@@ -25,7 +25,7 @@ type ConfigStore struct {
 }
 
 func newConfigStore(log Logger, cache ConfigCache) *ConfigStore {
-	return &ConfigStore{cache: cache, logger: log.Prefix("ConfigCat - Config Cache")}
+	return &ConfigStore{cache: cache, logger: log}
 }
 
 // NewInMemoryConfigCache creates an in-memory cache implementation used to store the fetched configurations.
@@ -50,7 +50,7 @@ func (store *ConfigStore) Get() string {
 	defer store.RUnlock()
 	value, err := store.cache.Get()
 	if err != nil {
-		store.logger.Printf("Reading from the cache failed, %s", err)
+		store.logger.Errorf("Reading from the cache failed, %s", err)
 		return store.inMemoryValue
 	}
 
@@ -64,6 +64,6 @@ func (store *ConfigStore) Set(value string) {
 	store.inMemoryValue = value
 	err := store.cache.Set(value)
 	if err != nil {
-		store.logger.Printf("Saving into the cache failed, %s", err)
+		store.logger.Errorf("Saving into the cache failed, %s", err)
 	}
 }

@@ -9,7 +9,6 @@ import (
 type AutoPollingPolicy struct {
 	ConfigRefresher
 	autoPollInterval time.Duration
-	logger           Logger
 	init             *Async
 	initialized      uint32
 	stop             chan struct{}
@@ -22,8 +21,9 @@ type AutoPollingPolicy struct {
 func NewAutoPollingPolicy(
 	configProvider ConfigProvider,
 	store *ConfigStore,
+	logger Logger,
 	autoPollInterval time.Duration) *AutoPollingPolicy {
-	return NewAutoPollingPolicyWithChangeListener(configProvider, store, autoPollInterval, nil)
+	return NewAutoPollingPolicyWithChangeListener(configProvider, store, logger, autoPollInterval, nil)
 }
 
 // NewAutoPollingPolicyWithChangeListener initializes a new AutoPollingPolicy.
@@ -31,6 +31,7 @@ func NewAutoPollingPolicy(
 func NewAutoPollingPolicyWithChangeListener(
 	configProvider ConfigProvider,
 	store *ConfigStore,
+	logger Logger,
 	autoPollInterval time.Duration,
 	configChanged func(config string, parser *ConfigParser)) *AutoPollingPolicy {
 
@@ -40,14 +41,13 @@ func NewAutoPollingPolicyWithChangeListener(
 	}
 
 	policy := &AutoPollingPolicy{
-		ConfigRefresher:  ConfigRefresher{ConfigProvider: configProvider, Store: store},
+		ConfigRefresher:  ConfigRefresher{ConfigProvider: configProvider, Store: store, Logger: logger},
 		autoPollInterval: autoPollInterval,
-		logger:           store.logger.Prefix("ConfigCat - Auto Polling Policy"),
 		init:             NewAsync(),
 		initialized:      no,
 		stop:             make(chan struct{}),
 		configChanged:    configChanged,
-		parser:           newParser(),
+		parser:           newParser(logger),
 	}
 	policy.startPolling()
 	return policy
@@ -72,7 +72,7 @@ func (policy *AutoPollingPolicy) Close() {
 }
 
 func (policy *AutoPollingPolicy) startPolling() {
-	policy.logger.Printf("Auto polling started with %+v interval", policy.autoPollInterval)
+	policy.Logger.Debugf("Auto polling started with %+v interval.", policy.autoPollInterval)
 
 	ticker := time.NewTicker(policy.autoPollInterval)
 
@@ -82,7 +82,7 @@ func (policy *AutoPollingPolicy) startPolling() {
 		for {
 			select {
 			case <-policy.stop:
-				policy.logger.Print("Auto polling stopped")
+				policy.Logger.Debugf("Auto polling stopped.")
 				return
 			case <-ticker.C:
 				policy.poll()
@@ -92,7 +92,7 @@ func (policy *AutoPollingPolicy) startPolling() {
 }
 
 func (policy *AutoPollingPolicy) poll() {
-	policy.logger.Print("Polling the latest configuration")
+	policy.Logger.Debugln("Polling the latest configuration.")
 	response := policy.ConfigProvider.GetConfigurationAsync().Get().(FetchResponse)
 	cached := policy.Store.Get()
 	if response.IsFetched() && cached != response.Body {
@@ -108,6 +108,6 @@ func (policy *AutoPollingPolicy) poll() {
 }
 
 func (policy *AutoPollingPolicy) readCache() *AsyncResult {
-	policy.logger.Print("Reading from cache")
+	policy.Logger.Debugln("Reading from cache.")
 	return AsCompletedAsyncResult(policy.Store.Get())
 }

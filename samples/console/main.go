@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"gopkg.in/configcat/go-sdk.v1"
+	"github.com/configcat/go-sdk"
 )
 
 func main() {

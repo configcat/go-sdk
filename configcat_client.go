@@ -2,6 +2,7 @@
 package configcat
 
 import (
+	"net/http"
 	"time"
 )
 
@@ -20,7 +21,7 @@ type ClientConfig struct {
 	// Base logger used to create new loggers
 	Logger Logger
 	// The factory delegate used to produce custom RefreshPolicy implementations.
-	PolicyFactory func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy
+	PolicyFactory func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy
 	// The custom cache implementation used to store the configuration.
 	Cache ConfigCache
 	// The maximum time how long at most the synchronous calls (e.g. client.Get(...)) should block the caller.
@@ -30,18 +31,21 @@ type ClientConfig struct {
 	HttpTimeout time.Duration
 	// The base ConfigCat CDN url.
 	BaseUrl string
+	// The custom http transport object.
+	Transport http.RoundTripper
 }
 
 // DefaultClientConfig prepares a default configuration for the ConfigCat Client.
 func DefaultClientConfig() ClientConfig {
 	return ClientConfig{
-		Logger:                  DefaultLogger("ConfigCat - Config Cat Client"),
-		BaseUrl:                 "https://cdn.configcat.com",
-		Cache:                   NewInMemoryConfigCache(),
+		Logger:  DefaultLogger(),
+		BaseUrl: "https://cdn.configcat.com",
+		Cache:   NewInMemoryConfigCache(),
 		MaxWaitTimeForSyncCalls: 0,
 		HttpTimeout:             time.Second * 15,
-		PolicyFactory: func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
-			return NewAutoPollingPolicy(configProvider, store, time.Second*120)
+		Transport:               http.DefaultTransport,
+		PolicyFactory: func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
+			return NewAutoPollingPolicy(configProvider, store, logger, time.Second*120)
 		},
 	}
 }
@@ -61,14 +65,14 @@ func newInternal(apiKey string, config ClientConfig, fetcher ConfigProvider) *Cl
 		panic("apiKey cannot be empty")
 	}
 	if config.Logger == nil {
-		config.Logger = DefaultLogger("ConfigCat - Config Cat Client")
+		config.Logger = DefaultLogger()
 	}
 
 	store := newConfigStore(config.Logger, config.Cache)
-	policy := config.PolicyFactory(fetcher, store)
+	policy := config.PolicyFactory(fetcher, store, config.Logger)
 	return &Client{configProvider: fetcher,
 		store:                   store,
-		parser:                  newParser(),
+		parser:                  newParser(config.Logger),
 		refreshPolicy:           policy,
 		maxWaitTimeForSyncCalls: config.MaxWaitTimeForSyncCalls,
 		logger:                  config.Logger}
@@ -94,7 +98,7 @@ func (client *Client) GetValueForUser(key string, defaultValue interface{}, user
 	if client.maxWaitTimeForSyncCalls > 0 {
 		json, err := client.refreshPolicy.GetConfigurationAsync().GetOrTimeout(client.maxWaitTimeForSyncCalls)
 		if err != nil {
-			client.logger.Printf("Policy could not provide the configuration: %s", err.Error())
+			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
 			return client.getDefault(key, defaultValue, user)
 		}
 
@@ -127,7 +131,7 @@ func (client *Client) GetAllKeys() ([]string, error) {
 	if client.maxWaitTimeForSyncCalls > 0 {
 		json, err := client.refreshPolicy.GetConfigurationAsync().GetOrTimeout(client.maxWaitTimeForSyncCalls)
 		if err != nil {
-			client.logger.Printf("Policy could not provide the configuration: %s", err.Error())
+			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
 			return nil, err
 		}
 

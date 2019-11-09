@@ -13,7 +13,6 @@ type LazyLoadingPolicy struct {
 	initialized     uint32
 	useAsyncRefresh bool
 	lastRefreshTime time.Time
-	logger          Logger
 	fetching        *AsyncResult
 	init            *Async
 }
@@ -22,6 +21,7 @@ type LazyLoadingPolicy struct {
 func NewLazyLoadingPolicy(
 	configProvider ConfigProvider,
 	store *ConfigStore,
+	logger Logger,
 	cacheInterval time.Duration,
 	useAsyncRefresh bool) *LazyLoadingPolicy {
 
@@ -30,14 +30,13 @@ func NewLazyLoadingPolicy(
 		fetcher.mode = "l"
 	}
 
-	return &LazyLoadingPolicy{ConfigRefresher: ConfigRefresher{ConfigProvider: configProvider, Store: store},
+	return &LazyLoadingPolicy{ConfigRefresher: ConfigRefresher{ConfigProvider: configProvider, Store: store, Logger: logger},
 		cacheInterval:   cacheInterval,
 		isFetching:      no,
 		initialized:     no,
 		useAsyncRefresh: useAsyncRefresh,
 		lastRefreshTime: time.Time{},
-		init:            NewAsync(),
-		logger:          store.logger.Prefix("ConfigCat - Lazy Loading Policy")}
+		init:            NewAsync()}
 }
 
 // GetConfigurationAsync reads the current configuration value.
@@ -52,7 +51,7 @@ func (policy *LazyLoadingPolicy) GetConfigurationAsync() *AsyncResult {
 			return policy.fetching
 		}
 
-		policy.logger.Print("Cache expired, refreshing")
+		policy.Logger.Debugln("Cache expired, refreshing.")
 		if initialized {
 			policy.fetching = policy.fetch()
 			if policy.useAsyncRefresh {
@@ -105,6 +104,6 @@ func (policy *LazyLoadingPolicy) fetch() *AsyncResult {
 }
 
 func (policy *LazyLoadingPolicy) readCache() *AsyncResult {
-	policy.logger.Print("Reading from cache")
+	policy.Logger.Debugln("Reading from cache.")
 	return AsCompletedAsyncResult(policy.Store.Get())
 }

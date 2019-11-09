@@ -16,11 +16,13 @@ func (p *ParseError) Error() string {
 
 // ConfigParser describes a JSON configuration parser
 type ConfigParser struct {
-	evaluator rolloutEvaluator
+	evaluator *rolloutEvaluator
+	logger    Logger
 }
 
-func newParser() *ConfigParser {
-	return &ConfigParser{evaluator: rolloutEvaluator{}}
+func newParser(logger Logger) *ConfigParser {
+	evaluator := newRolloutEvaluator(logger)
+	return &ConfigParser{evaluator: evaluator, logger: logger}
 }
 
 // Parse converts a json element identified by a key from the given json string into an interface{} value.
@@ -58,17 +60,22 @@ func (parser *ConfigParser) parse(jsonBody string, key string, user *User) (inte
 
 	rootNode, err := parser.deserialize(jsonBody)
 	if err != nil {
+		parser.logger.Errorf("JSON parsing failed. %s.", err.Error())
 		return nil, err
 	}
 
 	node := rootNode[key]
 	if node == nil {
-		return nil, &ParseError{"Key not found in json: " + key + ", json: " + jsonBody}
+		parser.logger.Errorf("Evaluating GetValue(%s) failed. "+
+			"Value not found for key %s.", key, key)
+		return nil, &ParseError{"Evaluating GetValue(" + key + ") failed. " +
+			"Value not found for key " + key + ", json: " + jsonBody}
 	}
 
 	evaluated := parser.evaluator.evaluate(node, key, user)
 	if evaluated == nil {
-		return nil, &ParseError{"JSON parsing failed for (key: " + key + "), json: " + jsonBody}
+		parser.logger.Errorf("Evaluating GetValue(%s) failed.", key)
+		return nil, &ParseError{"JSON parsing failed for key " + key + ", json: " + jsonBody}
 	}
 
 	return evaluated, nil

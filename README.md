@@ -26,7 +26,7 @@ go get gopkg.in/configcat/go-sdk.v1
 
 ### 3. Import the *ConfigCat* client package to your application
 ```go
-import gopkg.in/configcat/go-sdk.v1
+import gopkg.in/configcat/go-sdk.v2
 ```
 
 ### 4. Create a *ConfigCat* client instance:
@@ -64,7 +64,7 @@ client.Close()
 ## Getting user specific setting values with Targeting
 Using this feature, you will be able to get different setting values for different users in your application by passing a `User Object` to the `getValue()` function.
 
-Read more about [Targeting here](https://docs.configcat.com/docs/advanced/targeting/).
+Read more about [Targeting here](https://configcat.com/docs/advanced/targeting/).
 ```go
 user := configcat.NewUser("#USER-IDENTIFIER#")
 
@@ -77,7 +77,7 @@ if ok && isMyAwesomeFeatureEnabled {
 ```
 
 ## Polling Modes
-The ConfigCat SDK supports 3 different polling mechanisms to acquire the setting values from ConfigCat. After latest setting values are downloaded, they are stored in the internal cache then all requests are served from there. Read more about Polling Modes and how to use them at [ConfigCat Docs](https://docs.configcat.com/docs/sdk-reference/go/).
+The ConfigCat SDK supports 3 different polling mechanisms to acquire the setting values from ConfigCat. After latest setting values are downloaded, they are stored in the internal cache then all requests are served from there. Read more about Polling Modes and how to use them at [ConfigCat Docs](https://configcat.com/docs/sdk-reference/go/).
 
 ## Support
 If you need help how to use this SDK feel free to to contact the ConfigCat Staff on https://configcat.com. We're happy to help.
@@ -86,6 +86,6 @@ If you need help how to use this SDK feel free to to contact the ConfigCat Staff
 Contributions are welcome.
 
 ## About ConfigCat
-- [Official ConfigCat SDK's for other platforms](https://github.com/configcat)
-- [Documentation](https://docs.configcat.com)
-- [Blog](https://blog.configcat.com)
+- [Official ConfigCat SDKs for other platforms](https://github.com/configcat)
+- [Documentation](https://configcat.com/docs)
+- [Blog](https://configcat.com/blog)

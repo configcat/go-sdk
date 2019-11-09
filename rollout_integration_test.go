@@ -13,10 +13,16 @@ import (
 )
 
 func TestRolloutIntegration(t *testing.T) {
-	client := NewClient("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A")
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A", "testmatrix.csv", t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA", "testmatrix_semantic.csv", t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw", "testmatrix_number.csv", t)
+}
+
+func doIntegrationTest(apiKey string, fileName string, t *testing.T) {
+	client := NewClient(apiKey)
 	defer client.Close()
 
-	file, fileErr := os.Open("resources/testmatrix.csv")
+	file, fileErr := os.Open("resources/" + fileName)
 	if fileErr != nil {
 		log.Fatal(fileErr)
 	}

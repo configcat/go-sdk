@@ -1,28 +1,27 @@
 package configcat
 
 import (
-	"fmt"
-	"log"
-	"os"
+	"github.com/sirupsen/logrus"
 )
 
 // Logger defines the interface this library logs with
 type Logger interface {
-	Prefix(string) Logger
+	Debugf(format string, args ...interface{})
+	Infof(format string, args ...interface{})
+	Warnf(format string, args ...interface{})
+	Errorf(format string, args ...interface{})
 
-	Print(...interface{})
-	Printf(string, ...interface{})
+	Debug(args ...interface{})
+	Info(args ...interface{})
+	Warn(args ...interface{})
+	Error(args ...interface{})
+
+	Debugln(args ...interface{})
+	Infoln(args ...interface{})
+	Warnln(args ...interface{})
+	Errorln(args ...interface{})
 }
 
-type logger struct {
-	*log.Logger
-}
-
-// DefaultLogger instantiates a default logger backed by the standard library logger
-func DefaultLogger(name string) Logger {
-	return &logger{log.New(os.Stderr, fmt.Sprintf("[%s]", name), log.LstdFlags)}
-}
-
-func (l *logger) Prefix(name string) Logger {
-	return DefaultLogger(name)
+func DefaultLogger() Logger {
+	return logrus.New()
 }

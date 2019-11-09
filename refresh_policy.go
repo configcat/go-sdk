@@ -16,6 +16,8 @@ type ConfigRefresher struct {
 	ConfigProvider ConfigProvider
 	// The configuration store used to maintain the cached configuration.
 	Store *ConfigStore
+	// The logger instance.
+	Logger Logger
 }
 
 // RefreshAsync initiates a force refresh on the cached configuration.

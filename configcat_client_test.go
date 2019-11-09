@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	jsonFormat = "{ \"%s\": { \"Value\": %s, \"SettingType\": 0, \"RolloutPercentageItems\": [], \"RolloutRules\": [] }}"
+	jsonFormat = "{ \"%s\": { \"v\": %s, \"p\": [], \"r\": [] }}"
 )
 
 type FailingCache struct {
@@ -26,8 +26,8 @@ func (cache *FailingCache) Set(value string) error {
 
 func getTestClients() (*fakeConfigProvider, *Client) {
 	config := DefaultClientConfig()
-	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
-		return NewManualPollingPolicy(configProvider, store)
+	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
+		return NewManualPollingPolicy(configProvider, store, logger)
 	}
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
@@ -40,8 +40,8 @@ func getTestClients() (*fakeConfigProvider, *Client) {
 func TestClient_Refresh(t *testing.T) {
 
 	config := DefaultClientConfig()
-	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
-		return NewManualPollingPolicy(configProvider, store)
+	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
+		return NewManualPollingPolicy(configProvider, store, logger)
 	}
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
@@ -67,8 +67,8 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 
 	config := DefaultClientConfig()
 	config.MaxWaitTimeForSyncCalls = time.Second * 1
-	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
-		return NewManualPollingPolicy(configProvider, store)
+	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
+		return NewManualPollingPolicy(configProvider, store, logger)
 	}
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
@@ -131,8 +131,8 @@ func TestClient_Get_Latest(t *testing.T) {
 func TestClient_Get_WithTimeout(t *testing.T) {
 	config := DefaultClientConfig()
 	config.MaxWaitTimeForSyncCalls = time.Second * 1
-	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
-		return NewManualPollingPolicy(configProvider, store)
+	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
+		return NewManualPollingPolicy(configProvider, store, logger)
 	}
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
@@ -150,8 +150,8 @@ func TestClient_Get_WithTimeout(t *testing.T) {
 func TestClient_Get_WithFailingCache(t *testing.T) {
 	config := DefaultClientConfig()
 	config.Cache = &FailingCache{}
-	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore) RefreshPolicy {
-		return NewManualPollingPolicy(configProvider, store)
+	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
+		return NewManualPollingPolicy(configProvider, store, logger)
 	}
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",

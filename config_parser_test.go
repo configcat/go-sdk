@@ -3,8 +3,8 @@ package configcat
 import "testing"
 
 func TestConfigParser_Parse(t *testing.T) {
-	jsonBody := "{ \"keyDouble\": { \"Value\": 120.121238476, \"SettingType\": 0, \"RolloutPercentageItems\": [], \"RolloutRules\": [] }}"
-	parser := newParser()
+	jsonBody := "{ \"keyDouble\": { \"v\": 120.121238476, \"p\": [], \"r\": [] }}"
+	parser := newParser(DefaultLogger())
 
 	val, err := parser.Parse(jsonBody, "keyDouble")
 
@@ -15,7 +15,7 @@ func TestConfigParser_Parse(t *testing.T) {
 
 func TestConfigParser_BadJson(t *testing.T) {
 	jsonBody := ""
-	parser := newParser()
+	parser := newParser(DefaultLogger())
 
 	_, err := parser.Parse(jsonBody, "keyDouble")
 
@@ -28,7 +28,7 @@ func TestConfigParser_BadJson(t *testing.T) {
 
 func TestConfigParser_BadJson_String(t *testing.T) {
 	jsonBody := ""
-	parser := newParser()
+	parser := newParser(DefaultLogger())
 
 	_, err := parser.Parse(jsonBody, "key")
 
@@ -41,7 +41,7 @@ func TestConfigParser_BadJson_String(t *testing.T) {
 
 func TestConfigParser_WrongKey(t *testing.T) {
 	jsonBody := "{ \"keyDouble\": { \"Value\": 120.121238476, \"SettingType\": 0, \"RolloutPercentageItems\": [], \"RolloutRules\": [] }}"
-	parser := newParser()
+	parser := newParser(DefaultLogger())
 
 	_, err := parser.Parse(jsonBody, "wrongKey")
 
@@ -54,7 +54,7 @@ func TestConfigParser_WrongKey(t *testing.T) {
 
 func TestConfigParser_EmptyNode(t *testing.T) {
 	jsonBody := "{ \"keyDouble\": { }}"
-	parser := newParser()
+	parser := newParser(DefaultLogger())
 
 	_, err := parser.Parse(jsonBody, "keyDouble")
 
