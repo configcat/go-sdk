@@ -8,6 +8,7 @@
    ```bash
    go test
    ```
+3. Bump the version in `version.go`
 ## Publish
 - Via git tag
     1. Create a new version tag.

@@ -16,6 +16,7 @@ func TestRolloutIntegration(t *testing.T) {
 	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A", "testmatrix.csv", t)
 	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA", "testmatrix_semantic.csv", t)
 	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw", "testmatrix_number.csv", t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w", "testmatrix_semantic_2.csv", t)
 }
 
 func doIntegrationTest(apiKey string, fileName string, t *testing.T) {
@@ -32,6 +33,7 @@ func doIntegrationTest(apiKey string, fileName string, t *testing.T) {
 
 	header, _ := reader.Read()
 	settingKeys := header[4:]
+	customKey := header[3]
 
 	var errors []string
 
@@ -60,7 +62,7 @@ func doIntegrationTest(apiKey string, fileName string, t *testing.T) {
 
 			custom := map[string]string{}
 			if len(line[3]) > 0 && line[3] != "##null##" {
-				custom["Custom1"] = line[3]
+				custom[customKey] = line[3]
 			}
 
 			user = NewUserWithAdditionalAttributes(identifier, email, country, custom)
