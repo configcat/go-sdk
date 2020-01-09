@@ -3,10 +3,16 @@ package main
 import (
 	"fmt"
 	"github.com/configcat/go-sdk"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	client := configcat.NewClient("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A")
+	logger := logrus.New()
+	logger.SetLevel(logrus.DebugLevel)
+	config := configcat.DefaultClientConfig()
+	config.Logger = logger
+
+	client := configcat.NewCustomClient("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A", config)
 
 	// create a user object to identify your user (optional)
 	user := configcat.NewUser("##SOME-USER-IDENTIFICATION##")
