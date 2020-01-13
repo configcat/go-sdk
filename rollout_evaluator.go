@@ -36,6 +36,7 @@ func newRolloutEvaluator(logger Logger) *rolloutEvaluator {
 }
 
 func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *User) interface{} {
+
 	node, ok := json.(map[string]interface{})
 	if !ok {
 		return nil
@@ -63,6 +64,7 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 			value := rule["v"]
 
 			if !ok || len(userValue) == 0 {
+				evaluator.logNoMatch(comparisonAttribute, userValue, comparator, comparisonValue)
 				continue
 			}
 
@@ -181,6 +183,8 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 					return value
 				}
 			}
+
+			evaluator.logNoMatch(comparisonAttribute, userValue, comparator, comparisonValue)
 		}
 	}
 
@@ -210,13 +214,21 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 		}
 	}
 
-	return node["v"]
+	result := node["v"]
+	evaluator.logger.Infof("Returning %v.", result)
+	return result
 }
 
 func (evaluator *rolloutEvaluator) logMatch(comparisonAttribute string, userValue interface{},
 	comparator float64, comparisonValue string, value interface{}) {
-	evaluator.logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => match, returning: %s",
+	evaluator.logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => match, returning: %v",
 		comparisonAttribute, userValue, evaluator.comparatorTexts[int(comparator)], comparisonValue, value)
+}
+
+func (evaluator *rolloutEvaluator) logNoMatch(comparisonAttribute string, userValue interface{},
+	comparator float64, comparisonValue string) {
+	evaluator.logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => no match",
+		comparisonAttribute, userValue, evaluator.comparatorTexts[int(comparator)], comparisonValue)
 }
 
 func (evaluator *rolloutEvaluator) logFormatError(comparisonAttribute string, userValue interface{},
