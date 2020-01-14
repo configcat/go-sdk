@@ -8,14 +8,17 @@ import (
 
 func main() {
 	logger := logrus.New()
+
+	// Setting log level to Info to show detailed feature flag evaluation
 	logger.SetLevel(logrus.InfoLevel)
+	
 	config := configcat.DefaultClientConfig()
 	config.Logger = logger
 
 	client := configcat.NewCustomClient("PKDVCLf-Hq-h-kCzMp-L7Q/HhOWfwVtZ0mb30i9wi17GQ", config)
 
 	// create a user object to identify your user (optional)
-	user := configcat.NewUser("##SOME-USER-IDENTIFICATION##")
+	user := configcat.NewUserWithAdditionalAttributes("##SOME-USER-IDENTIFICATION##", "configcat@example.com", "", nil)
 
 	// get individual config values identified by a key and a user object
 	value := client.GetValueForUser("isPOCFeatureEnabled", "", user)
