@@ -21,7 +21,7 @@ func main() {
 	user := configcat.NewUserWithAdditionalAttributes("##SOME-USER-IDENTIFICATION##", "configcat@example.com", "", nil)
 
 	// get individual config values identified by a key and a user object
-	value := client.GetValueForUser("isPOCFeatureEnabled", "", user)
+	value := client.GetValueForUser("isPOCFeatureEnabled", false, user)
 
 	fmt.Println("isPOCFeatureEnabled: ", value)
 }
