@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/csv"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"log"
 	"os"
@@ -20,7 +21,11 @@ func TestRolloutIntegration(t *testing.T) {
 }
 
 func doIntegrationTest(apiKey string, fileName string, t *testing.T) {
-	client := NewClient(apiKey)
+	config := DefaultClientConfig()
+	logger := logrus.New()
+	logger.SetLevel(logrus.WarnLevel)
+	config.Logger = logger
+	client := NewCustomClient(apiKey, config)
 	defer client.Close()
 
 	file, fileErr := os.Open("resources/" + fileName)
