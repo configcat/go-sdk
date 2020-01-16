@@ -216,7 +216,9 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 						percentage := int64(p)
 						bucket += percentage
 						if scaled < bucket {
-							return rule["v"]
+							result := rule["v"]
+							evaluator.logger.Infof("Evaluating %% options. Returning %s", result)
+							return result
 						}
 					}
 				}
