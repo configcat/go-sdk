@@ -1,6 +1,8 @@
 package configcat
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestConfigParser_Parse(t *testing.T) {
 	jsonBody := "{ \"keyDouble\": { \"v\": 120.121238476, \"p\": [], \"r\": [] }}"

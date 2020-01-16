@@ -13,6 +13,8 @@ func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 		newConfigStore(logger, NewInMemoryConfigCache()),
 		logger,
 	)
+
+	policy.RefreshAsync().Wait()
 	config := policy.GetConfigurationAsync().Get().(string)
 
 	if config != "test" {
@@ -20,6 +22,7 @@ func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	}
 
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test2"})
+	policy.RefreshAsync().Wait()
 	config = policy.GetConfigurationAsync().Get().(string)
 
 	if config != "test2" {

@@ -49,6 +49,7 @@ func TestClient_Refresh(t *testing.T) {
 		fetcher)
 
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "\"value\"")})
+	client.Refresh()
 	result := client.GetValue("key", "default")
 
 	if result != "value" {
@@ -76,6 +77,7 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 		fetcher)
 
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "\"value\"")})
+	client.Refresh()
 	result := client.GetValue("key", "default")
 
 	if result != "value" {
@@ -93,6 +95,7 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 func TestClient_Get(t *testing.T) {
 	fetcher, client := getTestClients()
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	client.Refresh()
 	result := client.GetValue("key", 0)
 
 	if result == nil || result == 0 {
@@ -113,6 +116,7 @@ func TestClient_Get_Default(t *testing.T) {
 func TestClient_Get_Latest(t *testing.T) {
 	fetcher, client := getTestClients()
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	client.Refresh()
 	result := client.GetValue("key", 0)
 
 	if result == nil || result == 0 {
@@ -159,6 +163,7 @@ func TestClient_Get_WithFailingCache(t *testing.T) {
 		fetcher)
 
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	client.Refresh()
 	result := client.GetValue("key", 0)
 
 	if result == 0 {

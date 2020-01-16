@@ -42,16 +42,27 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 		return nil
 	}
 
+	evaluator.logger.Infof("Evaluating GetValue(%s).", key)
+
+	rolloutRules, rolloutOk := node["r"].([]interface{})
+	percentageRules, percentageOk := node["p"].([]interface{})
+
 	if user == nil {
-		evaluator.logger.Warnln("UserObject missing! You should pass a " +
-			"UserObject to getValue() in order to make targeting work properly. " +
-			"Read more: https://configcat.com/docs/advanced/user-object.")
-		return node["v"]
+		if (rolloutOk && len(rolloutRules) > 0) || (percentageOk && len(percentageRules) > 0) {
+			evaluator.logger.Warnln("Evaluating GetValue(" + key + "). UserObject missing! You should pass a " +
+				"UserObject to GetValueForUser() in order to make targeting work properly. " +
+				"Read more: https://configcat.com/docs/advanced/user-object.")
+		}
+
+		result := node["v"]
+		evaluator.logger.Infof("Returning %v.", result)
+		return result
 	}
 
-	rules, ok := node["r"].([]interface{})
-	if ok {
-		for _, r := range rules {
+	evaluator.logger.Infof("User object: %v", user)
+
+	if rolloutOk {
+		for _, r := range rolloutRules {
 			rule, ok := r.(map[string]interface{})
 			if !ok {
 				continue
@@ -188,8 +199,7 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 		}
 	}
 
-	rules, ok = node["p"].([]interface{})
-	if ok && len(rules) > 0 {
+	if percentageOk && len(percentageRules) > 0 {
 		hashCandidate := key + user.identifier
 		sha := sha1.New()
 		sha.Write([]byte(hashCandidate))
@@ -198,7 +208,7 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 		scaled := num % 100
 		if err == nil {
 			bucket := int64(0)
-			for _, r := range rules {
+			for _, r := range percentageRules {
 				rule, ok := r.(map[string]interface{})
 				if ok {
 					p, ok := rule["p"].(float64)

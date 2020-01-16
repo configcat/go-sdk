@@ -99,7 +99,7 @@ func (client *Client) GetValueForUser(key string, defaultValue interface{}, user
 		json, err := client.refreshPolicy.GetConfigurationAsync().GetOrTimeout(client.maxWaitTimeForSyncCalls)
 		if err != nil {
 			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
-			return client.getDefault(key, defaultValue, user)
+			return client.parseJson(client.store.Get(), key, defaultValue, user)
 		}
 
 		return client.parseJson(json.(string), key, defaultValue, user)
@@ -117,12 +117,7 @@ func (client *Client) GetValueAsyncForUser(key string, defaultValue interface{},
 	}
 
 	client.refreshPolicy.GetConfigurationAsync().Accept(func(res interface{}) {
-		parsed, err := client.parser.ParseWithUser(res.(string), key, user)
-		if err != nil {
-			completion(client.getDefault(key, defaultValue, user))
-			return
-		}
-		completion(parsed)
+		completion(client.parseJson(res.(string), key, defaultValue, user))
 	})
 }
 
@@ -171,16 +166,13 @@ func (client *Client) Close() {
 func (client *Client) parseJson(json string, key string, defaultValue interface{}, user *User) interface{} {
 	parsed, err := client.parser.ParseWithUser(json, key, user)
 	if err != nil {
-		return client.getDefault(key, defaultValue, user)
+		client.logger.Errorf(
+			"Evaluating GetValue(%s) failed. Returning defaultValue: [%v]. %s.",
+			key,
+			defaultValue,
+			err.Error())
+		return defaultValue
 	}
 
 	return parsed
-}
-
-func (client *Client) getDefault(key string, defaultValue interface{}, user *User) interface{} {
-	latest, parseErr := client.parser.ParseWithUser(client.store.inMemoryValue, key, user)
-	if parseErr != nil {
-		return defaultValue
-	}
-	return latest
 }

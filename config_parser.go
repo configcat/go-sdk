@@ -2,6 +2,7 @@ package configcat
 
 import (
 	"encoding/json"
+	"strings"
 )
 
 // ParseError describes JSON parsing related errors
@@ -60,25 +61,28 @@ func (parser *ConfigParser) parse(jsonBody string, key string, user *User) (inte
 
 	rootNode, err := parser.deserialize(jsonBody)
 	if err != nil {
-		parser.logger.Errorf("JSON parsing failed. %s.", err.Error())
-		return nil, err
+		return nil, &ParseError{"JSON parsing failed. "+ err.Error() +"."}
 	}
 
 	node := rootNode[key]
 	if node == nil {
-		parser.logger.Errorf("Evaluating GetValue(%s) failed. "+
-			"Value not found for key %s.", key, key)
-		return nil, &ParseError{"Evaluating GetValue(" + key + ") failed. " +
-			"Value not found for key " + key + ", json: " + jsonBody}
+		keys := make([]string, len(rootNode))
+		i := 0
+		for k := range rootNode {
+			keys[i] = k
+			i++
+		}
+
+		return nil, &ParseError{"Value not found for key " + key +
+			". Here are the available keys: " + strings.Join(keys, ", ")}
 	}
 
-	evaluated := parser.evaluator.evaluate(node, key, user)
-	if evaluated == nil {
-		parser.logger.Errorf("Evaluating GetValue(%s) failed.", key)
-		return nil, &ParseError{"JSON parsing failed for key " + key + ", json: " + jsonBody}
+	parsed := parser.evaluator.evaluate(node, key, user)
+	if parsed == nil {
+		return nil, &ParseError{"Null evaluated for key " + key + "."}
 	}
 
-	return evaluated, nil
+	return parsed, nil
 }
 
 func (parser *ConfigParser) deserialize(jsonBody string) (map[string]interface{}, error) {
@@ -90,7 +94,7 @@ func (parser *ConfigParser) deserialize(jsonBody string) (map[string]interface{}
 
 	rootNode, ok := root.(map[string]interface{})
 	if !ok {
-		return nil, &ParseError{"JSON parsing failed, json: " + jsonBody}
+		return nil, &ParseError{"JSON mapping failed, json: " + jsonBody}
 	}
 
 	return rootNode, nil

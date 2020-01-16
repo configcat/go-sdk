@@ -17,6 +17,7 @@ func TestClient_RefreshAsync(t *testing.T) {
 		fetcher)
 
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "\"value\"")})
+	client.Refresh()
 	c := make(chan string, 1)
 	defer close(c)
 	client.GetValueAsync("key", "default", func(result interface{}) {
@@ -30,6 +31,7 @@ func TestClient_RefreshAsync(t *testing.T) {
 	}
 
 	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "\"value2\"")})
+	client.Refresh()
 	c2 := make(chan string, 1)
 	defer close(c2)
 	client.RefreshAsync(func() {

@@ -21,21 +21,7 @@ func NewManualPollingPolicy(
 
 // GetConfigurationAsync reads the current configuration value.
 func (policy *ManualPollingPolicy) GetConfigurationAsync() *AsyncResult {
-	return policy.ConfigProvider.GetConfigurationAsync().ApplyThen(func(result interface{}) interface{} {
-		response := result.(FetchResponse)
-
-		cached := policy.Store.Get()
-		if response.IsFetched() {
-			fetched := response.Body
-			if cached != fetched {
-				policy.Store.Set(fetched)
-			}
-
-			return fetched
-		}
-
-		return cached
-	})
+	return AsCompletedAsyncResult(policy.Store.Get())
 }
 
 // Close shuts down the policy.
