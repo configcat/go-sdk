@@ -8,10 +8,9 @@ import (
 
 // Client is an object for handling configurations provided by ConfigCat.
 type Client struct {
-	configProvider          ConfigProvider
-	store                   *ConfigStore
+	store                   *configStore
 	parser                  *ConfigParser
-	refreshPolicy           RefreshPolicy
+	refreshPolicy           refreshPolicy
 	maxWaitTimeForSyncCalls time.Duration
 	logger                  Logger
 }
@@ -20,11 +19,9 @@ type Client struct {
 type ClientConfig struct {
 	// Base logger used to create new loggers
 	Logger Logger
-	// The factory delegate used to produce custom RefreshPolicy implementations.
-	PolicyFactory func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy
 	// The custom cache implementation used to store the configuration.
 	Cache ConfigCache
-	// The maximum time how long at most the synchronous calls (e.g. client.Get(...)) should block the caller.
+	// The maximum time how long at most the synchronous calls (e.g. client.get(...)) should block the caller.
 	// If it's 0 then the caller will be blocked in case of sync calls, until the operation succeeds or fails.
 	MaxWaitTimeForSyncCalls time.Duration
 	// The maximum wait time for a http response.
@@ -33,47 +30,76 @@ type ClientConfig struct {
 	BaseUrl string
 	// The custom http transport object.
 	Transport http.RoundTripper
+	// The refresh mode of the cached configuration.
+	Mode RefreshMode
 }
 
-// DefaultClientConfig prepares a default configuration for the ConfigCat Client.
-func DefaultClientConfig() ClientConfig {
+func defaultConfig() ClientConfig {
 	return ClientConfig{
 		Logger:                  DefaultLogger(),
 		BaseUrl:                 "https://cdn.configcat.com",
-		Cache:                   NewInMemoryConfigCache(),
+		Cache:                   newInMemoryConfigCache(),
 		MaxWaitTimeForSyncCalls: 0,
 		HttpTimeout:             time.Second * 15,
 		Transport:               http.DefaultTransport,
-		PolicyFactory: func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
-			return NewAutoPollingPolicy(configProvider, store, logger, time.Second*120)
-		},
+		Mode:					 AutoPoll(time.Second * 120),
 	}
 }
 
 // NewClient initializes a new ConfigCat Client with the default configuration. The api key parameter is mandatory.
 func NewClient(apiKey string) *Client {
-	return NewCustomClient(apiKey, DefaultClientConfig())
+	return NewCustomClient(apiKey, ClientConfig{})
 }
 
 // NewCustomClient initializes a new ConfigCat Client with advanced configuration. The api key parameter is mandatory.
 func NewCustomClient(apiKey string, config ClientConfig) *Client {
-	return newInternal(apiKey, config, newConfigFetcher(apiKey, config))
+	return newInternal(apiKey, config, nil)
 }
 
-func newInternal(apiKey string, config ClientConfig, fetcher ConfigProvider) *Client {
+func newInternal(apiKey string, config ClientConfig, fetcher configProvider) *Client {
 	if len(apiKey) == 0 {
 		panic("apiKey cannot be empty")
 	}
+
+	defaultConfig := defaultConfig()
+
 	if config.Logger == nil {
-		config.Logger = DefaultLogger()
+		config.Logger = defaultConfig.Logger
+	}
+
+	if config.Cache == nil {
+		config.Cache = defaultConfig.Cache
+	}
+
+	if len(config.BaseUrl) == 0 {
+		config.BaseUrl = defaultConfig.BaseUrl
+	}
+
+	if config.MaxWaitTimeForSyncCalls < 0 {
+		config.MaxWaitTimeForSyncCalls = defaultConfig.MaxWaitTimeForSyncCalls
+	}
+
+	if config.HttpTimeout <= 0 {
+		config.HttpTimeout = defaultConfig.HttpTimeout
+	}
+
+	if config.Transport == nil {
+		config.Transport = defaultConfig.Transport
+	}
+
+	if config.Mode == nil {
+		config.Mode = defaultConfig.Mode
+	}
+
+	if fetcher == nil {
+		fetcher = newConfigFetcher(apiKey, config)
 	}
 
 	store := newConfigStore(config.Logger, config.Cache)
-	policy := config.PolicyFactory(fetcher, store, config.Logger)
-	return &Client{configProvider: fetcher,
-		store:                   store,
+
+	return &Client{store:        store,
 		parser:                  newParser(config.Logger),
-		refreshPolicy:           policy,
+		refreshPolicy:           createRefreshPolicyByMode(config, fetcher, store),
 		maxWaitTimeForSyncCalls: config.MaxWaitTimeForSyncCalls,
 		logger:                  config.Logger}
 }
@@ -96,16 +122,16 @@ func (client *Client) GetValueForUser(key string, defaultValue interface{}, user
 	}
 
 	if client.maxWaitTimeForSyncCalls > 0 {
-		json, err := client.refreshPolicy.GetConfigurationAsync().GetOrTimeout(client.maxWaitTimeForSyncCalls)
+		json, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
 		if err != nil {
 			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
-			return client.parseJson(client.store.Get(), key, defaultValue, user)
+			return client.parseJson(client.store.get(), key, defaultValue, user)
 		}
 
 		return client.parseJson(json.(string), key, defaultValue, user)
 	}
 
-	json, _ := client.refreshPolicy.GetConfigurationAsync().Get().(string)
+	json, _ := client.refreshPolicy.getConfigurationAsync().get().(string)
 	return client.parseJson(json, key, defaultValue, user)
 }
 
@@ -116,7 +142,7 @@ func (client *Client) GetValueAsyncForUser(key string, defaultValue interface{},
 		panic("key cannot be empty")
 	}
 
-	client.refreshPolicy.GetConfigurationAsync().Accept(func(res interface{}) {
+	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
 		completion(client.parseJson(res.(string), key, defaultValue, user))
 	})
 }
@@ -124,7 +150,7 @@ func (client *Client) GetValueAsyncForUser(key string, defaultValue interface{},
 // GetAllKeys retrieves all the setting keys.
 func (client *Client) GetAllKeys() ([]string, error) {
 	if client.maxWaitTimeForSyncCalls > 0 {
-		json, err := client.refreshPolicy.GetConfigurationAsync().GetOrTimeout(client.maxWaitTimeForSyncCalls)
+		json, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
 		if err != nil {
 			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
 			return nil, err
@@ -133,13 +159,13 @@ func (client *Client) GetAllKeys() ([]string, error) {
 		return client.parser.GetAllKeys(json.(string))
 	}
 
-	json, _ := client.refreshPolicy.GetConfigurationAsync().Get().(string)
+	json, _ := client.refreshPolicy.getConfigurationAsync().get().(string)
 	return client.parser.GetAllKeys(json)
 }
 
 // GetAllKeysAsync retrieves all the setting keys asynchronously.
 func (client *Client) GetAllKeysAsync(completion func(result []string, err error)) {
-	client.refreshPolicy.GetConfigurationAsync().Accept(func(res interface{}) {
+	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
 		completion(client.parser.GetAllKeys(res.(string)))
 	})
 }
@@ -147,20 +173,20 @@ func (client *Client) GetAllKeysAsync(completion func(result []string, err error
 // Refresh initiates a force refresh synchronously on the cached configuration.
 func (client *Client) Refresh() {
 	if client.maxWaitTimeForSyncCalls > 0 {
-		client.refreshPolicy.RefreshAsync().WaitOrTimeout(client.maxWaitTimeForSyncCalls)
+		client.refreshPolicy.refreshAsync().waitOrTimeout(client.maxWaitTimeForSyncCalls)
 	} else {
-		client.refreshPolicy.RefreshAsync().Wait()
+		client.refreshPolicy.refreshAsync().wait()
 	}
 }
 
-// RefreshAsync initiates a force refresh asynchronously on the cached configuration.
+// refreshAsync initiates a force refresh asynchronously on the cached configuration.
 func (client *Client) RefreshAsync(completion func()) {
-	client.refreshPolicy.RefreshAsync().Accept(completion)
+	client.refreshPolicy.refreshAsync().accept(completion)
 }
 
-// Close shuts down the client, after closing, it shouldn't be used
+// close shuts down the client, after closing, it shouldn't be used
 func (client *Client) Close() {
-	client.refreshPolicy.Close()
+	client.refreshPolicy.close()
 }
 
 func (client *Client) parseJson(json string, key string, defaultValue interface{}, user *User) interface{} {
@@ -175,4 +201,23 @@ func (client *Client) parseJson(json string, key string, defaultValue interface{
 	}
 
 	return parsed
+}
+
+func createRefreshPolicyByMode(config ClientConfig, fetcher configProvider, store *configStore) refreshPolicy {
+	autoPoll, ok := config.Mode.(autoPollConfig)
+	if ok {
+		return newAutoPollingPolicy(fetcher, store, config.Logger, autoPoll)
+	}
+
+	lazyLoad, ok := config.Mode.(lazyLoadConfig)
+	if ok {
+		return newLazyLoadingPolicy(fetcher, store, config.Logger, lazyLoad)
+	}
+
+	_, ok = config.Mode.(manualPollConfig)
+	if ok {
+		return newManualPollingPolicy(fetcher, store, config.Logger)
+	}
+
+	panic("Invalid refresh mode, please choose from AutoPoll(), LazyLoad() or ManualPoll().")
 }

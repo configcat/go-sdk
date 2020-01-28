@@ -6,9 +6,9 @@ import (
 
 // ConfigCache is a cache API used to make custom cache implementations.
 type ConfigCache interface {
-	// Get reads the configuration from the cache.
+	// get reads the configuration from the cache.
 	Get() (string, error)
-	// Set writes the configuration into the cache.
+	// set writes the configuration into the cache.
 	Set(value string) error
 }
 
@@ -16,36 +16,36 @@ type inMemoryConfigCache struct {
 	value string
 }
 
-// ConfigStore is used to maintain the cached configuration.
-type ConfigStore struct {
+// configStore is used to maintain the cached configuration.
+type configStore struct {
 	cache         ConfigCache
 	logger        Logger
 	inMemoryValue string
 	sync.RWMutex
 }
 
-func newConfigStore(log Logger, cache ConfigCache) *ConfigStore {
-	return &ConfigStore{cache: cache, logger: log}
+func newConfigStore(log Logger, cache ConfigCache) *configStore {
+	return &configStore{cache: cache, logger: log}
 }
 
-// NewInMemoryConfigCache creates an in-memory cache implementation used to store the fetched configurations.
-func NewInMemoryConfigCache() *inMemoryConfigCache {
+// newInMemoryConfigCache creates an in-memory cache implementation used to store the fetched configurations.
+func newInMemoryConfigCache() *inMemoryConfigCache {
 	return &inMemoryConfigCache{value: ""}
 }
 
-// Get reads the configuration from the cache.
+// get reads the configuration from the cache.
 func (cache *inMemoryConfigCache) Get() (string, error) {
 	return cache.value, nil
 }
 
-// Set writes the configuration into the cache.
+// set writes the configuration into the cache.
 func (cache *inMemoryConfigCache) Set(value string) error {
 	cache.value = value
 	return nil
 }
 
-// Get reads the configuration.
-func (store *ConfigStore) Get() string {
+// get reads the configuration.
+func (store *configStore) get() string {
 	store.RLock()
 	defer store.RUnlock()
 	value, err := store.cache.Get()
@@ -57,8 +57,8 @@ func (store *ConfigStore) Get() string {
 	return value
 }
 
-// Set writes the configuration.
-func (store *ConfigStore) Set(value string) {
+// set writes the configuration.
+func (store *configStore) set(value string) {
 	store.Lock()
 	defer store.Unlock()
 	store.inMemoryValue = value

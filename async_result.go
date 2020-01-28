@@ -18,61 +18,61 @@ import (
 //     fmt.Print("chained operation completed")
 //  })
 //  go func() { async.Complete("success") }()
-type AsyncResult struct {
+type asyncResult struct {
 	state       uint32
 	completions []func(result interface{})
 	done        chan struct{}
 	result      interface{}
-	*Async
+	*async
 	sync.RWMutex
 }
 
-// NewAsyncResult initializes a new async object with result.
-func NewAsyncResult() *AsyncResult {
-	return &AsyncResult{state: pending, completions: []func(result interface{}){}, done: make(chan struct{}), Async: NewAsync()}
+// newAsyncResult initializes a new async object with result.
+func newAsyncResult() *asyncResult {
+	return &asyncResult{state: pending, completions: []func(result interface{}){}, done: make(chan struct{}), async: newAsync()}
 }
 
-// AsCompletedAsyncResult creates an already completed async object.
-func AsCompletedAsyncResult(result interface{}) *AsyncResult {
-	async := NewAsyncResult()
-	async.Complete(result)
+// asCompletedAsyncResult creates an already completed async object.
+func asCompletedAsyncResult(result interface{}) *asyncResult {
+	async := newAsyncResult()
+	async.complete(result)
 	return async
 }
 
-// Accept allows the chaining of the async operations after each other and subscribes a
+// accept allows the chaining of the async operations after each other and subscribes a
 // callback function which gets the operation result as argument and called when the async
 // operation completed. Returns an Async object. For example:
-//  async.Accept(func(result interface{}) {
+//  async.accept(func(result interface{}) {
 //     fmt.Print(result)
 //  })
-func (asyncResult *AsyncResult) Accept(completion func(result interface{})) *Async {
-	return asyncResult.Async.Accept(func() {
+func (asyncResult *asyncResult) accept(completion func(result interface{})) *async {
+	return asyncResult.async.accept(func() {
 		completion(asyncResult.result)
 	})
 }
 
-// ApplyThen allows the chaining of the async operations after each other and subscribes a
+// applyThen allows the chaining of the async operations after each other and subscribes a
 // callback function which gets the operation result as argument and called when the async
 // operation completed. Returns an AsyncResult object which returns a different result type.
 // For example:
-//  async.Accept(func(result interface{}) {
+//  async.accept(func(result interface{}) {
 //     fmt.Print(result)
 //  })
-func (asyncResult *AsyncResult) ApplyThen(completion func(result interface{}) interface{}) *AsyncResult {
-	newAsyncResult := NewAsyncResult()
-	asyncResult.Accept(func(result interface{}) {
+func (asyncResult *asyncResult) applyThen(completion func(result interface{}) interface{}) *asyncResult {
+	newAsyncResult := newAsyncResult()
+	asyncResult.accept(func(result interface{}) {
 		newResult := completion(result)
-		newAsyncResult.Complete(newResult)
+		newAsyncResult.complete(newResult)
 	})
 	return newAsyncResult
 }
 
-// Complete moves the async operation into the completed state.
+// complete moves the async operation into the completed state.
 // Gets the result of the operation as argument.
-func (asyncResult *AsyncResult) Complete(result interface{}) {
+func (asyncResult *asyncResult) complete(result interface{}) {
 	if atomic.CompareAndSwapUint32(&asyncResult.state, pending, completed) {
 		asyncResult.result = result
-		asyncResult.Async.Complete()
+		asyncResult.async.complete()
 		close(asyncResult.done)
 		asyncResult.RLock()
 		defer asyncResult.RUnlock()
@@ -83,16 +83,16 @@ func (asyncResult *AsyncResult) Complete(result interface{}) {
 	asyncResult.completions = nil
 }
 
-// Get blocks until the async operation is completed,
+// get blocks until the async operation is completed,
 // then returns the result of the operation.
-func (asyncResult *AsyncResult) Get() interface{} {
+func (asyncResult *asyncResult) get() interface{} {
 	<-asyncResult.done
 	return asyncResult.result
 }
 
 // GetOrTimeout blocks until the async operation is completed or until
 // the given timeout duration expires, then returns the result of the operation.
-func (asyncResult *AsyncResult) GetOrTimeout(duration time.Duration) (interface{}, error) {
+func (asyncResult *asyncResult) getOrTimeout(duration time.Duration) (interface{}, error) {
 	timer := time.NewTimer(duration)
 	defer timer.Stop()
 

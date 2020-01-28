@@ -1,15 +1,15 @@
 package configcat
 
 // FetchStatus describes the fetch response statuses.
-type FetchStatus int
+type fetchStatus int
 
 const (
 	// Fetched indicates that a new configuration was fetched.
-	Fetched FetchStatus = 0
+	Fetched fetchStatus = 0
 	// NotModified indicates that the current configuration is not modified.
-	NotModified FetchStatus = 1
+	NotModified fetchStatus = 1
 	// Failure indicates that the current configuration fetch is failed.
-	Failure FetchStatus = 2
+	Failure fetchStatus = 2
 )
 
 const (

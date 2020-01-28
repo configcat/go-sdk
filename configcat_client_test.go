@@ -14,21 +14,19 @@ const (
 type FailingCache struct {
 }
 
-// Get reads the configuration from the cache.
+// get reads the configuration from the cache.
 func (cache *FailingCache) Get() (string, error) {
 	return "", errors.New("fake failing cache fails to get")
 }
 
-// Set writes the configuration into the cache.
+// set writes the configuration into the cache.
 func (cache *FailingCache) Set(value string) error {
 	return errors.New("fake failing cache fails to set")
 }
 
 func getTestClients() (*fakeConfigProvider, *Client) {
-	config := DefaultClientConfig()
-	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
-		return NewManualPollingPolicy(configProvider, store, logger)
-	}
+
+	config := ClientConfig{ Mode: ManualPoll() }
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
 		config,
@@ -39,16 +37,13 @@ func getTestClients() (*fakeConfigProvider, *Client) {
 
 func TestClient_Refresh(t *testing.T) {
 
-	config := DefaultClientConfig()
-	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
-		return NewManualPollingPolicy(configProvider, store, logger)
-	}
+	config := ClientConfig{ Mode: ManualPoll() }
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
 		config,
 		fetcher)
 
-	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "\"value\"")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "\"value\"")})
 	client.Refresh()
 	result := client.GetValue("key", "default")
 
@@ -56,7 +51,7 @@ func TestClient_Refresh(t *testing.T) {
 		t.Error("Expecting non default string value")
 	}
 
-	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "\"value2\"")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "\"value2\"")})
 	client.Refresh()
 	result = client.GetValue("key", "default")
 	if result != "value2" {
@@ -66,17 +61,13 @@ func TestClient_Refresh(t *testing.T) {
 
 func TestClient_Refresh_Timeout(t *testing.T) {
 
-	config := DefaultClientConfig()
-	config.MaxWaitTimeForSyncCalls = time.Second * 1
-	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
-		return NewManualPollingPolicy(configProvider, store, logger)
-	}
+	config := ClientConfig{ Mode: ManualPoll(), MaxWaitTimeForSyncCalls: time.Second * 1 }
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
 		config,
 		fetcher)
 
-	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "\"value\"")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "\"value\"")})
 	client.Refresh()
 	result := client.GetValue("key", "default")
 
@@ -84,7 +75,7 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 		t.Error("Expecting non default string value")
 	}
 
-	fetcher.SetResponseWithDelay(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "\"value2\"")}, time.Second*10)
+	fetcher.SetResponseWithDelay(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "\"value2\"")}, time.Second*10)
 	client.Refresh()
 	result = client.GetValue("key", "default")
 	if result != "value" {
@@ -94,7 +85,7 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 
 func TestClient_Get(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "3213")})
 	client.Refresh()
 	result := client.GetValue("key", 0)
 
@@ -105,7 +96,7 @@ func TestClient_Get(t *testing.T) {
 
 func TestClient_Get_Default(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
+	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
 	result := client.GetValue("key", 0)
 
 	if result != 0 {
@@ -115,7 +106,7 @@ func TestClient_Get_Default(t *testing.T) {
 
 func TestClient_Get_Latest(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "3213")})
 	client.Refresh()
 	result := client.GetValue("key", 0)
 
@@ -123,7 +114,7 @@ func TestClient_Get_Latest(t *testing.T) {
 		t.Error("Expecting non default value")
 	}
 
-	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
+	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
 
 	result = client.GetValue("key", 0)
 
@@ -133,17 +124,13 @@ func TestClient_Get_Latest(t *testing.T) {
 }
 
 func TestClient_Get_WithTimeout(t *testing.T) {
-	config := DefaultClientConfig()
-	config.MaxWaitTimeForSyncCalls = time.Second * 1
-	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
-		return NewManualPollingPolicy(configProvider, store, logger)
-	}
+	config := ClientConfig{ Mode: ManualPoll(), MaxWaitTimeForSyncCalls: time.Second * 1 }
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
 		config,
 		fetcher)
 
-	fetcher.SetResponseWithDelay(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "3213")}, time.Second*10)
+	fetcher.SetResponseWithDelay(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "3213")}, time.Second*10)
 	result := client.GetValue("key", 0)
 
 	if result != 0 {
@@ -152,17 +139,13 @@ func TestClient_Get_WithTimeout(t *testing.T) {
 }
 
 func TestClient_Get_WithFailingCache(t *testing.T) {
-	config := DefaultClientConfig()
-	config.Cache = &FailingCache{}
-	config.PolicyFactory = func(configProvider ConfigProvider, store *ConfigStore, logger Logger) RefreshPolicy {
-		return NewManualPollingPolicy(configProvider, store, logger)
-	}
+	config := ClientConfig{ Mode: ManualPoll(), Cache: &FailingCache{} }
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
 		config,
 		fetcher)
 
-	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "3213")})
 	client.Refresh()
 	result := client.GetValue("key", 0)
 

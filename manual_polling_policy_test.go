@@ -7,23 +7,23 @@ import (
 func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 	logger := DefaultLogger()
-	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test"})
-	policy := NewManualPollingPolicy(
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
+	policy := newManualPollingPolicy(
 		fetcher,
-		newConfigStore(logger, NewInMemoryConfigCache()),
+		newConfigStore(logger, newInMemoryConfigCache()),
 		logger,
 	)
 
-	policy.RefreshAsync().Wait()
-	config := policy.GetConfigurationAsync().Get().(string)
+	policy.refreshAsync().wait()
+	config := policy.getConfigurationAsync().get().(string)
 
 	if config != "test" {
 		t.Error("Expecting test as result")
 	}
 
-	fetcher.SetResponse(FetchResponse{Status: Fetched, Body: "test2"})
-	policy.RefreshAsync().Wait()
-	config = policy.GetConfigurationAsync().Get().(string)
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test2"})
+	policy.refreshAsync().wait()
+	config = policy.getConfigurationAsync().get().(string)
 
 	if config != "test2" {
 		t.Error("Expecting test2 as result")
@@ -33,13 +33,13 @@ func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 func TestManualPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 	logger := DefaultLogger()
-	fetcher.SetResponse(FetchResponse{Status: Failure, Body: ""})
-	policy := NewManualPollingPolicy(
+	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
+	policy := newManualPollingPolicy(
 		fetcher,
-		newConfigStore(logger, NewInMemoryConfigCache()),
+		newConfigStore(logger, newInMemoryConfigCache()),
 		logger,
 	)
-	config := policy.GetConfigurationAsync().Get().(string)
+	config := policy.getConfigurationAsync().get().(string)
 
 	if config != "" {
 		t.Error("Expecting default")

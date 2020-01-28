@@ -1,22 +1,22 @@
 package configcat
 
-// FetchResponse represents a configuration fetch response.
-type FetchResponse struct {
-	Status FetchStatus
-	Body   string
+// fetchResponse represents a configuration fetch response.
+type fetchResponse struct {
+	status fetchStatus
+	body   string
 }
 
-// IsFailed returns true if the fetch is failed, otherwise false.
-func (response FetchResponse) IsFailed() bool {
-	return response.Status == Failure
+// isFailed returns true if the fetch is failed, otherwise false.
+func (response fetchResponse) isFailed() bool {
+	return response.status == Failure
 }
 
-// IsNotModified returns true if if the fetch resulted a 304 Not Modified code, otherwise false.
-func (response FetchResponse) IsNotModified() bool {
-	return response.Status == NotModified
+// isNotModified returns true if if the fetch resulted a 304 Not Modified code, otherwise false.
+func (response fetchResponse) isNotModified() bool {
+	return response.status == NotModified
 }
 
-// IsFetched returns true if a new configuration value was fetched, otherwise false.
-func (response FetchResponse) IsFetched() bool {
-	return response.Status == Fetched
+// isFetched returns true if a new configuration value was fetched, otherwise false.
+func (response fetchResponse) isFetched() bool {
+	return response.status == Fetched
 }

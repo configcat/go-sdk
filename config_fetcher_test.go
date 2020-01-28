@@ -5,25 +5,26 @@ import (
 )
 
 func TestConfigFetcher_GetConfigurationJson(t *testing.T) {
-	fetcher := newConfigFetcher("PKDVCLf-Hq-h-kCzMp-L7Q/PaDVCFk9EpmD6sLpGLltTA", DefaultClientConfig())
-	response := fetcher.GetConfigurationAsync().Get().(FetchResponse)
 
-	if !response.IsFetched() {
+	fetcher := newConfigFetcher("PKDVCLf-Hq-h-kCzMp-L7Q/PaDVCFk9EpmD6sLpGLltTA", defaultConfig())
+	response := fetcher.getConfigurationAsync().get().(fetchResponse)
+
+	if !response.isFetched() {
 		t.Error("Expecting fetched")
 	}
 
-	response2 := fetcher.GetConfigurationAsync().Get().(FetchResponse)
+	response2 := fetcher.getConfigurationAsync().get().(fetchResponse)
 
-	if !response2.IsNotModified() {
+	if !response2.isNotModified() {
 		t.Error("Expecting not modified")
 	}
 }
 
 func TestConfigFetcher_GetConfigurationJson_Fail(t *testing.T) {
-	fetcher := newConfigFetcher("thisshouldnotexist", DefaultClientConfig())
-	response := fetcher.GetConfigurationAsync().Get().(FetchResponse)
+	fetcher := newConfigFetcher("thisshouldnotexist", defaultConfig())
+	response := fetcher.getConfigurationAsync().get().(fetchResponse)
 
-	if !response.IsFailed() {
+	if !response.isFailed() {
 		t.Error("Expecting failed")
 	}
 }

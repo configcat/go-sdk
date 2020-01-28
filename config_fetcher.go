@@ -5,34 +5,35 @@ import (
 	"net/http"
 )
 
-// ConfigProvider describes a configuration provider which used to collect the actual configuration.
-type ConfigProvider interface {
-	// GetConfigurationAsync collects the actual configuration.
-	GetConfigurationAsync() *AsyncResult
+// configProvider describes a configuration provider which used to collect the actual configuration.
+type configProvider interface {
+	// getConfigurationAsync collects the actual configuration.
+	getConfigurationAsync() *asyncResult
 }
 
-// ConfigFetcher used to fetch the actual configuration over HTTP.
-type ConfigFetcher struct {
+// configFetcher used to fetch the actual configuration over HTTP.
+type configFetcher struct {
 	apiKey, eTag, mode, baseUrl string
 	client                      *http.Client
 	logger                      Logger
 }
 
-func newConfigFetcher(apiKey string, config ClientConfig) *ConfigFetcher {
-	return &ConfigFetcher{apiKey: apiKey,
+func newConfigFetcher(apiKey string, config ClientConfig) *configFetcher {
+	return &configFetcher{apiKey: apiKey,
+		mode: config.Mode.getModeIdentifier(),
 		baseUrl: config.BaseUrl,
 		logger:  config.Logger,
 		client:  &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport}}
 }
 
-// GetConfigurationAsync collects the actual configuration over HTTP.
-func (fetcher *ConfigFetcher) GetConfigurationAsync() *AsyncResult {
-	result := NewAsyncResult()
+// getConfigurationAsync collects the actual configuration over HTTP.
+func (fetcher *configFetcher) getConfigurationAsync() *asyncResult {
+	result := newAsyncResult()
 
 	go func() {
 		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.apiKey+"/config_v3.json", nil)
 		if requestError != nil {
-			result.Complete(FetchResponse{Status: Failure})
+			result.complete(fetchResponse{status: Failure})
 			return
 		}
 
@@ -45,7 +46,7 @@ func (fetcher *ConfigFetcher) GetConfigurationAsync() *AsyncResult {
 		response, responseError := fetcher.client.Do(request)
 		if responseError != nil {
 			fetcher.logger.Errorf("Config fetch failed: %s.", responseError.Error())
-			result.Complete(FetchResponse{Status: Failure, Body: ""})
+			result.complete(fetchResponse{status: Failure, body: ""})
 			return
 		}
 
@@ -53,7 +54,7 @@ func (fetcher *ConfigFetcher) GetConfigurationAsync() *AsyncResult {
 
 		if response.StatusCode == 304 {
 			fetcher.logger.Debugln("Config fetch succeeded: not modified.")
-			result.Complete(FetchResponse{Status: NotModified})
+			result.complete(fetchResponse{status: NotModified})
 			return
 		}
 
@@ -61,19 +62,19 @@ func (fetcher *ConfigFetcher) GetConfigurationAsync() *AsyncResult {
 			body, bodyError := ioutil.ReadAll(response.Body)
 			if bodyError != nil {
 				fetcher.logger.Errorf("Config fetch failed: %s.", bodyError.Error())
-				result.Complete(FetchResponse{Status: Failure})
+				result.complete(fetchResponse{status: Failure})
 				return
 			}
 
 			fetcher.logger.Debugln("Config fetch succeeded: new config fetched.")
 			fetcher.eTag = response.Header.Get("Etag")
-			result.Complete(FetchResponse{Status: Fetched, Body: string(body)})
+			result.complete(fetchResponse{status: Fetched, body: string(body)})
 			return
 		}
 
 		fetcher.logger.Errorf("Double-check your API KEY at https://app.configcat.com/apikey. "+
 			"Received unexpected response: %v.", response.StatusCode)
-		result.Complete(FetchResponse{Status: Failure})
+		result.complete(fetchResponse{status: Failure})
 	}()
 
 	return result
