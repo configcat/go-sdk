@@ -21,6 +21,8 @@ type autoPollingPolicy struct {
 type autoPollConfig struct {
 	// The auto polling interval.
 	autoPollInterval time.Duration
+	// The configuration change listener.
+	changeListener func(config string, parser *ConfigParser)
 }
 
 // getModeIdentifier returns the mode identifier sent in User-Agent.
@@ -33,36 +35,26 @@ func AutoPoll(interval time.Duration) RefreshMode {
 	return autoPollConfig{ autoPollInterval: interval }
 }
 
+// Creates an auto polling refresh mode.
+func AutoPollWithChangeListener(
+	interval time.Duration,
+	changeListener func(config string, parser *ConfigParser)) RefreshMode {
+	return autoPollConfig{ autoPollInterval: interval, changeListener: changeListener }
+}
+
 // newAutoPollingPolicy initializes a new autoPollingPolicy.
 func newAutoPollingPolicy(
 	configFetcher configProvider,
 	store *configStore,
 	logger Logger,
 	autoPollConfig autoPollConfig) *autoPollingPolicy {
-	return newAutoPollingPolicyWithChangeListener(
-		configFetcher,
-		store,
-		logger,
-		autoPollConfig.autoPollInterval,
-		nil)
-}
-
-// newAutoPollingPolicyWithChangeListener initializes a new autoPollingPolicy.
-// An optional configuration change listener callback can be passed.
-func newAutoPollingPolicyWithChangeListener(
-	configFetcher configProvider,
-	store *configStore,
-	logger Logger,
-	autoPollInterval time.Duration,
-	configChanged func(config string, parser *ConfigParser)) *autoPollingPolicy {
-
 	policy := &autoPollingPolicy{
 		configRefresher:  configRefresher{configFetcher: configFetcher, store: store, logger: logger},
-		autoPollInterval: autoPollInterval,
+		autoPollInterval: autoPollConfig.autoPollInterval,
 		init:             newAsync(),
 		initialized:      no,
 		stop:             make(chan struct{}),
-		configChanged:    configChanged,
+		configChanged:    autoPollConfig.changeListener,
 		parser:           newParser(logger),
 	}
 	policy.startPolling()
