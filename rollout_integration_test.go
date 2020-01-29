@@ -14,17 +14,18 @@ import (
 )
 
 func TestRolloutIntegration(t *testing.T) {
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A", "testmatrix.csv", t)
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA", "testmatrix_semantic.csv", t)
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw", "testmatrix_number.csv", t)
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w", "testmatrix_semantic_2.csv", t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A", "testmatrix.csv", AutoPoll(120), t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA", "testmatrix_semantic.csv", LazyLoad(120, false), t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw", "testmatrix_number.csv", ManualPoll(), t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w", "testmatrix_semantic_2.csv", AutoPoll(120), t)
 }
 
-func doIntegrationTest(apiKey string, fileName string, t *testing.T) {
+func doIntegrationTest(apiKey string, fileName string, mode RefreshMode, t *testing.T) {
 
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
-	client := NewCustomClient(apiKey, ClientConfig{ Logger: logger })
+	client := NewCustomClient(apiKey, ClientConfig{ Logger: logger, Mode: mode })
+	client.Refresh()
 	defer client.Close()
 
 	file, fileErr := os.Open("resources/" + fileName)
