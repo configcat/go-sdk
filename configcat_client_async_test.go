@@ -7,7 +7,7 @@ import (
 
 func TestClient_RefreshAsync(t *testing.T) {
 
-	config := ClientConfig{ Mode: ManualPoll() }
+	config := ClientConfig{Mode: ManualPoll()}
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
 		config,

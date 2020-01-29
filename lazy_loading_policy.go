@@ -20,10 +20,10 @@ type lazyLoadingPolicy struct {
 // lazyLoadConfig describes the configuration for auto polling.
 type lazyLoadConfig struct {
 	// The cache invalidation interval.
-	cacheInterval 		time.Duration
+	cacheInterval time.Duration
 	// If you use the asynchronous refresh then when a request is being made on the cache while it's expired,
 	// the previous value will be returned immediately until the fetching of the new configuration is completed
-	useAsyncRefresh 	bool
+	useAsyncRefresh bool
 }
 
 func (config lazyLoadConfig) getModeIdentifier() string {
@@ -36,7 +36,7 @@ func (config lazyLoadConfig) accept(visitor pollingModeVisitor) refreshPolicy {
 
 // Creates a lazy loading refresh mode.
 func LazyLoad(cacheInterval time.Duration, useAsyncRefresh bool) RefreshMode {
-	return lazyLoadConfig{ cacheInterval: cacheInterval, useAsyncRefresh: useAsyncRefresh }
+	return lazyLoadConfig{cacheInterval: cacheInterval, useAsyncRefresh: useAsyncRefresh}
 }
 
 // newLazyLoadingPolicy initializes a new lazyLoadingPolicy.

@@ -24,7 +24,7 @@ func doIntegrationTest(apiKey string, fileName string, mode RefreshMode, t *test
 
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
-	client := NewCustomClient(apiKey, ClientConfig{ Logger: logger, Mode: mode })
+	client := NewCustomClient(apiKey, ClientConfig{Logger: logger, Mode: mode})
 	client.Refresh()
 	defer client.Close()
 

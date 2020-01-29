@@ -14,7 +14,7 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_DoNotUseAsync(t *testing.T) {
 		fetcher,
 		newConfigStore(logger, newInMemoryConfigCache()),
 		logger,
-		lazyLoadConfig{time.Second*2,false })
+		lazyLoadConfig{time.Second * 2, false})
 	config := policy.getConfigurationAsync().get().(string)
 
 	if config != "test" {
@@ -45,7 +45,7 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 		fetcher,
 		newConfigStore(logger, newInMemoryConfigCache()),
 		logger,
-		lazyLoadConfig{time.Second*2,false })
+		lazyLoadConfig{time.Second * 2, false})
 	config := policy.getConfigurationAsync().get().(string)
 
 	if config != "" {
@@ -62,7 +62,7 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_UseAsync(t *testing.T) {
 		fetcher,
 		newConfigStore(logger, newInMemoryConfigCache()),
 		logger,
-		lazyLoadConfig{time.Second*2,true })
+		lazyLoadConfig{time.Second * 2, true})
 	config := policy.getConfigurationAsync().get().(string)
 
 	if config != "test" {

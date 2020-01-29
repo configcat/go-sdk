@@ -20,7 +20,7 @@ type configFetcher struct {
 
 func newConfigFetcher(apiKey string, config ClientConfig) *configFetcher {
 	return &configFetcher{apiKey: apiKey,
-		mode: config.Mode.getModeIdentifier(),
+		mode:    config.Mode.getModeIdentifier(),
 		baseUrl: config.BaseUrl,
 		logger:  config.Logger,
 		client:  &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport}}

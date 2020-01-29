@@ -42,7 +42,7 @@ func defaultConfig() ClientConfig {
 		MaxWaitTimeForSyncCalls: 0,
 		HttpTimeout:             time.Second * 15,
 		Transport:               http.DefaultTransport,
-		Mode:					 AutoPoll(time.Second * 120),
+		Mode:                    AutoPoll(time.Second * 120),
 	}
 }
 
@@ -97,7 +97,7 @@ func newInternal(apiKey string, config ClientConfig, fetcher configProvider) *Cl
 
 	store := newConfigStore(config.Logger, config.Cache)
 
-	return &Client{store:        store,
+	return &Client{store: store,
 		parser:                  newParser(config.Logger),
 		refreshPolicy:           config.Mode.accept(newRefreshPolicyFactory(fetcher, store, config.Logger)),
 		maxWaitTimeForSyncCalls: config.MaxWaitTimeForSyncCalls,

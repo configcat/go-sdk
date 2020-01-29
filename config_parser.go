@@ -61,7 +61,7 @@ func (parser *ConfigParser) parse(jsonBody string, key string, user *User) (inte
 
 	rootNode, err := parser.deserialize(jsonBody)
 	if err != nil {
-		return nil, &ParseError{"JSON parsing failed. "+ err.Error() +"."}
+		return nil, &ParseError{"JSON parsing failed. " + err.Error() + "."}
 	}
 
 	node := rootNode[key]

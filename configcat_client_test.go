@@ -26,7 +26,7 @@ func (cache *FailingCache) Set(value string) error {
 
 func getTestClients() (*fakeConfigProvider, *Client) {
 
-	config := ClientConfig{ Mode: ManualPoll() }
+	config := ClientConfig{Mode: ManualPoll()}
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
 		config,
@@ -37,7 +37,7 @@ func getTestClients() (*fakeConfigProvider, *Client) {
 
 func TestClient_Refresh(t *testing.T) {
 
-	config := ClientConfig{ Mode: ManualPoll() }
+	config := ClientConfig{Mode: ManualPoll()}
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
 		config,
@@ -61,7 +61,7 @@ func TestClient_Refresh(t *testing.T) {
 
 func TestClient_Refresh_Timeout(t *testing.T) {
 
-	config := ClientConfig{ Mode: ManualPoll(), MaxWaitTimeForSyncCalls: time.Second * 1 }
+	config := ClientConfig{Mode: ManualPoll(), MaxWaitTimeForSyncCalls: time.Second * 1}
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
 		config,
@@ -124,7 +124,7 @@ func TestClient_Get_Latest(t *testing.T) {
 }
 
 func TestClient_Get_WithTimeout(t *testing.T) {
-	config := ClientConfig{ Mode: ManualPoll(), MaxWaitTimeForSyncCalls: time.Second * 1 }
+	config := ClientConfig{Mode: ManualPoll(), MaxWaitTimeForSyncCalls: time.Second * 1}
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
 		config,
@@ -139,7 +139,7 @@ func TestClient_Get_WithTimeout(t *testing.T) {
 }
 
 func TestClient_Get_WithFailingCache(t *testing.T) {
-	config := ClientConfig{ Mode: ManualPoll(), Cache: &FailingCache{} }
+	config := ClientConfig{Mode: ManualPoll(), Cache: &FailingCache{}}
 	fetcher := newFakeConfigProvider()
 	client := newInternal("fakeKey",
 		config,

@@ -35,14 +35,14 @@ func (config autoPollConfig) accept(visitor pollingModeVisitor) refreshPolicy {
 
 // Creates an auto polling refresh mode.
 func AutoPoll(interval time.Duration) RefreshMode {
-	return autoPollConfig{ autoPollInterval: interval }
+	return autoPollConfig{autoPollInterval: interval}
 }
 
 // Creates an auto polling refresh mode with change listener callback.
 func AutoPollWithChangeListener(
 	interval time.Duration,
 	changeListener func(config string, parser *ConfigParser)) RefreshMode {
-	return autoPollConfig{ autoPollInterval: interval, changeListener: changeListener }
+	return autoPollConfig{autoPollInterval: interval, changeListener: changeListener}
 }
 
 // newAutoPollingPolicy initializes a new autoPollingPolicy.

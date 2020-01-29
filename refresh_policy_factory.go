@@ -8,12 +8,12 @@ type pollingModeVisitor interface {
 
 type refreshPolicyFactory struct {
 	configFetcher configProvider
-	store *configStore
-	logger Logger
+	store         *configStore
+	logger        Logger
 }
 
 func newRefreshPolicyFactory(configFetcher configProvider, store *configStore, logger Logger) *refreshPolicyFactory {
-	return &refreshPolicyFactory{ configFetcher: configFetcher, store: store, logger:logger }
+	return &refreshPolicyFactory{configFetcher: configFetcher, store: store, logger: logger}
 }
 
 func (factory *refreshPolicyFactory) visitAutoPoll(config autoPollConfig) refreshPolicy {
@@ -27,4 +27,3 @@ func (factory *refreshPolicyFactory) visitManualPoll(config manualPollConfig) re
 func (factory *refreshPolicyFactory) visitLazyLoad(config lazyLoadConfig) refreshPolicy {
 	return newLazyLoadingPolicy(factory.configFetcher, factory.store, factory.logger, config)
 }
-
