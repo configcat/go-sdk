@@ -34,7 +34,7 @@ func (config lazyLoadConfig) accept(visitor pollingModeVisitor) refreshPolicy {
 	return visitor.visitLazyLoad(config)
 }
 
-// Creates a lazy loading refresh mode.
+// LazyLoad creates a lazy loading refresh mode.
 func LazyLoad(cacheInterval time.Duration, useAsyncRefresh bool) RefreshMode {
 	return lazyLoadConfig{cacheInterval: cacheInterval, useAsyncRefresh: useAsyncRefresh}
 }

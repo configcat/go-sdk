@@ -39,6 +39,7 @@ func NewUserWithAdditionalAttributes(identifier string, email string, country st
 	return user
 }
 
+// GetAttribute retrieves a user attribute identified by a key.
 func (user *User) GetAttribute(key string) string {
 	val := user.attributes[strings.ToLower(key)]
 	if len(val) > 0 {

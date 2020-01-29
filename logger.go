@@ -22,7 +22,7 @@ type Logger interface {
 	Errorln(args ...interface{})
 }
 
-// The default logger (logrus.New())
+// DefaultLogger creates the default logger (logrus.New()).
 func DefaultLogger() Logger {
 	return logrus.New()
 }

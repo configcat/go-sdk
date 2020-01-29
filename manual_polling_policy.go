@@ -16,7 +16,7 @@ func (config manualPollConfig) accept(visitor pollingModeVisitor) refreshPolicy 
 	return visitor.visitManualPoll(config)
 }
 
-// Creates a manual loading refresh mode.
+// ManualPoll creates a manual loading refresh mode.
 func ManualPoll() RefreshMode {
 	return manualPollConfig{}
 }

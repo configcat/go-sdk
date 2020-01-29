@@ -179,12 +179,12 @@ func (client *Client) Refresh() {
 	}
 }
 
-// refreshAsync initiates a force refresh asynchronously on the cached configuration.
+// RefreshAsync initiates a force refresh asynchronously on the cached configuration.
 func (client *Client) RefreshAsync(completion func()) {
 	client.refreshPolicy.refreshAsync().accept(completion)
 }
 
-// close shuts down the client, after closing, it shouldn't be used
+// Close shuts down the client, after closing, it shouldn't be used
 func (client *Client) Close() {
 	client.refreshPolicy.close()
 }
