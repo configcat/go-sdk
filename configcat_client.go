@@ -99,7 +99,7 @@ func newInternal(apiKey string, config ClientConfig, fetcher configProvider) *Cl
 
 	return &Client{store:        store,
 		parser:                  newParser(config.Logger),
-		refreshPolicy:           createRefreshPolicyByMode(config, fetcher, store),
+		refreshPolicy:           config.Mode.accept(newRefreshPolicyFactory(fetcher, store, config.Logger)),
 		maxWaitTimeForSyncCalls: config.MaxWaitTimeForSyncCalls,
 		logger:                  config.Logger}
 }
@@ -201,23 +201,4 @@ func (client *Client) parseJson(json string, key string, defaultValue interface{
 	}
 
 	return parsed
-}
-
-func createRefreshPolicyByMode(config ClientConfig, fetcher configProvider, store *configStore) refreshPolicy {
-	autoPoll, ok := config.Mode.(autoPollConfig)
-	if ok {
-		return newAutoPollingPolicy(fetcher, store, config.Logger, autoPoll)
-	}
-
-	lazyLoad, ok := config.Mode.(lazyLoadConfig)
-	if ok {
-		return newLazyLoadingPolicy(fetcher, store, config.Logger, lazyLoad)
-	}
-
-	_, ok = config.Mode.(manualPollConfig)
-	if ok {
-		return newManualPollingPolicy(fetcher, store, config.Logger)
-	}
-
-	panic("Invalid refresh mode, please choose from AutoPoll(), LazyLoad() or ManualPoll().")
 }

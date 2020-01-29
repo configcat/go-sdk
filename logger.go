@@ -4,7 +4,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Logger defines the interface this library logs with
+// Logger defines the interface this library logs with.
 type Logger interface {
 	Debugf(format string, args ...interface{})
 	Infof(format string, args ...interface{})
@@ -22,6 +22,7 @@ type Logger interface {
 	Errorln(args ...interface{})
 }
 
+// The default logger (logrus.New())
 func DefaultLogger() Logger {
 	return logrus.New()
 }

@@ -26,9 +26,12 @@ type lazyLoadConfig struct {
 	useAsyncRefresh 	bool
 }
 
-// getModeIdentifier returns the mode identifier sent in User-Agent.
 func (config lazyLoadConfig) getModeIdentifier() string {
 	return "l"
+}
+
+func (config lazyLoadConfig) accept(visitor pollingModeVisitor) refreshPolicy {
+	return visitor.visitLazyLoad(config)
 }
 
 // Creates a lazy loading refresh mode.

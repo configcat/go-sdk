@@ -5,16 +5,18 @@ type manualPollingPolicy struct {
 	configRefresher
 }
 
-// manualPollConfig describes the configuration for manual polling.
 type manualPollConfig struct {
 }
 
-// getModeIdentifier returns the mode identifier sent in User-Agent.
 func (config manualPollConfig) getModeIdentifier() string {
 	return "m"
 }
 
-// Creates a lazy loading refresh mode.
+func (config manualPollConfig) accept(visitor pollingModeVisitor) refreshPolicy {
+	return visitor.visitManualPoll(config)
+}
+
+// Creates a manual loading refresh mode.
 func ManualPoll() RefreshMode {
 	return manualPollConfig{}
 }

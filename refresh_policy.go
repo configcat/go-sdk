@@ -22,10 +22,11 @@ type configRefresher struct {
 
 // RefreshMode is a base for refresh mode configurations.
 type RefreshMode interface {
-	// Returns the identifier sent in User-Agent.
+	// Returns the identifier sent in User-Agent by the config fetcher.
 	getModeIdentifier() string
+	// Creates a refresh policy from refresh mode.
+	accept(visitor pollingModeVisitor) refreshPolicy
 }
-
 
 // refreshAsync initiates a force refresh on the cached configuration.
 func (refresher *configRefresher) refreshAsync() *async {

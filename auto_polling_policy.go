@@ -25,9 +25,12 @@ type autoPollConfig struct {
 	changeListener func(config string, parser *ConfigParser)
 }
 
-// getModeIdentifier returns the mode identifier sent in User-Agent.
 func (config autoPollConfig) getModeIdentifier() string {
 	return "a"
+}
+
+func (config autoPollConfig) accept(visitor pollingModeVisitor) refreshPolicy {
+	return visitor.visitAutoPoll(config)
 }
 
 // Creates an auto polling refresh mode.
@@ -35,7 +38,7 @@ func AutoPoll(interval time.Duration) RefreshMode {
 	return autoPollConfig{ autoPollInterval: interval }
 }
 
-// Creates an auto polling refresh mode.
+// Creates an auto polling refresh mode with change listener callback.
 func AutoPollWithChangeListener(
 	interval time.Duration,
 	changeListener func(config string, parser *ConfigParser)) RefreshMode {
