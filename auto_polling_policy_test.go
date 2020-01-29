@@ -69,10 +69,10 @@ func TestAutoPollingPolicy_GetConfigurationAsync_WithListener(t *testing.T) {
 		fetcher,
 		newConfigStore(logger, newInMemoryConfigCache()),
 		logger,
-		autoPollConfig{
+		AutoPollWithChangeListener(
 			time.Second*2 ,
 			func(config string, parser *ConfigParser) { c <- config },
-		},
+		).(autoPollConfig),
 	)
 	defer policy.close()
 	config := <-c
