@@ -13,8 +13,7 @@ type autoPollingPolicy struct {
 	initialized      uint32
 	stop             chan struct{}
 	closed           uint32
-	configChanged    func(config string, parser *ConfigParser)
-	parser           *ConfigParser
+	configChanged    func()
 }
 
 // autoPollConfig describes the configuration for auto polling.
@@ -22,7 +21,7 @@ type autoPollConfig struct {
 	// The auto polling interval.
 	autoPollInterval time.Duration
 	// The configuration change listener.
-	changeListener func(config string, parser *ConfigParser)
+	changeListener func()
 }
 
 func (config autoPollConfig) getModeIdentifier() string {
@@ -41,7 +40,7 @@ func AutoPoll(interval time.Duration) RefreshMode {
 // AutoPollWithChangeListener creates an auto polling refresh mode with change listener callback.
 func AutoPollWithChangeListener(
 	interval time.Duration,
-	changeListener func(config string, parser *ConfigParser)) RefreshMode {
+	changeListener func()) RefreshMode {
 	return autoPollConfig{autoPollInterval: interval, changeListener: changeListener}
 }
 
@@ -58,7 +57,6 @@ func newAutoPollingPolicy(
 		initialized:      no,
 		stop:             make(chan struct{}),
 		configChanged:    autoPollConfig.changeListener,
-		parser:           newParser(logger),
 	}
 	policy.startPolling()
 	return policy
@@ -109,7 +107,7 @@ func (policy *autoPollingPolicy) poll() {
 	if response.isFetched() && cached != response.body {
 		policy.store.set(response.body)
 		if policy.configChanged != nil {
-			policy.configChanged(response.body, policy.parser)
+			policy.configChanged()
 		}
 	}
 

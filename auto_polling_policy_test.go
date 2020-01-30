@@ -63,7 +63,7 @@ func TestAutoPollingPolicy_GetConfigurationAsync_WithListener(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 	logger := DefaultLogger()
 	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
-	c := make(chan string, 1)
+	c := make(chan bool, 1)
 	defer close(c)
 	policy := newAutoPollingPolicy(
 		fetcher,
@@ -71,13 +71,13 @@ func TestAutoPollingPolicy_GetConfigurationAsync_WithListener(t *testing.T) {
 		logger,
 		AutoPollWithChangeListener(
 			time.Second*2,
-			func(config string, parser *ConfigParser) { c <- config },
+			func() { c <- true },
 		).(autoPollConfig),
 	)
 	defer policy.close()
-	config := <-c
+	called := <-c
 
-	if config != "test" {
+	if !called {
 		t.Error("Expecting test as result")
 	}
 }
