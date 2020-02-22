@@ -3,9 +3,10 @@ package configcat
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"github.com/blang/semver"
 	"strconv"
 	"strings"
+
+	"github.com/blang/semver"
 )
 
 type rolloutEvaluator struct {
@@ -32,6 +33,8 @@ func newRolloutEvaluator(logger Logger) *rolloutEvaluator {
 			"<= (Number)",
 			"> (Number)",
 			">= (Number)",
+			"IS ONE OF (Sensitive)",
+			"IS NOT ONE OF (Sensitive)",
 		}}
 }
 
@@ -190,6 +193,35 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 					(comparator == 13 && userDouble <= cmpDouble) ||
 					(comparator == 14 && userDouble > cmpDouble) ||
 					(comparator == 15 && userDouble >= cmpDouble) {
+					evaluator.logMatch(comparisonAttribute, userValue, comparator, comparisonValue, value)
+					return value
+				}
+			//IS ONE OF (Sensitive)
+			case 16:
+				separated := strings.Split(comparisonValue, ",")
+				sha := sha1.New()
+				sha.Write([]byte(userValue))
+				hash := hex.EncodeToString(sha.Sum(nil))
+				for _, item := range separated {
+					if strings.Contains(strings.TrimSpace(item), hash) {
+						evaluator.logMatch(comparisonAttribute, userValue, comparator, comparisonValue, value)
+						return value
+					}
+				}
+			//IS NOT ONE OF (Sensitive)
+			case 17:
+				separated := strings.Split(comparisonValue, ",")
+				found := false
+				sha := sha1.New()
+				sha.Write([]byte(userValue))
+				hash := hex.EncodeToString(sha.Sum(nil))
+				for _, item := range separated {
+					if strings.Contains(strings.TrimSpace(item), hash) {
+						found = true
+					}
+				}
+
+				if !found {
 					evaluator.logMatch(comparisonAttribute, userValue, comparator, comparisonValue, value)
 					return value
 				}

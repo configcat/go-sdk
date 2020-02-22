@@ -4,13 +4,14 @@ import (
 	"bufio"
 	"encoding/csv"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/sirupsen/logrus"
 )
 
 func TestRolloutIntegration(t *testing.T) {
@@ -18,6 +19,7 @@ func TestRolloutIntegration(t *testing.T) {
 	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA", "testmatrix_semantic.csv", LazyLoad(120, false), t)
 	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw", "testmatrix_number.csv", ManualPoll(), t)
 	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w", "testmatrix_semantic_2.csv", AutoPoll(120), t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/qX3TP2dTj06ZpCCT1h_SPA", "testmatrix_sensitive.csv", AutoPoll(120), t)
 }
 
 func doIntegrationTest(apiKey string, fileName string, mode RefreshMode, t *testing.T) {
