@@ -33,6 +33,8 @@ func newRolloutEvaluator(logger Logger) *rolloutEvaluator {
 			"<= (Number)",
 			"> (Number)",
 			">= (Number)",
+			"IS ONE OF (Sensitive)",
+			"IS NOT ONE OF (Sensitive)",
 		}}
 }
 
