@@ -30,7 +30,7 @@ func doIntegrationTest(apiKey string, fileName string, mode RefreshMode, t *test
 	client.Refresh()
 	defer client.Close()
 
-	file, fileErr := os.Open("resources/" + fileName)
+	file, fileErr := os.Open("../resources/" + fileName)
 	if fileErr != nil {
 		log.Fatal(fileErr)
 	}
