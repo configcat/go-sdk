@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/configcat/go-sdk"
+	"github.com/configcat/go-sdk/v4"
 	"github.com/sirupsen/logrus"
 )
 
