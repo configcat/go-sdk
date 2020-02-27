@@ -31,7 +31,7 @@ func (fetcher *configFetcher) getConfigurationAsync() *asyncResult {
 	result := newAsyncResult()
 
 	go func() {
-		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.apiKey+"/config_v3.json", nil)
+		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.apiKey+"/config_v4.json", nil)
 		if requestError != nil {
 			result.complete(fetchResponse{status: Failure})
 			return

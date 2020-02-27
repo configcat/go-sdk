@@ -1,5 +1,5 @@
 package configcat
 
 const (
-	version = "3.1"
+	version = "4.0"
 )
