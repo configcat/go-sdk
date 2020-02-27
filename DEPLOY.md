@@ -25,6 +25,9 @@
 
   Create a new [Github release](https://github.com/configcat/go-sdk/releases) with a new version tag and release notes.
 
+## Validate new version on go.dev
+https://pkg.go.dev/mod/github.com/configcat/go-sdk
+
 ## Update import examples in local README.md
 
 ## Update import examples in Dashboard
