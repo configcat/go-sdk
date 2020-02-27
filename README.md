@@ -17,7 +17,7 @@ ConfigCat is a <a target="_blank" href="https://configcat.com">hosted feature fl
 
 ### 1. Install the package with `go`
 ```bash
-go get gopkg.in/configcat/go-sdk.v4
+go get go get github.com/configcat/go-sdk
 ```
 
 ### 2. Go to <a href="https://app.configcat.com/connect" target="_blank">Connect your application</a> tab to get your *API Key*:
@@ -26,7 +26,7 @@ go get gopkg.in/configcat/go-sdk.v4
 
 ### 3. Import the *ConfigCat* client package to your application
 ```go
-import gopkg.in/configcat/go-sdk.v4
+import ("github.com/configcat/go-sdk")
 ```
 
 ### 4. Create a *ConfigCat* client instance:
