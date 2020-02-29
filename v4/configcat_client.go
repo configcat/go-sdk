@@ -36,7 +36,7 @@ type ClientConfig struct {
 
 func defaultConfig() ClientConfig {
 	return ClientConfig{
-		Logger:                  DefaultLogger(),
+		Logger:                  DefaultLogger(LogLevelError),
 		BaseUrl:                 "https://cdn.configcat.com",
 		Cache:                   newInMemoryConfigCache(),
 		MaxWaitTimeForSyncCalls: 0,

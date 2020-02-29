@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/sirupsen/logrus"
 )
 
 func TestRolloutIntegration(t *testing.T) {
@@ -24,8 +22,7 @@ func TestRolloutIntegration(t *testing.T) {
 
 func doIntegrationTest(apiKey string, fileName string, mode RefreshMode, t *testing.T) {
 
-	logger := logrus.New()
-	logger.SetLevel(logrus.WarnLevel)
+	logger := DefaultLogger(LogLevelWarn)
 	client := NewCustomClient(apiKey, ClientConfig{Logger: logger, Mode: mode})
 	client.Refresh()
 	defer client.Close()

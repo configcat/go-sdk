@@ -9,7 +9,7 @@ func TestAutoPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
 	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
-	logger := DefaultLogger()
+	logger := DefaultLogger(LogLevelError)
 	policy := newAutoPollingPolicy(
 		fetcher,
 		newConfigStore(logger, newInMemoryConfigCache()),
@@ -43,7 +43,7 @@ func TestAutoPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
 	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
-	logger := DefaultLogger()
+	logger := DefaultLogger(LogLevelError)
 	policy := newAutoPollingPolicy(
 		fetcher,
 		newConfigStore(logger, newInMemoryConfigCache()),
@@ -61,7 +61,7 @@ func TestAutoPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 
 func TestAutoPollingPolicy_GetConfigurationAsync_WithListener(t *testing.T) {
 	fetcher := newFakeConfigProvider()
-	logger := DefaultLogger()
+	logger := DefaultLogger(LogLevelError)
 	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
 	c := make(chan bool, 1)
 	defer close(c)

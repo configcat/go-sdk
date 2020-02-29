@@ -4,6 +4,19 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Define the logrus log levels
+const (
+	LogLevelPanic = LogLevel(logrus.PanicLevel)
+	LogLevelFatal = LogLevel(logrus.FatalLevel)
+	LogLevelError = LogLevel(logrus.ErrorLevel)
+	LogLevelWarn = LogLevel(logrus.WarnLevel)
+	LogLevelInfo = LogLevel(logrus.InfoLevel)
+	LogLevelDebug = LogLevel(logrus.DebugLevel)
+	LogLevelTrace = LogLevel(logrus.TraceLevel)
+)
+
+type LogLevel uint32
+
 // Logger defines the interface this library logs with.
 type Logger interface {
 	Debugf(format string, args ...interface{})
@@ -23,6 +36,8 @@ type Logger interface {
 }
 
 // DefaultLogger creates the default logger (logrus.New()).
-func DefaultLogger() Logger {
-	return logrus.New()
+func DefaultLogger(level LogLevel) Logger {
+	logger := logrus.New()
+	logger.SetLevel(logrus.Level(level))
+	return logger
 }
