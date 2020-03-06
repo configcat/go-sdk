@@ -2,13 +2,15 @@ package main
 
 import (
 	"fmt"
-
-	configcat "github.com/configcat/go-sdk/v4"
+	"github.com/configcat/go-sdk/v4"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
+	logger := logrus.New()
+
 	// Setting log level to Info to show detailed feature flag evaluation
-	logger := configcat.DefaultLogger(configcat.LogLevelInfo)
+	logger.SetLevel(logrus.InfoLevel)
 
 	client := configcat.NewCustomClient("PKDVCLf-Hq-h-kCzMp-L7Q/HhOWfwVtZ0mb30i9wi17GQ", configcat.ClientConfig{Logger: logger})
 
