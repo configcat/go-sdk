@@ -9,7 +9,7 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_DoNotUseAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
 	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
-	logger := DefaultLogger(LogLevelError)
+	logger := DefaultLogger(LogLevelWarn)
 	policy := newLazyLoadingPolicy(
 		fetcher,
 		newConfigStore(logger, newInMemoryConfigCache()),
@@ -40,7 +40,7 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
 	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
-	logger := DefaultLogger(LogLevelError)
+	logger := DefaultLogger(LogLevelWarn)
 	policy := newLazyLoadingPolicy(
 		fetcher,
 		newConfigStore(logger, newInMemoryConfigCache()),
@@ -57,7 +57,7 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_UseAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
 	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
-	logger := DefaultLogger(LogLevelError)
+	logger := DefaultLogger(LogLevelWarn)
 	policy := newLazyLoadingPolicy(
 		fetcher,
 		newConfigStore(logger, newInMemoryConfigCache()),

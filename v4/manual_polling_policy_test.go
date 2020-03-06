@@ -6,7 +6,7 @@ import (
 
 func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
-	logger := DefaultLogger(LogLevelError)
+	logger := DefaultLogger(LogLevelWarn)
 	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
 	policy := newManualPollingPolicy(
 		fetcher,
@@ -32,7 +32,7 @@ func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 
 func TestManualPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher := newFakeConfigProvider()
-	logger := DefaultLogger(LogLevelError)
+	logger := DefaultLogger(LogLevelWarn)
 	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
 	policy := newManualPollingPolicy(
 		fetcher,
