@@ -1,15 +1,20 @@
 # Steps to deploy
 ## Preparation
-1. Make sure the code is properly formatted.
+1. Go to the current major versions folder.
+   ```bash
+   cd v<major>
+   ```
+2. Make sure the code is properly formatted.
    ```bash
    gofmt -s
    ```
-2. Run tests
+3. Run tests
    ```bash
    go test
    ```
-3. Increase the version in `version.go`
-4. Commit & Push
+4. Increase the version in `version.go`
+5. When you want to increase the major version, create a new `v<major>` folder and copy all the sources from the previous major versions folder and start the work there.
+6. Commit & Push
 ## Publish
 - Via git tag
     1. Create a new version tag.
