@@ -13,13 +13,13 @@ type configProvider interface {
 
 // configFetcher used to fetch the actual configuration over HTTP.
 type configFetcher struct {
-	apiKey, eTag, mode, baseUrl string
+	sdkKey, eTag, mode, baseUrl string
 	client                      *http.Client
 	logger                      Logger
 }
 
-func newConfigFetcher(apiKey string, config ClientConfig) *configFetcher {
-	return &configFetcher{apiKey: apiKey,
+func newConfigFetcher(sdkKey string, config ClientConfig) *configFetcher {
+	return &configFetcher{sdkKey: sdkKey,
 		mode:    config.Mode.getModeIdentifier(),
 		baseUrl: config.BaseUrl,
 		logger:  config.Logger,
@@ -31,7 +31,7 @@ func (fetcher *configFetcher) getConfigurationAsync() *asyncResult {
 	result := newAsyncResult()
 
 	go func() {
-		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.apiKey+"/config_v4.json", nil)
+		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.sdkKey+"/config_v4.json", nil)
 		if requestError != nil {
 			result.complete(fetchResponse{status: Failure})
 			return
@@ -72,7 +72,7 @@ func (fetcher *configFetcher) getConfigurationAsync() *asyncResult {
 			return
 		}
 
-		fetcher.logger.Errorf("Double-check your API KEY at https://app.configcat.com/apikey. "+
+		fetcher.logger.Errorf("Double-check your SDK KEY at https://app.configcat.com/sdkkey. "+
 			"Received unexpected response: %v.", response.StatusCode)
 		result.complete(fetchResponse{status: Failure})
 	}()

@@ -20,8 +20,8 @@ ConfigCat is a <a target="_blank" href="https://configcat.com">hosted feature fl
 go get github.com/configcat/go-sdk/v4
 ```
 
-### 2. Go to <a href="https://app.configcat.com/connect" target="_blank">Connect your application</a> tab to get your *API Key*:
-![API-KEY](https://raw.githubusercontent.com/ConfigCat/go-sdk/master/media/readme01.png  "API-KEY")
+### 2. Go to <a href="https://app.configcat.com/connect" target="_blank">Connect your application</a> tab to get your *SDK Key*:
+![SDK-KEY](https://raw.githubusercontent.com/ConfigCat/go-sdk/master/media/readme01.png  "SDK-KEY")
 
 
 ### 3. Import the *ConfigCat* client package to your application
@@ -31,7 +31,7 @@ import "github.com/configcat/go-sdk/v4"
 
 ### 4. Create a *ConfigCat* client instance:
 ```go
-client := configcat.NewClient("#YOUR-API-KEY#")
+client := configcat.NewClient("#YOUR-SDK-KEY#")
 ```
 
 ### 5. Get your setting value:
@@ -43,7 +43,7 @@ if ok && isMyAwesomeFeatureEnabled {
     DoTheOldThing()
 }
 ```
-Or use the async APIs:
+Or use the async SDKs:
 ```go
 client.GetValueAsync("isMyAwesomeFeatureEnabled", false, func(result interface{}) {
     isMyAwesomeFeatureEnabled, ok := result.(bool)
