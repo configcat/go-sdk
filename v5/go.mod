@@ -1,4 +1,4 @@
-module github.com/configcat/go-sdk/v4
+module github.com/configcat/go-sdk/v5
 
 go 1.13
 

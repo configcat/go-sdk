@@ -1,6 +1,6 @@
 # Steps to deploy
 ## Preparation
-1. If you want to increase the major version, create a new `v<major>` folder and copy all the sources from the previous major versions folder and start the work there.
+1. If you want to increase the **major version**, create a new `v<major>` folder and copy all the sources from the previous major versions folder and start the work there. Increase major version in `go.mod`.
 1. Go to the current major versions folder.
    ```bash
    cd v<major>
@@ -14,7 +14,7 @@
    go test
    ```
 4. Increase the version in `version.go`
-6. Commit & Push
+5. Commit & Push
 ## Publish
 - Via git tag
     1. Create a new version tag.

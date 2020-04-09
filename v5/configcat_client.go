@@ -1,4 +1,4 @@
-// Package configcat contains the Golang SDK for ConfigCat (https://configcat.com)
+// ConfigCat SDK for Go (https://configcat.com)
 package configcat
 
 import (
