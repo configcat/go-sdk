@@ -46,19 +46,19 @@ func defaultConfig() ClientConfig {
 	}
 }
 
-// NewClient initializes a new ConfigCat Client with the default configuration. The api key parameter is mandatory.
-func NewClient(apiKey string) *Client {
-	return NewCustomClient(apiKey, ClientConfig{})
+// NewClient initializes a new ConfigCat Client with the default configuration. The sdkKey parameter is mandatory.
+func NewClient(sdkKey string) *Client {
+	return NewCustomClient(sdkKey, ClientConfig{})
 }
 
-// NewCustomClient initializes a new ConfigCat Client with advanced configuration. The api key parameter is mandatory.
-func NewCustomClient(apiKey string, config ClientConfig) *Client {
-	return newInternal(apiKey, config, nil)
+// NewCustomClient initializes a new ConfigCat Client with advanced configuration. The sdkKey parameter is mandatory.
+func NewCustomClient(sdkKey string, config ClientConfig) *Client {
+	return newInternal(sdkKey, config, nil)
 }
 
-func newInternal(apiKey string, config ClientConfig, fetcher configProvider) *Client {
-	if len(apiKey) == 0 {
-		panic("apiKey cannot be empty")
+func newInternal(sdkKey string, config ClientConfig, fetcher configProvider) *Client {
+	if len(sdkKey) == 0 {
+		panic("sdkKey cannot be empty")
 	}
 
 	defaultConfig := defaultConfig()
@@ -92,7 +92,7 @@ func newInternal(apiKey string, config ClientConfig, fetcher configProvider) *Cl
 	}
 
 	if fetcher == nil {
-		fetcher = newConfigFetcher(apiKey, config)
+		fetcher = newConfigFetcher(sdkKey, config)
 	}
 
 	store := newConfigStore(config.Logger, config.Cache)
