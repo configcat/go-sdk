@@ -20,7 +20,7 @@ ConfigCat is a <a target="_blank" href="https://configcat.com">hosted feature fl
 go get github.com/configcat/go-sdk/v5
 ```
 
-### 2. Go to <a href="https://app.configcat.com/connect" target="_blank">Connect your application</a> tab to get your *SDK Key*:
+### 2. Go to <a href="https://app.configcat.com/sdkkey" target="_blank">Connect your application</a> tab to get your *SDK Key*:
 ![SDK-KEY](https://raw.githubusercontent.com/ConfigCat/go-sdk/master/media/readme01.png  "SDK-KEY")
 
 

@@ -72,7 +72,7 @@ func (fetcher *configFetcher) getConfigurationAsync() *asyncResult {
 			return
 		}
 
-		fetcher.logger.Errorf("Double-check your API KEY at https://app.configcat.com/apikey. "+
+		fetcher.logger.Errorf("Double-check your API KEY at https://app.configcat.com/sdkkey. "+
 			"Received unexpected response: %v.", response.StatusCode)
 		result.complete(fetchResponse{status: Failure})
 	}()
