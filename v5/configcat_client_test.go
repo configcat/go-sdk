@@ -9,6 +9,7 @@ import (
 
 const (
 	jsonFormat = "{ \"%s\": { \"v\": %s, \"p\": [], \"r\": [] }}"
+	variationJsonFormat = "{ \"first\": { \"v\": false, \"p\": [], \"r\": [], \"i\":\"fakeIdFirst\" }, \"second\": { \"v\": true, \"p\": [], \"r\": [], \"i\":\"fakeIdSecond\" }}"
 )
 
 type FailingCache struct {
@@ -166,5 +167,88 @@ func TestClient_GetAllKeys(t *testing.T) {
 
 	if len(keys) != 16 {
 		t.Error("Expecting 16 items")
+	}
+}
+
+func TestClient_GetVariationId(t *testing.T) {
+	fetcher, client := getTestClients()
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(variationJsonFormat)})
+	client.Refresh()
+	result := client.GetVariationId("first", "")
+
+	if result != "fakeIdFirst" {
+		t.Error("Expecting non default value")
+	}
+}
+
+func TestClient_GetVariationId_Default(t *testing.T) {
+	fetcher, client := getTestClients()
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(variationJsonFormat)})
+	client.Refresh()
+	result := client.GetVariationId("nonexisting", "")
+
+	if result != "" {
+		t.Error("Expecting default value")
+	}
+}
+
+func TestClient_GetAllVariationIds(t *testing.T) {
+	fetcher, client := getTestClients()
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(variationJsonFormat)})
+	client.Refresh()
+	result, err := client.GetAllVariationIds()
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(result) != 2 {
+		t.Error("Expecting 2 items")
+	}
+}
+
+func TestClient_GetAllVariationIds_Empty(t *testing.T) {
+	fetcher, client := getTestClients()
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf("{}")})
+	client.Refresh()
+	result, err := client.GetAllVariationIds()
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(result) != 0 {
+		t.Error("Expecting 0 items")
+	}
+}
+
+func TestClient_GetKeyAndValue(t *testing.T) {
+	fetcher, client := getTestClients()
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(variationJsonFormat)})
+	client.Refresh()
+	key, value := client.GetKeyAndValue("fakeIdSecond")
+
+	if key != "second" {
+		t.Error("Expecting second")
+	}
+
+	result, ok := value.(bool)
+	if !ok || !result {
+		t.Error("Invalid result")
+	}
+}
+
+func TestClient_GetKeyAndValue_Empty(t *testing.T) {
+	fetcher, client := getTestClients()
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(variationJsonFormat)})
+	client.Refresh()
+	key, value := client.GetKeyAndValue("nonexisting")
+
+	if key != "" {
+		t.Error("Expecting empty key")
+	}
+
+	if value != nil {
+		t.Error("Expecting nil value")
 	}
 }

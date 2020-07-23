@@ -1,7 +1,5 @@
 package configcat
 
-import "strings"
-
 // User is an object containing attributes to properly identify a given user for rollout evaluation.
 type User struct {
 	identifier string
@@ -15,24 +13,20 @@ func NewUser(identifier string) *User {
 
 // NewUserWithAdditionalAttributes creates a new user object with additional attributes. The identifier argument is mandatory.
 func NewUserWithAdditionalAttributes(identifier string, email string, country string, custom map[string]string) *User {
-	if len(identifier) == 0 {
-		panic("identifier cannot be empty")
-	}
-
 	user := &User{identifier: identifier, attributes: map[string]string{}}
-	user.attributes["identifier"] = identifier
+	user.attributes["Identifier"] = identifier
 
 	if len(email) > 0 {
-		user.attributes["email"] = email
+		user.attributes["Email"] = email
 	}
 
 	if len(country) > 0 {
-		user.attributes["country"] = country
+		user.attributes["Country"] = country
 	}
 
 	if len(custom) > 0 {
 		for k, v := range custom {
-			user.attributes[strings.ToLower(k)] = v
+			user.attributes[k] = v
 		}
 	}
 
@@ -41,7 +35,7 @@ func NewUserWithAdditionalAttributes(identifier string, email string, country st
 
 // GetAttribute retrieves a user attribute identified by a key.
 func (user *User) GetAttribute(key string) string {
-	val := user.attributes[strings.ToLower(key)]
+	val := user.attributes[key]
 	if len(val) > 0 {
 		return val
 	}

@@ -22,3 +22,21 @@ const (
 	pending   = 0
 	completed = 1
 )
+
+const (
+	settingValue = "v"
+	settingType = "t"
+	settingRolloutPercentageItems = "p"
+	settingRolloutRules = "r"
+	settingVariationId = "i"
+
+	rolloutValue = "v"
+	rolloutComparisonAttribute = "a"
+	rolloutComparator = "t"
+	rolloutComparisonValue = "c"
+	rolloutVariationId = "i"
+
+	percentageItemValue = "v"
+	percentageItemPercentage = "p"
+	percentageItemVariationId = "i"
+)

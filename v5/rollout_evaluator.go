@@ -38,17 +38,17 @@ func newRolloutEvaluator(logger Logger) *rolloutEvaluator {
 		}}
 }
 
-func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *User) interface{} {
+func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *User) (interface{}, string) {
 
 	node, ok := json.(map[string]interface{})
 	if !ok {
-		return nil
+		return nil, ""
 	}
 
 	evaluator.logger.Infof("Evaluating GetValue(%s).", key)
 
-	rolloutRules, rolloutOk := node["r"].([]interface{})
-	percentageRules, percentageOk := node["p"].([]interface{})
+	rolloutRules, rolloutOk := node[settingRolloutRules].([]interface{})
+	percentageRules, percentageOk := node[settingRolloutPercentageItems].([]interface{})
 
 	if user == nil {
 		if (rolloutOk && len(rolloutRules) > 0) || (percentageOk && len(percentageRules) > 0) {
@@ -57,9 +57,9 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 				"Read more: https://configcat.com/docs/advanced/user-object.")
 		}
 
-		result := node["v"]
+		result := node[settingValue]
 		evaluator.logger.Infof("Returning %v.", result)
-		return result
+		return result, evaluator.extractVariationId(node[settingVariationId])
 	}
 
 	evaluator.logger.Infof("User object: %v", user)
@@ -71,11 +71,12 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 				continue
 			}
 
-			comparisonAttribute, ok := rule["a"].(string)
-			comparisonValue, ok := rule["c"].(string)
-			comparator, ok := rule["t"].(float64)
+			comparisonAttribute, ok := rule[rolloutComparisonAttribute].(string)
+			comparisonValue, ok := rule[rolloutComparisonValue].(string)
+			comparator, ok := rule[rolloutComparator].(float64)
+			variationId, ok := rule[rolloutVariationId].(string)
 			userValue := user.GetAttribute(comparisonAttribute)
-			value := rule["v"]
+			value := rule[rolloutValue]
 
 			if !ok || len(userValue) == 0 {
 				evaluator.logNoMatch(comparisonAttribute, userValue, comparator, comparisonValue)
@@ -89,7 +90,7 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 				for _, item := range separated {
 					if strings.Contains(strings.TrimSpace(item), userValue) {
 						evaluator.logMatch(comparisonAttribute, userValue, comparator, comparisonValue, value)
-						return value
+						return value, variationId
 					}
 				}
 			//IS NOT ONE OF
@@ -104,19 +105,19 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 
 				if !found {
 					evaluator.logMatch(comparisonAttribute, userValue, comparator, comparisonValue, value)
-					return value
+					return value, variationId
 				}
 			//CONTAINS
 			case 2:
 				if strings.Contains(userValue, comparisonValue) {
 					evaluator.logMatch(comparisonAttribute, userValue, comparator, comparisonValue, value)
-					return value
+					return value, variationId
 				}
 			//DOES NOT CONTAIN
 			case 3:
 				if !strings.Contains(userValue, comparisonValue) {
 					evaluator.logMatch(comparisonAttribute, userValue, comparator, comparisonValue, value)
-					return value
+					return value, variationId
 				}
 			//IS ONE OF, IS NOT ONE OF (SemVer)
 			case 4, 5:
@@ -150,7 +151,7 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 
 				if (matched && comparator == 4) || (!matched && comparator == 5) {
 					evaluator.logMatch(comparisonAttribute, userValue, comparator, comparisonValue, value)
-					return value
+					return value, variationId
 				}
 			//LESS THAN, LESS THAN OR EQUALS TO, GREATER THAN, GREATER THAN OR EQUALS TO (SemVer)
 			case 6, 7, 8, 9:
@@ -171,7 +172,7 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 					(comparator == 8 && userVersion.GT(cmpVersion)) ||
 					(comparator == 9 && userVersion.GTE(cmpVersion)) {
 					evaluator.logMatch(comparisonAttribute, userValue, comparator, comparisonValue, value)
-					return value
+					return value, variationId
 				}
 			//LESS THAN, LESS THAN OR EQUALS TO, GREATER THAN, GREATER THAN OR EQUALS TO (SemVer)
 			case 10, 11, 12, 13, 14, 15:
@@ -194,7 +195,7 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 					(comparator == 14 && userDouble > cmpDouble) ||
 					(comparator == 15 && userDouble >= cmpDouble) {
 					evaluator.logMatch(comparisonAttribute, userValue, comparator, comparisonValue, value)
-					return value
+					return value, variationId
 				}
 			//IS ONE OF (Sensitive)
 			case 16:
@@ -205,7 +206,7 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 				for _, item := range separated {
 					if strings.Contains(strings.TrimSpace(item), hash) {
 						evaluator.logMatch(comparisonAttribute, userValue, comparator, comparisonValue, value)
-						return value
+						return value, variationId
 					}
 				}
 			//IS NOT ONE OF (Sensitive)
@@ -223,7 +224,7 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 
 				if !found {
 					evaluator.logMatch(comparisonAttribute, userValue, comparator, comparisonValue, value)
-					return value
+					return value, variationId
 				}
 			}
 
@@ -243,14 +244,14 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 			for _, r := range percentageRules {
 				rule, ok := r.(map[string]interface{})
 				if ok {
-					p, ok := rule["p"].(float64)
+					p, ok := rule[percentageItemPercentage].(float64)
 					if ok {
 						percentage := int64(p)
 						bucket += percentage
 						if scaled < bucket {
-							result := rule["v"]
+							result := rule[percentageItemValue]
 							evaluator.logger.Infof("Evaluating %% options. Returning %s", result)
-							return result
+							return result, evaluator.extractVariationId(rule[percentageItemVariationId])
 						}
 					}
 				}
@@ -258,9 +259,9 @@ func (evaluator *rolloutEvaluator) evaluate(json interface{}, key string, user *
 		}
 	}
 
-	result := node["v"]
+	result := node[settingValue]
 	evaluator.logger.Infof("Returning %v.", result)
-	return result
+	return result, evaluator.extractVariationId(node[settingVariationId])
 }
 
 func (evaluator *rolloutEvaluator) logMatch(comparisonAttribute string, userValue interface{},
@@ -279,4 +280,12 @@ func (evaluator *rolloutEvaluator) logFormatError(comparisonAttribute string, us
 	comparator float64, comparisonValue string, error string) {
 	evaluator.logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => SKIP rule. Validation error: %s",
 		comparisonAttribute, userValue, evaluator.comparatorTexts[int(comparator)], comparisonValue, error)
+}
+
+func (evaluator *rolloutEvaluator) extractVariationId(variationId interface{}) string {
+	result, ok := variationId.(string)
+	if !ok {
+		return ""
+	}
+	return result
 }

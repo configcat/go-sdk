@@ -12,15 +12,21 @@ import (
 	"testing"
 )
 
+const (
+	valueKind = 0
+	variationKind = 1
+)
+
 func TestRolloutIntegration(t *testing.T) {
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A", "testmatrix.csv", AutoPoll(120), t)
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA", "testmatrix_semantic.csv", LazyLoad(120, false), t)
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw", "testmatrix_number.csv", ManualPoll(), t)
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w", "testmatrix_semantic_2.csv", AutoPoll(120), t)
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/qX3TP2dTj06ZpCCT1h_SPA", "testmatrix_sensitive.csv", AutoPoll(120), t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A", "testmatrix.csv", AutoPoll(120), valueKind, t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA", "testmatrix_semantic.csv", LazyLoad(120, false), valueKind, t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw", "testmatrix_number.csv", ManualPoll(), valueKind, t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w", "testmatrix_semantic_2.csv", AutoPoll(120), valueKind, t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/qX3TP2dTj06ZpCCT1h_SPA", "testmatrix_sensitive.csv", AutoPoll(120), valueKind, t)
+	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/nQ5qkhRAUEa6beEyyrVLBA", "testmatrix_variationId.csv", AutoPoll(120), variationKind, t)
 }
 
-func doIntegrationTest(sdkKey string, fileName string, mode RefreshMode, t *testing.T) {
+func doIntegrationTest(sdkKey string, fileName string, mode RefreshMode, kind int, t *testing.T) {
 
 	logger := DefaultLogger(LogLevelWarn)
 	client := NewCustomClient(sdkKey, ClientConfig{Logger: logger, Mode: mode})
@@ -50,7 +56,7 @@ func doIntegrationTest(sdkKey string, fileName string, mode RefreshMode, t *test
 		}
 
 		var user *User
-		if len(line[0]) > 0 && line[0] != "##null##" {
+		if line[0] != "##null##" {
 
 			email := ""
 			country := ""
@@ -74,7 +80,7 @@ func doIntegrationTest(sdkKey string, fileName string, mode RefreshMode, t *test
 
 		var i = 0
 		for _, settingKey := range settingKeys {
-			val := client.GetValueForUser(settingKey, nil, user)
+			val := getTestValue(settingKey, kind, user, client)
 			expected := line[i+4]
 			boolVal, ok := val.(bool)
 			if ok {
@@ -130,5 +136,13 @@ func doIntegrationTest(sdkKey string, fileName string, mode RefreshMode, t *test
 
 	if len(errors) > 0 {
 		t.Error("Expecting no errors")
+	}
+}
+
+func getTestValue(settingKey string, kind int, user *User, client *Client) interface{} {
+	if kind == valueKind {
+		return client.GetValueForUser(settingKey, nil, user)
+	} else {
+		return client.GetVariationIdForUser(settingKey, "", user)
 	}
 }

@@ -5,40 +5,35 @@ import (
 	"strings"
 )
 
-// ParseError describes JSON parsing related errors.
-type ParseError struct {
+type parseError struct {
 	msg string
 }
 
-// Error is the error message.
-func (p *ParseError) Error() string {
+func (p *parseError) Error() string {
 	return p.msg
 }
 
-// ConfigParser describes a JSON configuration parser.
-type ConfigParser struct {
+type configParser struct {
 	evaluator *rolloutEvaluator
 	logger    Logger
 }
 
-func newParser(logger Logger) *ConfigParser {
+func newParser(logger Logger) *configParser {
 	evaluator := newRolloutEvaluator(logger)
-	return &ConfigParser{evaluator: evaluator, logger: logger}
+	return &configParser{evaluator: evaluator, logger: logger}
 }
 
-// Parse converts a json element identified by a key from the given json string into an interface{} value.
-func (parser *ConfigParser) Parse(jsonBody string, key string) (interface{}, error) {
-	return parser.ParseWithUser(jsonBody, key, nil)
+func (parser *configParser) parse(jsonBody string, key string, user *User) (interface{}, error) {
+	result, _, err := parser.parseInternal(jsonBody, key, user)
+	return result, err
 }
 
-// ParseWithUser converts a json element identified by the key from the given json
-// string into an interface{} value. Optional user argument can be passed to identify the caller.
-func (parser *ConfigParser) ParseWithUser(jsonBody string, key string, user *User) (interface{}, error) {
-	return parser.parse(jsonBody, key, user)
+func (parser *configParser) parseVariationId(jsonBody string, key string, user *User) (string, error) {
+	_, variationId, err := parser.parseInternal(jsonBody, key, user)
+	return variationId, err
 }
 
-// GetAllKeys retrieves all the setting keys from the given json config.
-func (parser *ConfigParser) GetAllKeys(jsonBody string) ([]string, error) {
+func (parser *configParser) getAllKeys(jsonBody string) ([]string, error) {
 	rootNode, err := parser.deserialize(jsonBody)
 	if err != nil {
 		return nil, err
@@ -54,14 +49,47 @@ func (parser *ConfigParser) GetAllKeys(jsonBody string) ([]string, error) {
 	return keys, nil
 }
 
-func (parser *ConfigParser) parse(jsonBody string, key string, user *User) (interface{}, error) {
+func (parser *configParser) parseKeyValue(jsonBody string, variationId string) (string, interface{}, error) {
+	rootNode, err := parser.deserialize(jsonBody)
+	if err != nil {
+		return "", nil, &parseError{"JSON parsing failed. " + err.Error() + "."}
+	}
+
+	for key, value := range rootNode {
+		node := value.(map[string]interface{})
+		if node[settingVariationId].(string) == variationId {
+			return key, node[settingValue], nil
+		}
+
+		rolloutRules := node[settingRolloutRules].([]interface{})
+		percentageRules := node[settingRolloutPercentageItems].([]interface{})
+
+		for _, rolloutItem := range rolloutRules {
+			rule := rolloutItem.(map[string]interface{})
+			if rule[rolloutVariationId].(string) == variationId {
+				return key, rule[rolloutValue], nil
+			}
+		}
+
+		for _, percentageItem := range percentageRules {
+			rule := percentageItem.(map[string]interface{})
+			if rule[percentageItemVariationId].(string) == variationId {
+				return key, rule[percentageItemValue], nil
+			}
+		}
+	}
+
+	return "", nil, &parseError{"JSON parsing failed." }
+}
+
+func (parser *configParser) parseInternal(jsonBody string, key string, user *User) (interface{}, string, error) {
 	if len(key) == 0 {
 		panic("Key cannot be empty")
 	}
 
 	rootNode, err := parser.deserialize(jsonBody)
 	if err != nil {
-		return nil, &ParseError{"JSON parsing failed. " + err.Error() + "."}
+		return nil, "", &parseError{"JSON parsing failed. " + err.Error() + "."}
 	}
 
 	node := rootNode[key]
@@ -73,19 +101,19 @@ func (parser *ConfigParser) parse(jsonBody string, key string, user *User) (inte
 			i++
 		}
 
-		return nil, &ParseError{"Value not found for key " + key +
+		return nil, "", &parseError{"Value not found for key " + key +
 			". Here are the available keys: " + strings.Join(keys, ", ")}
 	}
 
-	parsed := parser.evaluator.evaluate(node, key, user)
+	parsed, variationId := parser.evaluator.evaluate(node, key, user)
 	if parsed == nil {
-		return nil, &ParseError{"Null evaluated for key " + key + "."}
+		return nil, "", &parseError{"Null evaluated for key " + key + "."}
 	}
 
-	return parsed, nil
+	return parsed, variationId, nil
 }
 
-func (parser *ConfigParser) deserialize(jsonBody string) (map[string]interface{}, error) {
+func (parser *configParser) deserialize(jsonBody string) (map[string]interface{}, error) {
 	var root interface{}
 	err := json.Unmarshal([]byte(jsonBody), &root)
 	if err != nil {
@@ -94,7 +122,7 @@ func (parser *ConfigParser) deserialize(jsonBody string) (map[string]interface{}
 
 	rootNode, ok := root.(map[string]interface{})
 	if !ok {
-		return nil, &ParseError{"JSON mapping failed, json: " + jsonBody}
+		return nil, &parseError{"JSON mapping failed, json: " + jsonBody}
 	}
 
 	return rootNode, nil
