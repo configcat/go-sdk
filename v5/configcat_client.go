@@ -9,7 +9,7 @@ import (
 // Client is an object for handling configurations provided by ConfigCat.
 type Client struct {
 	store                   *configStore
-	parser                  *ConfigParser
+	parser                  *configParser
 	refreshPolicy           refreshPolicy
 	maxWaitTimeForSyncCalls time.Duration
 	logger                  Logger
@@ -147,6 +147,108 @@ func (client *Client) GetValueAsyncForUser(key string, defaultValue interface{},
 	})
 }
 
+// GetVariationId returns a Variation ID synchronously as string from the configuration identified by the given key.
+func (client *Client) GetVariationId(key string, defaultVariationId string) string {
+	return client.GetVariationIdForUser(key, defaultVariationId, nil)
+}
+
+// GetVariationIdAsync reads and sends a Variation ID asynchronously to a callback function as string from the configuration identified by the given key.
+func (client *Client) GetVariationIdAsync(key string, defaultVariationId string, completion func(result string)) {
+	client.GetVariationIdAsyncForUser(key, defaultVariationId, nil, completion)
+}
+
+// GetVariationIdForUser returns a Variation ID synchronously as string from the configuration identified by the given key.
+// Optional user argument can be passed to identify the caller.
+func (client *Client) GetVariationIdForUser(key string, defaultVariationId string, user *User) string {
+	if len(key) == 0 {
+		panic("key cannot be empty")
+	}
+
+	if client.maxWaitTimeForSyncCalls > 0 {
+		json, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
+		if err != nil {
+			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
+			return client.parseVariationId(client.store.get(), key, defaultVariationId, user)
+		}
+
+		return client.parseVariationId(json.(string), key, defaultVariationId, user)
+	}
+
+	json, _ := client.refreshPolicy.getConfigurationAsync().get().(string)
+	return client.parseVariationId(json, key, defaultVariationId, user)
+}
+
+// GetVariationIdAsyncForUser reads and sends a Variation Id asynchronously to a callback function as string from the configuration identified by the given key.
+// Optional user argument can be passed to identify the caller.
+func (client *Client) GetVariationIdAsyncForUser(key string, defaultVariationId string, user *User, completion func(result string)) {
+	if len(key) == 0 {
+		panic("key cannot be empty")
+	}
+
+	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
+		completion(client.parseVariationId(res.(string), key, defaultVariationId, user))
+	})
+}
+
+// GetAllVariationIds returns the Variation IDs synchronously as []string from the configuration.
+func (client *Client) GetAllVariationIds() ([]string, error) {
+	return client.GetAllVariationIdsForUser(nil)
+}
+
+// GetAllVariationIdsAsync reads and sends a Variation ID asynchronously to a callback function as []string from the configuration.
+func (client *Client) GetAllVariationIdsAsync(completion func(result []string, err error)) {
+	client.GetAllVariationIdsAsyncForUser(nil, completion)
+}
+
+// GetAllVariationIdsForUser returns the Variation IDs synchronously as []string from the configuration.
+// Optional user argument can be passed to identify the caller.
+func (client *Client) GetAllVariationIdsForUser(user *User) ([]string, error) {
+	if client.maxWaitTimeForSyncCalls > 0 {
+		json, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
+		if err != nil {
+			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
+			return nil, err
+		}
+
+		return client.getVariationIds(json.(string), user)
+	}
+
+	json, _ := client.refreshPolicy.getConfigurationAsync().get().(string)
+	return client.getVariationIds(json, user)
+}
+
+// GetAllVariationIdsAsyncForUser reads and sends a Variation ID asynchronously to a callback function as []string from the configuration.
+// Optional user argument can be passed to identify the caller.
+func (client *Client) GetAllVariationIdsAsyncForUser(user *User, completion func(result []string, err error)) {
+	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
+		completion(client.getVariationIds(res.(string), user))
+	})
+}
+
+// GetKeyAndValue returns the key of a setting and its value identified by the given Variation ID.
+func (client *Client) GetKeyAndValue(variationId string) (string, interface{}) {
+	if client.maxWaitTimeForSyncCalls > 0 {
+		json, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
+		if err != nil {
+			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
+			return "", nil
+		}
+
+		return client.getKeyAndValue(json.(string), variationId)
+	}
+
+	json, _ := client.refreshPolicy.getConfigurationAsync().get().(string)
+	return client.getKeyAndValue(json, variationId)
+}
+
+// GetAllVariationIdsAsyncForUser reads and sends the key of a setting and its value identified by the given
+// Variation ID asynchronously to a callback function as (string, interface{}) from the configuration.
+func (client *Client) GetKeyAndValueAsync(variationId string, completion func(key string, value interface{})) {
+	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
+		completion(client.getKeyAndValue(res.(string), variationId))
+	})
+}
+
 // GetAllKeys retrieves all the setting keys.
 func (client *Client) GetAllKeys() ([]string, error) {
 	if client.maxWaitTimeForSyncCalls > 0 {
@@ -156,17 +258,17 @@ func (client *Client) GetAllKeys() ([]string, error) {
 			return nil, err
 		}
 
-		return client.parser.GetAllKeys(json.(string))
+		return client.parser.getAllKeys(json.(string))
 	}
 
 	json, _ := client.refreshPolicy.getConfigurationAsync().get().(string)
-	return client.parser.GetAllKeys(json)
+	return client.parser.getAllKeys(json)
 }
 
 // GetAllKeysAsync retrieves all the setting keys asynchronously.
 func (client *Client) GetAllKeysAsync(completion func(result []string, err error)) {
 	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
-		completion(client.parser.GetAllKeys(res.(string)))
+		completion(client.parser.getAllKeys(res.(string)))
 	})
 }
 
@@ -190,7 +292,7 @@ func (client *Client) Close() {
 }
 
 func (client *Client) parseJson(json string, key string, defaultValue interface{}, user *User) interface{} {
-	parsed, err := client.parser.ParseWithUser(json, key, user)
+	parsed, err := client.parser.parse(json, key, user)
 	if err != nil {
 		client.logger.Errorf(
 			"Evaluating GetValue(%s) failed. Returning defaultValue: [%v]. %s.",
@@ -201,4 +303,47 @@ func (client *Client) parseJson(json string, key string, defaultValue interface{
 	}
 
 	return parsed
+}
+
+func (client *Client) parseVariationId(json string, key string, defaultVariationId string, user *User) string {
+	parsed, err := client.parser.parseVariationId(json, key, user)
+	if err != nil {
+		client.logger.Errorf(
+			"Evaluating GetVariationId(%s) failed. Returning defaultVariationId: [%v]. %s.",
+			key,
+			defaultVariationId,
+			err.Error())
+		return defaultVariationId
+	}
+
+	return parsed
+}
+
+func (client *Client) getVariationIds(json string, user *User) ([]string, error) {
+	keys, err := client.parser.getAllKeys(json)
+	if err != nil {
+		client.logger.Errorf(
+			"Evaluating GetAllVariationIds() failed. Returning nil. %s.",
+			err.Error())
+		return nil, err
+	}
+	variationIds := make([]string, len(keys))
+	for index, value := range keys {
+		variationIds[index] = client.parseVariationId(json, value, "", user)
+	}
+
+	return variationIds, nil
+}
+
+func (client *Client) getKeyAndValue(json string, variationId string) (string, interface{}) {
+	key, value, err := client.parser.parseKeyValue(json, variationId)
+	if err != nil {
+		client.logger.Errorf(
+			"Evaluating GetKeyAndValue(%s) failed. Returning nil. %s.",
+			variationId,
+			err.Error())
+		return "", nil
+	}
+
+	return key, value
 }

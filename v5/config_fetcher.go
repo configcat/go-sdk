@@ -5,13 +5,10 @@ import (
 	"net/http"
 )
 
-// configProvider describes a configuration provider which used to collect the actual configuration.
 type configProvider interface {
-	// getConfigurationAsync collects the actual configuration.
 	getConfigurationAsync() *asyncResult
 }
 
-// configFetcher used to fetch the actual configuration over HTTP.
 type configFetcher struct {
 	sdkKey, eTag, mode, baseUrl string
 	client                      *http.Client
@@ -26,7 +23,6 @@ func newConfigFetcher(sdkKey string, config ClientConfig) *configFetcher {
 		client:  &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport}}
 }
 
-// getConfigurationAsync collects the actual configuration over HTTP.
 func (fetcher *configFetcher) getConfigurationAsync() *asyncResult {
 	result := newAsyncResult()
 
