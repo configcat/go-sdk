@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	jsonFormat = "{ \"f\": { \"%s\": { \"v\": %s, \"p\": [], \"r\": [] }}}"
+	jsonFormat          = "{ \"f\": { \"%s\": { \"v\": %s, \"p\": [], \"r\": [] }}}"
 	variationJsonFormat = "{ \"f\": { \"first\": { \"v\": false, \"p\": [], \"r\": [], \"i\":\"fakeIdFirst\" }, \"second\": { \"v\": true, \"p\": [], \"r\": [], \"i\":\"fakeIdSecond\" }}}"
 )
 

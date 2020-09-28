@@ -17,7 +17,7 @@ import (
 //  })
 //  go func() { async.Complete("success") }()
 type asyncResult struct {
-	result      interface{}
+	result interface{}
 	*async
 }
 

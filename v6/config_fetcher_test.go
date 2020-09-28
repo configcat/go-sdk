@@ -294,6 +294,6 @@ func (m *mockHttpTransport) RoundTrip(req *http.Request) (*http.Response, error)
 func (m *mockHttpTransport) enqueue(statusCode int, body string) {
 	m.responses = append(m.responses, &http.Response{
 		StatusCode: statusCode,
-		Body: ioutil.NopCloser(bytes.NewBufferString(body)),
+		Body:       ioutil.NopCloser(bytes.NewBufferString(body)),
 	})
 }

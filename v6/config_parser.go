@@ -79,7 +79,7 @@ func (parser *configParser) parseKeyValue(jsonBody string, variationId string) (
 		}
 	}
 
-	return "", nil, &parseError{"JSON parsing failed." }
+	return "", nil, &parseError{"JSON parsing failed."}
 }
 
 func (parser *configParser) parseInternal(jsonBody string, key string, user *User) (interface{}, string, error) {

@@ -44,7 +44,7 @@ func defaultConfig() ClientConfig {
 		HttpTimeout:             time.Second * 15,
 		Transport:               http.DefaultTransport,
 		Mode:                    AutoPoll(time.Second * 120),
-		DataGovernance: 		 Global,
+		DataGovernance:          Global,
 	}
 }
 

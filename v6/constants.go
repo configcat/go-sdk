@@ -39,25 +39,25 @@ const (
 )
 
 const (
-	entries = "f"
+	entries     = "f"
 	preferences = "p"
 
-	preferencesUrl = "u"
+	preferencesUrl      = "u"
 	preferencesRedirect = "r"
 
-	settingValue = "v"
-	settingType = "t"
+	settingValue                  = "v"
+	settingType                   = "t"
 	settingRolloutPercentageItems = "p"
-	settingRolloutRules = "r"
-	settingVariationId = "i"
+	settingRolloutRules           = "r"
+	settingVariationId            = "i"
 
-	rolloutValue = "v"
+	rolloutValue               = "v"
 	rolloutComparisonAttribute = "a"
-	rolloutComparator = "t"
-	rolloutComparisonValue = "c"
-	rolloutVariationId = "i"
+	rolloutComparator          = "t"
+	rolloutComparisonValue     = "c"
+	rolloutVariationId         = "i"
 
-	percentageItemValue = "v"
-	percentageItemPercentage = "p"
+	percentageItemValue       = "v"
+	percentageItemPercentage  = "p"
 	percentageItemVariationId = "i"
 )

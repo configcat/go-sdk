@@ -11,7 +11,7 @@ type configProvider interface {
 
 type configFetcher struct {
 	sdkKey, eTag, mode, baseUrl string
-	urlIsCustom					bool
+	urlIsCustom                 bool
 	parser                      *configParser
 	client                      *http.Client
 	logger                      Logger
@@ -19,15 +19,19 @@ type configFetcher struct {
 
 func newConfigFetcher(sdkKey string, config ClientConfig, parser *configParser) *configFetcher {
 	fetcher := &configFetcher{sdkKey: sdkKey,
-		mode:        config.Mode.getModeIdentifier(),
-		parser:      parser,
-		logger:      config.Logger,
-		client:      &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport}}
+		mode:   config.Mode.getModeIdentifier(),
+		parser: parser,
+		logger: config.Logger,
+		client: &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport}}
 
 	if len(config.BaseUrl) == 0 {
 		fetcher.urlIsCustom = false
 		fetcher.baseUrl = func() string {
-			if config.DataGovernance == Global { return globalBaseUrl} else { return euOnlyBaseUrl}
+			if config.DataGovernance == Global {
+				return globalBaseUrl
+			} else {
+				return euOnlyBaseUrl
+			}
 		}()
 	} else {
 		fetcher.urlIsCustom = true
@@ -78,7 +82,7 @@ func (fetcher *configFetcher) executeFetchAsync(executionCount int) *asyncResult
 		} else {
 			if redirect == 1 {
 				fetcher.logger.Warnln("Please check the data_governance parameter " +
-				 	"in the ConfigCatClient initialization. " +
+					"in the ConfigCatClient initialization. " +
 					"It should match the settings provided in " +
 					"https://app.configcat.com/organization/data-governance. " +
 					"If you are not allowed to view this page, ask your Organization's Admins " +
