@@ -12,13 +12,13 @@ const (
 	Failure fetchStatus = 2
 )
 
-// DataGovernance describes the location from where the sdk gets the ConfigCat configuration.
+// DataGovernance describes the location of your feature flag and setting data within the ConfigCat CDN.
 type DataGovernance int
 
 const (
-	// Global indicates that the sdk will use the global cdn servers to get the ConfigCat configuration.
+	// Global indicates that your data will be published to all ConfigCat CDN nodes to guarantee lowest response times.
 	Global DataGovernance = 0
-	// EuOnly indicates that the sdk will use the EU cdn servers to get the ConfigCat configuration.
+	// EuOnly indicates that your data will be published to CDN nodes only in the EU.
 	EuOnly DataGovernance = 1
 )
 
