@@ -8,7 +8,6 @@ import (
 
 // Client is an object for handling configurations provided by ConfigCat.
 type Client struct {
-	store                   *configStore
 	parser                  *configParser
 	refreshPolicy           refreshPolicy
 	maxWaitTimeForSyncCalls time.Duration
@@ -32,17 +31,20 @@ type ClientConfig struct {
 	Transport http.RoundTripper
 	// The refresh mode of the cached configuration.
 	Mode RefreshMode
+	// The location from where the sdk gets the ConfigCat configuration.
+	DataGovernance DataGovernance
 }
 
 func defaultConfig() ClientConfig {
 	return ClientConfig{
 		Logger:                  DefaultLogger(LogLevelWarn),
-		BaseUrl:                 "https://cdn.configcat.com",
+		BaseUrl:                 "",
 		Cache:                   newInMemoryConfigCache(),
 		MaxWaitTimeForSyncCalls: 0,
 		HttpTimeout:             time.Second * 15,
 		Transport:               http.DefaultTransport,
 		Mode:                    AutoPoll(time.Second * 120),
+		DataGovernance: 		 Global,
 	}
 }
 
@@ -71,10 +73,6 @@ func newInternal(sdkKey string, config ClientConfig, fetcher configProvider) *Cl
 		config.Cache = defaultConfig.Cache
 	}
 
-	if len(config.BaseUrl) == 0 {
-		config.BaseUrl = defaultConfig.BaseUrl
-	}
-
 	if config.MaxWaitTimeForSyncCalls < 0 {
 		config.MaxWaitTimeForSyncCalls = defaultConfig.MaxWaitTimeForSyncCalls
 	}
@@ -91,15 +89,15 @@ func newInternal(sdkKey string, config ClientConfig, fetcher configProvider) *Cl
 		config.Mode = defaultConfig.Mode
 	}
 
+	parser := newParser(config.Logger)
+
 	if fetcher == nil {
-		fetcher = newConfigFetcher(sdkKey, config)
+		fetcher = newConfigFetcher(sdkKey, config, parser)
 	}
 
-	store := newConfigStore(config.Logger, config.Cache)
-
-	return &Client{store: store,
-		parser:                  newParser(config.Logger),
-		refreshPolicy:           config.Mode.accept(newRefreshPolicyFactory(fetcher, store, config.Logger)),
+	return &Client{
+		parser:                  parser,
+		refreshPolicy:           config.Mode.accept(newRefreshPolicyFactory(fetcher, config.Cache, config.Logger)),
 		maxWaitTimeForSyncCalls: config.MaxWaitTimeForSyncCalls,
 		logger:                  config.Logger}
 }
@@ -125,7 +123,7 @@ func (client *Client) GetValueForUser(key string, defaultValue interface{}, user
 		json, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
 		if err != nil {
 			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
-			return client.parseJson(client.store.get(), key, defaultValue, user)
+			return client.parseJson(client.refreshPolicy.getLastCachedConfig(), key, defaultValue, user)
 		}
 
 		return client.parseJson(json.(string), key, defaultValue, user)
@@ -168,7 +166,7 @@ func (client *Client) GetVariationIdForUser(key string, defaultVariationId strin
 		json, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
 		if err != nil {
 			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
-			return client.parseVariationId(client.store.get(), key, defaultVariationId, user)
+			return client.parseVariationId(client.refreshPolicy.getLastCachedConfig(), key, defaultVariationId, user)
 		}
 
 		return client.parseVariationId(json.(string), key, defaultVariationId, user)

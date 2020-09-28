@@ -8,20 +8,20 @@ import (
 )
 
 const (
-	jsonFormat = "{ \"%s\": { \"v\": %s, \"p\": [], \"r\": [] }}"
-	variationJsonFormat = "{ \"first\": { \"v\": false, \"p\": [], \"r\": [], \"i\":\"fakeIdFirst\" }, \"second\": { \"v\": true, \"p\": [], \"r\": [], \"i\":\"fakeIdSecond\" }}"
+	jsonFormat = "{ \"f\": { \"%s\": { \"v\": %s, \"p\": [], \"r\": [] }}}"
+	variationJsonFormat = "{ \"f\": { \"first\": { \"v\": false, \"p\": [], \"r\": [], \"i\":\"fakeIdFirst\" }, \"second\": { \"v\": true, \"p\": [], \"r\": [], \"i\":\"fakeIdSecond\" }}}"
 )
 
 type FailingCache struct {
 }
 
 // get reads the configuration from the cache.
-func (cache *FailingCache) Get() (string, error) {
+func (cache *FailingCache) Get(key string) (string, error) {
 	return "", errors.New("fake failing cache fails to get")
 }
 
 // set writes the configuration into the cache.
-func (cache *FailingCache) Set(value string) error {
+func (cache *FailingCache) Set(key string, value string) error {
 	return errors.New("fake failing cache fails to set")
 }
 
@@ -209,7 +209,7 @@ func TestClient_GetAllVariationIds(t *testing.T) {
 
 func TestClient_GetAllVariationIds_Empty(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf("{}")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf("{ \"f\": {} }")})
 	client.Refresh()
 	result, err := client.GetAllVariationIds()
 

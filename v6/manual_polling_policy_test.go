@@ -10,7 +10,7 @@ func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
 	policy := newManualPollingPolicy(
 		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
+		newInMemoryConfigCache(),
 		logger,
 	)
 
@@ -36,7 +36,7 @@ func TestManualPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
 	policy := newManualPollingPolicy(
 		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
+		newInMemoryConfigCache(),
 		logger,
 	)
 	config := policy.getConfigurationAsync().get().(string)

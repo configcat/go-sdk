@@ -11,23 +11,94 @@ type configProvider interface {
 
 type configFetcher struct {
 	sdkKey, eTag, mode, baseUrl string
+	urlIsCustom					bool
+	parser                      *configParser
 	client                      *http.Client
 	logger                      Logger
 }
 
-func newConfigFetcher(sdkKey string, config ClientConfig) *configFetcher {
-	return &configFetcher{sdkKey: sdkKey,
-		mode:    config.Mode.getModeIdentifier(),
-		baseUrl: config.BaseUrl,
-		logger:  config.Logger,
-		client:  &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport}}
+func newConfigFetcher(sdkKey string, config ClientConfig, parser *configParser) *configFetcher {
+	fetcher := &configFetcher{sdkKey: sdkKey,
+		mode:        config.Mode.getModeIdentifier(),
+		parser:      parser,
+		logger:      config.Logger,
+		client:      &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport}}
+
+	if len(config.BaseUrl) == 0 {
+		fetcher.urlIsCustom = false
+		fetcher.baseUrl = func() string {
+			if config.DataGovernance == Global { return globalBaseUrl} else { return euOnlyBaseUrl}
+		}()
+	} else {
+		fetcher.urlIsCustom = true
+		fetcher.baseUrl = config.BaseUrl
+	}
+
+	return fetcher
 }
 
 func (fetcher *configFetcher) getConfigurationAsync() *asyncResult {
+	return fetcher.executeFetchAsync(2)
+}
+
+func (fetcher *configFetcher) executeFetchAsync(executionCount int) *asyncResult {
+	return fetcher.sendFetchRequestAsync().compose(func(result interface{}) *asyncResult {
+		fetchResponse, ok := result.(fetchResponse)
+		if !ok || !fetchResponse.isFetched() {
+			return asCompletedAsyncResult(result)
+		}
+
+		rootNode, err := fetcher.parser.deserialize(fetchResponse.body)
+		if err != nil {
+			return asCompletedAsyncResult(fetchResponse)
+		}
+
+		preferences, ok := rootNode[preferences].(map[string]interface{})
+		if !ok {
+			return asCompletedAsyncResult(fetchResponse)
+		}
+
+		newUrl, ok := preferences[preferencesUrl].(string)
+		if !ok || len(newUrl) == 0 || newUrl == fetcher.baseUrl {
+			return asCompletedAsyncResult(fetchResponse)
+		}
+
+		redirect, ok := preferences[preferencesRedirect].(float64)
+		if !ok {
+			return asCompletedAsyncResult(fetchResponse)
+		}
+
+		if fetcher.urlIsCustom && redirect != 2 {
+			return asCompletedAsyncResult(fetchResponse)
+		}
+
+		fetcher.baseUrl = newUrl
+		if redirect == 0 {
+			return asCompletedAsyncResult(fetchResponse)
+		} else {
+			if redirect == 1 {
+				fetcher.logger.Warnln("Please check the data_governance parameter " +
+				 	"in the ConfigCatClient initialization. " +
+					"It should match the settings provided in " +
+					"https://app.configcat.com/organization/data-governance. " +
+					"If you are not allowed to view this page, ask your Organization's Admins " +
+					"for the correct setting.")
+			}
+
+			if executionCount > 0 {
+				return fetcher.executeFetchAsync(executionCount - 1)
+			}
+		}
+
+		return asCompletedAsyncResult(fetchResponse)
+	})
+}
+
+func (fetcher *configFetcher) sendFetchRequestAsync() *asyncResult {
 	result := newAsyncResult()
 
 	go func() {
-		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.sdkKey+"/config_v4.json", nil)
+		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.sdkKey+"/config_v5.json", nil)
 		if requestError != nil {
 			result.complete(fetchResponse{status: Failure})
 			return

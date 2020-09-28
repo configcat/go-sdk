@@ -12,7 +12,7 @@ func TestAutoPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	logger := DefaultLogger(LogLevelWarn)
 	policy := newAutoPollingPolicy(
 		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
+		newInMemoryConfigCache(),
 		logger,
 		autoPollConfig{time.Second * 2, nil},
 	)
@@ -46,7 +46,7 @@ func TestAutoPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	logger := DefaultLogger(LogLevelWarn)
 	policy := newAutoPollingPolicy(
 		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
+		newInMemoryConfigCache(),
 		logger,
 		autoPollConfig{time.Second * 2, nil},
 	)
@@ -67,7 +67,7 @@ func TestAutoPollingPolicy_GetConfigurationAsync_WithListener(t *testing.T) {
 	defer close(c)
 	policy := newAutoPollingPolicy(
 		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
+		newInMemoryConfigCache(),
 		logger,
 		AutoPollWithChangeListener(
 			time.Second*2,

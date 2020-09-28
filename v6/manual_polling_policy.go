@@ -24,15 +24,15 @@ func ManualPoll() RefreshMode {
 // newManualPollingPolicy initializes a new manualPollingPolicy.
 func newManualPollingPolicy(
 	configFetcher configProvider,
-	store *configStore,
+	cache ConfigCache,
 	logger Logger) *manualPollingPolicy {
 
-	return &manualPollingPolicy{configRefresher: configRefresher{configFetcher: configFetcher, store: store, logger: logger}}
+	return &manualPollingPolicy{configRefresher: configRefresher{configFetcher: configFetcher, cache: cache, logger: logger}}
 }
 
 // getConfigurationAsync reads the current configuration value.
 func (policy *manualPollingPolicy) getConfigurationAsync() *asyncResult {
-	return asCompletedAsyncResult(policy.store.get())
+	return asCompletedAsyncResult(policy.get())
 }
 
 // close shuts down the policy.

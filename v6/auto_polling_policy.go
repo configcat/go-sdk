@@ -47,11 +47,11 @@ func AutoPollWithChangeListener(
 // newAutoPollingPolicy initializes a new autoPollingPolicy.
 func newAutoPollingPolicy(
 	configFetcher configProvider,
-	store *configStore,
+	cache ConfigCache,
 	logger Logger,
 	autoPollConfig autoPollConfig) *autoPollingPolicy {
 	policy := &autoPollingPolicy{
-		configRefresher:  configRefresher{configFetcher: configFetcher, store: store, logger: logger},
+		configRefresher:  configRefresher{configFetcher: configFetcher, cache: cache, logger: logger},
 		autoPollInterval: autoPollConfig.autoPollInterval,
 		init:             newAsync(),
 		initialized:      no,
@@ -69,7 +69,7 @@ func (policy *autoPollingPolicy) getConfigurationAsync() *asyncResult {
 	}
 
 	return policy.init.apply(func() interface{} {
-		return policy.store.get()
+		return policy.get()
 	})
 }
 
@@ -103,9 +103,9 @@ func (policy *autoPollingPolicy) startPolling() {
 func (policy *autoPollingPolicy) poll() {
 	policy.logger.Debugln("Polling the latest configuration.")
 	response := policy.configFetcher.getConfigurationAsync().get().(fetchResponse)
-	cached := policy.store.get()
+	cached := policy.get()
 	if response.isFetched() && cached != response.body {
-		policy.store.set(response.body)
+		policy.set(response.body)
 		if policy.configChanged != nil {
 			policy.configChanged()
 		}
@@ -118,5 +118,5 @@ func (policy *autoPollingPolicy) poll() {
 
 func (policy *autoPollingPolicy) readCache() *asyncResult {
 	policy.logger.Debugln("Reading from cache.")
-	return asCompletedAsyncResult(policy.store.get())
+	return asCompletedAsyncResult(policy.get())
 }

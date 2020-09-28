@@ -5,7 +5,7 @@ import (
 )
 
 func TestConfigParser_Parse(t *testing.T) {
-	jsonBody := "{ \"keyDouble\": { \"v\": 120.121238476, \"p\": [], \"r\": [], \"i\":\"\" }}"
+	jsonBody := "{ \"f\": { \"keyDouble\": { \"v\": 120.121238476, \"p\": [], \"r\": [], \"i\":\"\" }}}"
 	parser := newParser(DefaultLogger(LogLevelWarn))
 
 	val, err := parser.parse(jsonBody, "keyDouble", nil)

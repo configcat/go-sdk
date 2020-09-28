@@ -34,7 +34,7 @@ func (parser *configParser) parseVariationId(jsonBody string, key string, user *
 }
 
 func (parser *configParser) getAllKeys(jsonBody string) ([]string, error) {
-	rootNode, err := parser.deserialize(jsonBody)
+	rootNode, err := parser.getEntries(jsonBody)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func (parser *configParser) getAllKeys(jsonBody string) ([]string, error) {
 }
 
 func (parser *configParser) parseKeyValue(jsonBody string, variationId string) (string, interface{}, error) {
-	rootNode, err := parser.deserialize(jsonBody)
+	rootNode, err := parser.getEntries(jsonBody)
 	if err != nil {
 		return "", nil, &parseError{"JSON parsing failed. " + err.Error() + "."}
 	}
@@ -87,7 +87,7 @@ func (parser *configParser) parseInternal(jsonBody string, key string, user *Use
 		panic("Key cannot be empty")
 	}
 
-	rootNode, err := parser.deserialize(jsonBody)
+	rootNode, err := parser.getEntries(jsonBody)
 	if err != nil {
 		return nil, "", &parseError{"JSON parsing failed. " + err.Error() + "."}
 	}
@@ -111,6 +111,20 @@ func (parser *configParser) parseInternal(jsonBody string, key string, user *Use
 	}
 
 	return parsed, variationId, nil
+}
+
+func (parser *configParser) getEntries(jsonBody string) (map[string]interface{}, error) {
+	rootNode, err := parser.deserialize(jsonBody)
+	if err != nil {
+		return nil, err
+	}
+
+	entries, ok := rootNode[entries].(map[string]interface{})
+	if !ok {
+		return nil, &parseError{"JSON mapping failed, json: " + jsonBody}
+	}
+
+	return entries, nil
 }
 
 func (parser *configParser) deserialize(jsonBody string) (map[string]interface{}, error) {
