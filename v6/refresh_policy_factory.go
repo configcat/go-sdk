@@ -10,7 +10,7 @@ type refreshPolicyFactory struct {
 	configFetcher configProvider
 	cache         ConfigCache
 	logger        Logger
-	sdkKey		  string
+	sdkKey        string
 }
 
 func newRefreshPolicyFactory(configFetcher configProvider, cache ConfigCache, logger Logger, sdkKey string) *refreshPolicyFactory {

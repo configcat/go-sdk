@@ -2,10 +2,10 @@ package configcat
 
 import (
 	"fmt"
+	"github.com/spaolacci/murmur3"
 	"strconv"
 	"sync"
 )
-import "github.com/spaolacci/murmur3"
 
 const (
 	CacheBase = "config-v5-%s"
@@ -23,7 +23,7 @@ type configRefresher struct {
 	cache         ConfigCache
 	logger        Logger
 	inMemoryValue string
-	cacheKey	  string
+	cacheKey      string
 	sync.RWMutex
 }
 
@@ -33,7 +33,7 @@ type RefreshMode interface {
 }
 
 func newConfigRefresher(configFetcher configProvider, cache ConfigCache, logger Logger, sdkKey string) configRefresher {
-	hasher:= murmur3.New32WithSeed(104729)
+	hasher := murmur3.New32WithSeed(104729)
 	_, _ = hasher.Write([]byte(sdkKey))
 	cacheKey := fmt.Sprintf(CacheBase, strconv.FormatUint(uint64(hasher.Sum32()), 32))
 	return configRefresher{configFetcher: configFetcher, cache: cache, logger: logger, cacheKey: cacheKey}
