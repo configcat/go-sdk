@@ -12,6 +12,7 @@ func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 		fetcher,
 		newInMemoryConfigCache(),
 		logger,
+		"",
 	)
 
 	policy.refreshAsync().wait()
@@ -38,6 +39,7 @@ func TestManualPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 		fetcher,
 		newInMemoryConfigCache(),
 		logger,
+		"",
 	)
 	config := policy.getConfigurationAsync().get().(string)
 

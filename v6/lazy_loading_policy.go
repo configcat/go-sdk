@@ -44,8 +44,9 @@ func newLazyLoadingPolicy(
 	configFetcher configProvider,
 	cache ConfigCache,
 	logger Logger,
+	sdkKey string,
 	config lazyLoadConfig) *lazyLoadingPolicy {
-	return &lazyLoadingPolicy{configRefresher: configRefresher{configFetcher: configFetcher, cache: cache, logger: logger},
+	return &lazyLoadingPolicy{configRefresher: newConfigRefresher(configFetcher, cache, logger, sdkKey),
 		cacheInterval:   config.cacheInterval,
 		isFetching:      no,
 		initialized:     no,

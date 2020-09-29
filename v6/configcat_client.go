@@ -99,7 +99,7 @@ func newInternal(sdkKey string, config ClientConfig, fetcher configProvider) *Cl
 
 	return &Client{
 		parser:                  parser,
-		refreshPolicy:           config.Mode.accept(newRefreshPolicyFactory(fetcher, config.Cache, config.Logger)),
+		refreshPolicy:           config.Mode.accept(newRefreshPolicyFactory(fetcher, config.Cache, config.Logger, sdkKey)),
 		maxWaitTimeForSyncCalls: config.MaxWaitTimeForSyncCalls,
 		logger:                  config.Logger}
 }

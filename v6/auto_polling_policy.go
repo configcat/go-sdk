@@ -49,9 +49,10 @@ func newAutoPollingPolicy(
 	configFetcher configProvider,
 	cache ConfigCache,
 	logger Logger,
+	sdkKey string,
 	autoPollConfig autoPollConfig) *autoPollingPolicy {
 	policy := &autoPollingPolicy{
-		configRefresher:  configRefresher{configFetcher: configFetcher, cache: cache, logger: logger},
+		configRefresher:  newConfigRefresher(configFetcher, cache, logger, sdkKey),
 		autoPollInterval: autoPollConfig.autoPollInterval,
 		init:             newAsync(),
 		initialized:      no,

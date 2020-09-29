@@ -25,9 +25,10 @@ func ManualPoll() RefreshMode {
 func newManualPollingPolicy(
 	configFetcher configProvider,
 	cache ConfigCache,
-	logger Logger) *manualPollingPolicy {
+	logger Logger,
+	sdkKey string) *manualPollingPolicy {
 
-	return &manualPollingPolicy{configRefresher: configRefresher{configFetcher: configFetcher, cache: cache, logger: logger}}
+	return &manualPollingPolicy{configRefresher: newConfigRefresher(configFetcher, cache, logger, sdkKey)}
 }
 
 // getConfigurationAsync reads the current configuration value.

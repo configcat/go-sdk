@@ -25,6 +25,19 @@ func (cache *FailingCache) Set(key string, value string) error {
 	return errors.New("fake failing cache fails to set")
 }
 
+type KeyCheckerCache struct {
+	key string
+}
+
+func (cache *KeyCheckerCache) Get(key string) (string, error) {
+	return "", nil
+}
+
+func (cache *KeyCheckerCache) Set(key string, value string) error {
+	cache.key = key
+	return nil
+}
+
 func getTestClients() (*fakeConfigProvider, *Client) {
 
 	config := ClientConfig{Mode: ManualPoll()}
@@ -156,7 +169,6 @@ func TestClient_Get_WithFailingCache(t *testing.T) {
 }
 
 func TestClient_GetAllKeys(t *testing.T) {
-
 	client := NewClient("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A")
 
 	keys, err := client.GetAllKeys()
@@ -250,5 +262,18 @@ func TestClient_GetKeyAndValue_Empty(t *testing.T) {
 
 	if value != nil {
 		t.Error("Expecting nil value")
+	}
+}
+
+func TestClient_EnsureCacheKeyHashIsSameOnAllPlatforms(t *testing.T) {
+	config := defaultConfig()
+	cache := &KeyCheckerCache{}
+	config.Cache = cache
+	client := NewCustomClient("PKDVCLf-Hq-h-kCzMp-L7Q/PaDVCFk9EpmD6sLpGLltTA", config)
+
+	client.Refresh()
+
+	if cache.key != "config-v5-1oi96ci" {
+		t.Error("config-v5-1oi96ci cache key expected but it's: " + cache.key)
 	}
 }

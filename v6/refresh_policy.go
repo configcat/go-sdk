@@ -1,9 +1,14 @@
 package configcat
 
-import "sync"
+import (
+	"fmt"
+	"strconv"
+	"sync"
+)
+import "github.com/spaolacci/murmur3"
 
 const (
-	CacheKey = "config-v5"
+	CacheBase = "config-v5-%s"
 )
 
 type refreshPolicy interface {
@@ -18,12 +23,20 @@ type configRefresher struct {
 	cache         ConfigCache
 	logger        Logger
 	inMemoryValue string
+	cacheKey	  string
 	sync.RWMutex
 }
 
 type RefreshMode interface {
 	getModeIdentifier() string
 	accept(visitor pollingModeVisitor) refreshPolicy
+}
+
+func newConfigRefresher(configFetcher configProvider, cache ConfigCache, logger Logger, sdkKey string) configRefresher {
+	hasher:= murmur3.New32WithSeed(104729)
+	_, _ = hasher.Write([]byte(sdkKey))
+	cacheKey := fmt.Sprintf(CacheBase, strconv.FormatUint(uint64(hasher.Sum32()), 32))
+	return configRefresher{configFetcher: configFetcher, cache: cache, logger: logger, cacheKey: cacheKey}
 }
 
 func (refresher *configRefresher) refreshAsync() *async {
@@ -43,7 +56,7 @@ func (refresher *configRefresher) getLastCachedConfig() string {
 func (refresher *configRefresher) get() string {
 	refresher.RLock()
 	defer refresher.RUnlock()
-	value, err := refresher.cache.Get(CacheKey)
+	value, err := refresher.cache.Get(refresher.cacheKey)
 	if err != nil {
 		refresher.logger.Errorf("Reading from the cache failed, %s", err)
 		return refresher.inMemoryValue
@@ -57,7 +70,7 @@ func (refresher *configRefresher) set(value string) {
 	refresher.Lock()
 	defer refresher.Unlock()
 	refresher.inMemoryValue = value
-	err := refresher.cache.Set(CacheKey, value)
+	err := refresher.cache.Set(refresher.cacheKey, value)
 	if err != nil {
 		refresher.logger.Errorf("Saving into the cache failed, %s", err)
 	}
