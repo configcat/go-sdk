@@ -5,6 +5,8 @@ import (
 	"net/http"
 )
 
+const ConfigJsonName = "config_v5"
+
 type configProvider interface {
 	getConfigurationAsync() *asyncResult
 }
@@ -84,7 +86,7 @@ func (fetcher *configFetcher) executeFetchAsync(executionCount int) *asyncResult
 				fetcher.logger.Warnln("Your config.DataGovernance parameter at ConfigCatClient " +
 					"initialization is not in sync with your preferences on the ConfigCat " +
 					"Dashboard: https://app.configcat.com/organization/data-governance. " +
-					"Only Organization Admins can set this preference.")
+					"Only Organization Admins can access this preference.")
 			}
 
 			if executionCount > 0 {
@@ -100,7 +102,7 @@ func (fetcher *configFetcher) sendFetchRequestAsync() *asyncResult {
 	result := newAsyncResult()
 
 	go func() {
-		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.sdkKey+"/config_v5.json", nil)
+		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.sdkKey+"/"+ConfigJsonName+".json", nil)
 		if requestError != nil {
 			result.complete(fetchResponse{status: Failure})
 			return

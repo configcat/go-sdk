@@ -16,9 +16,9 @@ const (
 type DataGovernance int
 
 const (
-	// Global indicates that your data will be published to all ConfigCat CDN nodes to guarantee lowest response times.
+	// Global Select this if your feature flags are published to all global CDN nodes.
 	Global DataGovernance = 0
-	// EuOnly indicates that your data will be published to CDN nodes only in the EU.
+	// EuOnly Select this if your feature flags are published to CDN nodes only in the EU.
 	EuOnly DataGovernance = 1
 )
 

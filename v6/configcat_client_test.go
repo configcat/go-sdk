@@ -264,16 +264,3 @@ func TestClient_GetKeyAndValue_Empty(t *testing.T) {
 		t.Error("Expecting nil value")
 	}
 }
-
-func TestClient_EnsureCacheKeyHashIsSameOnAllPlatforms(t *testing.T) {
-	config := defaultConfig()
-	cache := &KeyCheckerCache{}
-	config.Cache = cache
-	client := NewCustomClient("PKDVCLf-Hq-h-kCzMp-L7Q/PaDVCFk9EpmD6sLpGLltTA", config)
-
-	client.Refresh()
-
-	if cache.key != "config-v5-1oi96ci" {
-		t.Error("config-v5-1oi96ci cache key expected but it's: " + cache.key)
-	}
-}

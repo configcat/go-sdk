@@ -1,14 +1,14 @@
 package configcat
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
-	"github.com/spaolacci/murmur3"
-	"strconv"
 	"sync"
 )
 
 const (
-	CacheBase = "config-v5-%s"
+	CacheBase = "go_"+ ConfigJsonName +"_%s"
 )
 
 type refreshPolicy interface {
@@ -33,9 +33,10 @@ type RefreshMode interface {
 }
 
 func newConfigRefresher(configFetcher configProvider, cache ConfigCache, logger Logger, sdkKey string) configRefresher {
-	hasher := murmur3.New32WithSeed(104729)
-	_, _ = hasher.Write([]byte(sdkKey))
-	cacheKey := fmt.Sprintf(CacheBase, strconv.FormatUint(uint64(hasher.Sum32()), 32))
+	sha := sha1.New()
+	sha.Write([]byte(sdkKey))
+	hash := hex.EncodeToString(sha.Sum(nil))
+	cacheKey := fmt.Sprintf(CacheBase, hash)
 	return configRefresher{configFetcher: configFetcher, cache: cache, logger: logger, cacheKey: cacheKey}
 }
 
