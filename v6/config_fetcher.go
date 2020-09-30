@@ -5,7 +5,13 @@ import (
 	"net/http"
 )
 
-const ConfigJsonName = "config_v5"
+const (
+	ConfigJsonName = "config_v5"
+
+	NoRedirect = 0
+	ShouldRedirect = 1
+	ForceRedirect = 2
+)
 
 type configProvider interface {
 	getConfigurationAsync() *asyncResult
@@ -74,15 +80,15 @@ func (fetcher *configFetcher) executeFetchAsync(executionCount int) *asyncResult
 			return asCompletedAsyncResult(fetchResponse)
 		}
 
-		if fetcher.urlIsCustom && redirect != 2 {
+		if fetcher.urlIsCustom && redirect != ForceRedirect {
 			return asCompletedAsyncResult(fetchResponse)
 		}
 
 		fetcher.baseUrl = newUrl
-		if redirect == 0 {
+		if redirect == NoRedirect {
 			return asCompletedAsyncResult(fetchResponse)
 		} else {
-			if redirect == 1 {
+			if redirect == ShouldRedirect {
 				fetcher.logger.Warnln("Your config.DataGovernance parameter at ConfigCatClient " +
 					"initialization is not in sync with your preferences on the ConfigCat " +
 					"Dashboard: https://app.configcat.com/organization/data-governance. " +
