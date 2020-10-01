@@ -100,6 +100,7 @@ func (fetcher *configFetcher) executeFetchAsync(executionCount int) *asyncResult
 			}
 		}
 
+		fetcher.logger.Errorln("Redirect loop during config.json fetch. Please contact support@configcat.com.")
 		return asCompletedAsyncResult(fetchResponse)
 	})
 }
