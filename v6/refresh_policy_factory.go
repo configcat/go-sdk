@@ -8,22 +8,23 @@ type pollingModeVisitor interface {
 
 type refreshPolicyFactory struct {
 	configFetcher configProvider
-	store         *configStore
+	cache         ConfigCache
 	logger        Logger
+	sdkKey        string
 }
 
-func newRefreshPolicyFactory(configFetcher configProvider, store *configStore, logger Logger) *refreshPolicyFactory {
-	return &refreshPolicyFactory{configFetcher: configFetcher, store: store, logger: logger}
+func newRefreshPolicyFactory(configFetcher configProvider, cache ConfigCache, logger Logger, sdkKey string) *refreshPolicyFactory {
+	return &refreshPolicyFactory{configFetcher: configFetcher, cache: cache, logger: logger, sdkKey: sdkKey}
 }
 
 func (factory *refreshPolicyFactory) visitAutoPoll(config autoPollConfig) refreshPolicy {
-	return newAutoPollingPolicy(factory.configFetcher, factory.store, factory.logger, config)
+	return newAutoPollingPolicy(factory.configFetcher, factory.cache, factory.logger, factory.sdkKey, config)
 }
 
 func (factory *refreshPolicyFactory) visitManualPoll(config manualPollConfig) refreshPolicy {
-	return newManualPollingPolicy(factory.configFetcher, factory.store, factory.logger)
+	return newManualPollingPolicy(factory.configFetcher, factory.cache, factory.logger, factory.sdkKey)
 }
 
 func (factory *refreshPolicyFactory) visitLazyLoad(config lazyLoadConfig) refreshPolicy {
-	return newLazyLoadingPolicy(factory.configFetcher, factory.store, factory.logger, config)
+	return newLazyLoadingPolicy(factory.configFetcher, factory.cache, factory.logger, factory.sdkKey, config)
 }
