@@ -1,39 +1,78 @@
 package configcat
 
-// refreshPolicy is the public interface of a refresh policy which's implementors should describe the configuration update rules.
+import (
+	"crypto/sha1"
+	"encoding/hex"
+	"fmt"
+	"sync"
+)
+
+const (
+	CacheBase = "go_"+ ConfigJsonName +"_%s"
+)
+
 type refreshPolicy interface {
-	// getConfigurationAsync reads the current configuration value.
 	getConfigurationAsync() *asyncResult
-	// refreshAsync initiates a force refresh on the cached configuration.
+	getLastCachedConfig() string
 	refreshAsync() *async
-	// close shuts down the policy.
 	close()
 }
 
-// configRefresher describes a configuration refresher, holds a shared implementation of the refreshAsync method on refreshPolicy.
 type configRefresher struct {
-	// The configuration provider implementation used to collect the latest configuration.
 	configFetcher configProvider
-	// The configuration store used to maintain the cached configuration.
-	store *configStore
-	// The logger instance.
-	logger Logger
+	cache         ConfigCache
+	logger        Logger
+	inMemoryValue string
+	cacheKey      string
+	sync.RWMutex
 }
 
-// RefreshMode is a base for refresh mode configurations.
 type RefreshMode interface {
-	// Returns the identifier sent in User-Agent by the config fetcher.
 	getModeIdentifier() string
-	// Creates a refresh policy from refresh mode.
 	accept(visitor pollingModeVisitor) refreshPolicy
 }
 
-// refreshAsync initiates a force refresh on the cached configuration.
+func newConfigRefresher(configFetcher configProvider, cache ConfigCache, logger Logger, sdkKey string) configRefresher {
+	sha := sha1.New()
+	sha.Write([]byte(sdkKey))
+	hash := hex.EncodeToString(sha.Sum(nil))
+	cacheKey := fmt.Sprintf(CacheBase, hash)
+	return configRefresher{configFetcher: configFetcher, cache: cache, logger: logger, cacheKey: cacheKey}
+}
+
 func (refresher *configRefresher) refreshAsync() *async {
 	return refresher.configFetcher.getConfigurationAsync().accept(func(result interface{}) {
 		response := result.(fetchResponse)
 		if result.(fetchResponse).isFetched() {
-			refresher.store.set(response.body)
+			refresher.set(response.body)
 		}
 	})
+}
+
+func (refresher *configRefresher) getLastCachedConfig() string {
+	return refresher.inMemoryValue
+}
+
+// get reads the configuration.
+func (refresher *configRefresher) get() string {
+	refresher.RLock()
+	defer refresher.RUnlock()
+	value, err := refresher.cache.Get(refresher.cacheKey)
+	if err != nil {
+		refresher.logger.Errorf("Reading from the cache failed, %s", err)
+		return refresher.inMemoryValue
+	}
+
+	return value
+}
+
+// set writes the configuration.
+func (refresher *configRefresher) set(value string) {
+	refresher.Lock()
+	defer refresher.Unlock()
+	refresher.inMemoryValue = value
+	err := refresher.cache.Set(refresher.cacheKey, value)
+	if err != nil {
+		refresher.logger.Errorf("Saving into the cache failed, %s", err)
+	}
 }

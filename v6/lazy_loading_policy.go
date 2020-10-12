@@ -42,10 +42,11 @@ func LazyLoad(cacheInterval time.Duration, useAsyncRefresh bool) RefreshMode {
 // newLazyLoadingPolicy initializes a new lazyLoadingPolicy.
 func newLazyLoadingPolicy(
 	configFetcher configProvider,
-	store *configStore,
+	cache ConfigCache,
 	logger Logger,
+	sdkKey string,
 	config lazyLoadConfig) *lazyLoadingPolicy {
-	return &lazyLoadingPolicy{configRefresher: configRefresher{configFetcher: configFetcher, store: store, logger: logger},
+	return &lazyLoadingPolicy{configRefresher: newConfigRefresher(configFetcher, cache, logger, sdkKey),
 		cacheInterval:   config.cacheInterval,
 		isFetching:      no,
 		initialized:     no,
@@ -79,7 +80,7 @@ func (policy *lazyLoadingPolicy) getConfigurationAsync() *asyncResult {
 			policy.fetching = policy.fetch()
 		}
 		return policy.init.apply(func() interface{} {
-			return policy.store.get()
+			return policy.get()
 		})
 	}
 
@@ -95,11 +96,11 @@ func (policy *lazyLoadingPolicy) fetch() *asyncResult {
 		defer atomic.StoreUint32(&policy.isFetching, no)
 
 		response := result.(fetchResponse)
-		cached := policy.store.get()
+		cached := policy.get()
 		fetched := response.isFetched()
 
 		if fetched && response.body != cached {
-			policy.store.set(response.body)
+			policy.set(response.body)
 		}
 
 		if !response.isFailed() {
@@ -120,5 +121,5 @@ func (policy *lazyLoadingPolicy) fetch() *asyncResult {
 
 func (policy *lazyLoadingPolicy) readCache() *asyncResult {
 	policy.logger.Debugln("Reading from cache.")
-	return asCompletedAsyncResult(policy.store.get())
+	return asCompletedAsyncResult(policy.get())
 }

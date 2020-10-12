@@ -12,6 +12,21 @@ const (
 	Failure fetchStatus = 2
 )
 
+// DataGovernance describes the location of your feature flag and setting data within the ConfigCat CDN.
+type DataGovernance int
+
+const (
+	// Global Select this if your feature flags are published to all global CDN nodes.
+	Global DataGovernance = 0
+	// EuOnly Select this if your feature flags are published to CDN nodes only in the EU.
+	EuOnly DataGovernance = 1
+)
+
+const (
+	globalBaseUrl = "https://cdn-global.configcat.com"
+	euOnlyBaseUrl = "https://cdn-eu.configcat.com"
+)
+
 const (
 	no  = 0
 	yes = 1
@@ -24,19 +39,25 @@ const (
 )
 
 const (
-	settingValue = "v"
-	settingType = "t"
+	entries     = "f"
+	preferences = "p"
+
+	preferencesUrl      = "u"
+	preferencesRedirect = "r"
+
+	settingValue                  = "v"
+	settingType                   = "t"
 	settingRolloutPercentageItems = "p"
-	settingRolloutRules = "r"
-	settingVariationId = "i"
+	settingRolloutRules           = "r"
+	settingVariationId            = "i"
 
-	rolloutValue = "v"
+	rolloutValue               = "v"
 	rolloutComparisonAttribute = "a"
-	rolloutComparator = "t"
-	rolloutComparisonValue = "c"
-	rolloutVariationId = "i"
+	rolloutComparator          = "t"
+	rolloutComparisonValue     = "c"
+	rolloutVariationId         = "i"
 
-	percentageItemValue = "v"
-	percentageItemPercentage = "p"
+	percentageItemValue       = "v"
+	percentageItemPercentage  = "p"
 	percentageItemVariationId = "i"
 )

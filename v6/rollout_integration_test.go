@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	valueKind = 0
+	valueKind     = 0
 	variationKind = 1
 )
 

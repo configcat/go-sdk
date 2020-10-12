@@ -2,8 +2,6 @@ package configcat
 
 import (
 	"errors"
-	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -19,17 +17,13 @@ import (
 //  })
 //  go func() { async.Complete("success") }()
 type asyncResult struct {
-	state       uint32
-	completions []func(result interface{})
-	done        chan struct{}
-	result      interface{}
+	result interface{}
 	*async
-	sync.RWMutex
 }
 
 // newAsyncResult initializes a new async object with result.
 func newAsyncResult() *asyncResult {
-	return &asyncResult{state: pending, completions: []func(result interface{}){}, done: make(chan struct{}), async: newAsync()}
+	return &asyncResult{async: newAsync()}
 }
 
 // asCompletedAsyncResult creates an already completed async object.
@@ -67,20 +61,35 @@ func (asyncResult *asyncResult) applyThen(completion func(result interface{}) in
 	return newAsyncResult
 }
 
+// compose allows the chaining of the async operations after each other and subscribes a
+// callback function which gets the operation result as argument and returns a new async object.
+// Returns an AsyncResult object which returns a different result type.
+// For example:
+//  async.compose(func(result interface{}) {
+//     newAsyncResult := newAsyncResult()
+//
+//     DoSomethingAsynchronously(func(result interface{}) {
+//         newAsyncResult.complete(result)
+//     }))
+//
+//     return newAsyncResult
+//  })
+func (asyncResult *asyncResult) compose(completion func(result interface{}) *asyncResult) *asyncResult {
+	newAsyncResult := newAsyncResult()
+	asyncResult.accept(func(result interface{}) {
+		newResult := completion(result)
+		newResult.accept(func(result interface{}) {
+			newAsyncResult.complete(result)
+		})
+	})
+	return newAsyncResult
+}
+
 // complete moves the async operation into the completed state.
 // Gets the result of the operation as argument.
 func (asyncResult *asyncResult) complete(result interface{}) {
-	if atomic.CompareAndSwapUint32(&asyncResult.state, pending, completed) {
-		asyncResult.result = result
-		asyncResult.async.complete()
-		close(asyncResult.done)
-		asyncResult.RLock()
-		defer asyncResult.RUnlock()
-		for _, comp := range asyncResult.completions {
-			comp(result)
-		}
-	}
-	asyncResult.completions = nil
+	asyncResult.result = result
+	asyncResult.async.complete()
 }
 
 // get blocks until the async operation is completed,

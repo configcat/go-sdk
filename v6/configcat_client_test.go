@@ -8,21 +8,34 @@ import (
 )
 
 const (
-	jsonFormat = "{ \"%s\": { \"v\": %s, \"p\": [], \"r\": [] }}"
-	variationJsonFormat = "{ \"first\": { \"v\": false, \"p\": [], \"r\": [], \"i\":\"fakeIdFirst\" }, \"second\": { \"v\": true, \"p\": [], \"r\": [], \"i\":\"fakeIdSecond\" }}"
+	jsonFormat          = "{ \"f\": { \"%s\": { \"v\": %s, \"p\": [], \"r\": [] }}}"
+	variationJsonFormat = "{ \"f\": { \"first\": { \"v\": false, \"p\": [], \"r\": [], \"i\":\"fakeIdFirst\" }, \"second\": { \"v\": true, \"p\": [], \"r\": [], \"i\":\"fakeIdSecond\" }}}"
 )
 
 type FailingCache struct {
 }
 
 // get reads the configuration from the cache.
-func (cache *FailingCache) Get() (string, error) {
+func (cache *FailingCache) Get(key string) (string, error) {
 	return "", errors.New("fake failing cache fails to get")
 }
 
 // set writes the configuration into the cache.
-func (cache *FailingCache) Set(value string) error {
+func (cache *FailingCache) Set(key string, value string) error {
 	return errors.New("fake failing cache fails to set")
+}
+
+type KeyCheckerCache struct {
+	key string
+}
+
+func (cache *KeyCheckerCache) Get(key string) (string, error) {
+	return "", nil
+}
+
+func (cache *KeyCheckerCache) Set(key string, value string) error {
+	cache.key = key
+	return nil
 }
 
 func getTestClients() (*fakeConfigProvider, *Client) {
@@ -156,7 +169,6 @@ func TestClient_Get_WithFailingCache(t *testing.T) {
 }
 
 func TestClient_GetAllKeys(t *testing.T) {
-
 	client := NewClient("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A")
 
 	keys, err := client.GetAllKeys()
@@ -209,7 +221,7 @@ func TestClient_GetAllVariationIds(t *testing.T) {
 
 func TestClient_GetAllVariationIds_Empty(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf("{}")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf("{ \"f\": {} }")})
 	client.Refresh()
 	result, err := client.GetAllVariationIds()
 
