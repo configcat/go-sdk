@@ -8,34 +8,34 @@ import (
 func TestAutoPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":1}`)})
 	logger := DefaultLogger(LogLevelWarn)
 	policy := newAutoPollingPolicy(
 		fetcher,
-		newInMemoryConfigCache(),
+		inMemoryConfigCache{},
 		logger,
 		"",
 		autoPollConfig{time.Second * 2, nil},
 	)
 	defer policy.close()
 
-	config := policy.getConfigurationAsync().get().(string)
+	conf := policy.getConfigurationAsync().get().(*config)
 
-	if config != "test" {
-		t.Error("Expecting test as result")
+	if conf.body() != `{"test":1}` {
+		t.Errorf("Expecting test as result, got %s", conf.body())
 	}
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test2"})
-	config = policy.getConfigurationAsync().get().(string)
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":2}`)})
+	conf = policy.getConfigurationAsync().get().(*config)
 
-	if config != "test" {
+	if conf.body() != `{"test":1}` {
 		t.Error("Expecting test as result")
 	}
 
 	time.Sleep(time.Second * 4)
-	config = policy.getConfigurationAsync().get().(string)
+	conf = policy.getConfigurationAsync().get().(*config)
 
-	if config != "test2" {
+	if conf.body() != `{"test":2}` {
 		t.Error("Expecting test2 as result")
 	}
 }
@@ -43,20 +43,23 @@ func TestAutoPollingPolicy_GetConfigurationAsync(t *testing.T) {
 func TestAutoPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
-	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
+	fetcher.SetResponse(fetchResponse{status: Failure})
 	logger := DefaultLogger(LogLevelWarn)
 	policy := newAutoPollingPolicy(
 		fetcher,
-		newInMemoryConfigCache(),
+		inMemoryConfigCache{},
 		logger,
 		"",
-		autoPollConfig{time.Second * 2, nil},
+		autoPollConfig{
+			time.Second * 2,
+			nil,
+		},
 	)
 	defer policy.close()
 
-	config := policy.getConfigurationAsync().get().(string)
+	config := policy.getConfigurationAsync().get().(*config)
 
-	if config != "" {
+	if config.body() != "" {
 		t.Error("Expecting default")
 	}
 }
@@ -64,12 +67,12 @@ func TestAutoPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 func TestAutoPollingPolicy_GetConfigurationAsync_WithListener(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 	logger := DefaultLogger(LogLevelWarn)
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":1}`)})
 	c := make(chan bool, 1)
 	defer close(c)
 	policy := newAutoPollingPolicy(
 		fetcher,
-		newInMemoryConfigCache(),
+		inMemoryConfigCache{},
 		logger,
 		"",
 		AutoPollWithChangeListener(
@@ -83,4 +86,12 @@ func TestAutoPollingPolicy_GetConfigurationAsync_WithListener(t *testing.T) {
 	if !called {
 		t.Error("Expecting test as result")
 	}
+}
+
+func mustParseConfig(s string) *config {
+	conf, err := parseConfig([]byte(s))
+	if err != nil {
+		panic(err)
+	}
+	return conf
 }

@@ -8,12 +8,12 @@ type pollingModeVisitor interface {
 
 type refreshPolicyFactory struct {
 	configFetcher configProvider
-	cache         ConfigCache
+	cache         configCache
 	logger        Logger
 	sdkKey        string
 }
 
-func newRefreshPolicyFactory(configFetcher configProvider, cache ConfigCache, logger Logger, sdkKey string) *refreshPolicyFactory {
+func newRefreshPolicyFactory(configFetcher configProvider, cache configCache, logger Logger, sdkKey string) *refreshPolicyFactory {
 	return &refreshPolicyFactory{configFetcher: configFetcher, cache: cache, logger: logger, sdkKey: sdkKey}
 }
 

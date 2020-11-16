@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	jsonFormat          = "{ \"f\": { \"%s\": { \"v\": %s, \"p\": [], \"r\": [] }}}"
-	variationJsonFormat = "{ \"f\": { \"first\": { \"v\": false, \"p\": [], \"r\": [], \"i\":\"fakeIdFirst\" }, \"second\": { \"v\": true, \"p\": [], \"r\": [], \"i\":\"fakeIdSecond\" }}}"
+	jsonFormat          = `{ "f": { "%s": { "v": %s, "p": [], "r": [] }}}`
+	variationJsonFormat = `{ "f": { "first": { "v": false, "p": [], "r": [], "i":"fakeIdFirst" }, "second": { "v": true, "p": [], "r": [], "i":"fakeIdSecond" }}}`
 )
 
 type FailingCache struct {
@@ -57,7 +57,7 @@ func TestClient_Refresh(t *testing.T) {
 		config,
 		fetcher)
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "\"value\"")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "\"value\""))})
 	client.Refresh()
 	result := client.GetValue("key", "default")
 
@@ -65,7 +65,7 @@ func TestClient_Refresh(t *testing.T) {
 		t.Error("Expecting non default string value")
 	}
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "\"value2\"")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "\"value2\""))})
 	client.Refresh()
 	result = client.GetValue("key", "default")
 	if result != "value2" {
@@ -81,7 +81,7 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 		config,
 		fetcher)
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "\"value\"")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "\"value\""))})
 	client.Refresh()
 	result := client.GetValue("key", "default")
 
@@ -89,7 +89,7 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 		t.Error("Expecting non default string value")
 	}
 
-	fetcher.SetResponseWithDelay(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "\"value2\"")}, time.Second*10)
+	fetcher.SetResponseWithDelay(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "\"value2\""))}, time.Second*10)
 	client.Refresh()
 	result = client.GetValue("key", "default")
 	if result != "value" {
@@ -99,7 +99,7 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 
 func TestClient_Get(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "3213"))})
 	client.Refresh()
 	result := client.GetValue("key", 0)
 
@@ -110,7 +110,7 @@ func TestClient_Get(t *testing.T) {
 
 func TestClient_Get_Default(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
+	fetcher.SetResponse(fetchResponse{status: Failure})
 	result := client.GetValue("key", 0)
 
 	if result != 0 {
@@ -120,7 +120,7 @@ func TestClient_Get_Default(t *testing.T) {
 
 func TestClient_Get_Latest(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "3213"))})
 	client.Refresh()
 	result := client.GetValue("key", 0)
 
@@ -128,7 +128,7 @@ func TestClient_Get_Latest(t *testing.T) {
 		t.Error("Expecting non default value")
 	}
 
-	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
+	fetcher.SetResponse(fetchResponse{status: Failure})
 
 	result = client.GetValue("key", 0)
 
@@ -144,7 +144,7 @@ func TestClient_Get_WithTimeout(t *testing.T) {
 		config,
 		fetcher)
 
-	fetcher.SetResponseWithDelay(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "3213")}, time.Second*10)
+	fetcher.SetResponseWithDelay(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "3213"))}, time.Second*10)
 	result := client.GetValue("key", 0)
 
 	if result != 0 {
@@ -159,7 +159,7 @@ func TestClient_Get_WithFailingCache(t *testing.T) {
 		config,
 		fetcher)
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "3213"))})
 	client.Refresh()
 	result := client.GetValue("key", 0)
 
@@ -184,7 +184,7 @@ func TestClient_GetAllKeys(t *testing.T) {
 
 func TestClient_GetVariationId(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(variationJsonFormat)})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(variationJsonFormat))})
 	client.Refresh()
 	result := client.GetVariationId("first", "")
 
@@ -195,7 +195,7 @@ func TestClient_GetVariationId(t *testing.T) {
 
 func TestClient_GetVariationId_Default(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(variationJsonFormat)})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(variationJsonFormat))})
 	client.Refresh()
 	result := client.GetVariationId("nonexisting", "")
 
@@ -206,7 +206,7 @@ func TestClient_GetVariationId_Default(t *testing.T) {
 
 func TestClient_GetAllVariationIds(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(variationJsonFormat)})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(variationJsonFormat))})
 	client.Refresh()
 	result, err := client.GetAllVariationIds()
 
@@ -221,7 +221,7 @@ func TestClient_GetAllVariationIds(t *testing.T) {
 
 func TestClient_GetAllVariationIds_Empty(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf("{ \"f\": {} }")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{ "f": {} }`)})
 	client.Refresh()
 	result, err := client.GetAllVariationIds()
 
@@ -236,7 +236,7 @@ func TestClient_GetAllVariationIds_Empty(t *testing.T) {
 
 func TestClient_GetKeyAndValue(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(variationJsonFormat)})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(variationJsonFormat))})
 	client.Refresh()
 	key, value := client.GetKeyAndValue("fakeIdSecond")
 
@@ -252,7 +252,7 @@ func TestClient_GetKeyAndValue(t *testing.T) {
 
 func TestClient_GetKeyAndValue_Empty(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(variationJsonFormat)})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(variationJsonFormat))})
 	client.Refresh()
 	key, value := client.GetKeyAndValue("nonexisting")
 

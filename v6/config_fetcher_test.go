@@ -9,12 +9,12 @@ import (
 	"testing"
 )
 
-const jsonTemplate = "{ \"p\": { \"u\": \"%s\", \"r\": %d }, \"f\": {} }"
+const jsonTemplate = `{ "p": { "u": "%s", "r": %d }, "f": {} }`
 const customCdnUrl = "https://custom-cdn.configcat.com"
 
 func TestConfigFetcher_GetConfigurationJson(t *testing.T) {
 	fetcher := newConfigFetcher("PKDVCLf-Hq-h-kCzMp-L7Q/PaDVCFk9EpmD6sLpGLltTA",
-		defaultConfig(), newParser(DefaultLogger(LogLevelError)))
+		defaultConfig())
 	response := fetcher.getConfigurationAsync().get().(fetchResponse)
 
 	if !response.isFetched() {
@@ -29,8 +29,7 @@ func TestConfigFetcher_GetConfigurationJson(t *testing.T) {
 }
 
 func TestConfigFetcher_GetConfigurationJson_Fail(t *testing.T) {
-	fetcher := newConfigFetcher("thisshouldnotexist", defaultConfig(),
-		newParser(DefaultLogger(LogLevelError)))
+	fetcher := newConfigFetcher("thisshouldnotexist", defaultConfig())
 	response := fetcher.getConfigurationAsync().get().(fetchResponse)
 
 	if !response.isFailed() {
@@ -47,10 +46,10 @@ func TestConfigFetcher_ShouldStayOnGivenUrl(t *testing.T) {
 	fetcher := createFetcher(transport, "")
 
 	// Act
-	result := fetcher.getConfigurationAsync().get().(fetchResponse).body
+	result := fetcher.getConfigurationAsync().get().(fetchResponse).config
 
 	// Assert
-	if body != result {
+	if body != result.body() {
 		t.Error("same result expected")
 	}
 
@@ -72,10 +71,10 @@ func TestConfigFetcher_ShouldStayOnSameUrlWithRedirect(t *testing.T) {
 	fetcher := createFetcher(transport, "")
 
 	// Act
-	result := fetcher.getConfigurationAsync().get().(fetchResponse).body
+	result := fetcher.getConfigurationAsync().get().(fetchResponse).config
 
 	// Assert
-	if body != result {
+	if body != result.body() {
 		t.Error("same result expected")
 	}
 
@@ -97,10 +96,10 @@ func TestConfigFetcher_ShouldStayOnSameUrlEvenWhenForced(t *testing.T) {
 	fetcher := createFetcher(transport, "")
 
 	// Act
-	result := fetcher.getConfigurationAsync().get().(fetchResponse).body
+	result := fetcher.getConfigurationAsync().get().(fetchResponse).config
 
 	// Assert
-	if body != result {
+	if body != result.body() {
 		t.Error("same result expected")
 	}
 
@@ -124,10 +123,10 @@ func TestConfigFetcher_ShouldRedirectToAnotherServer(t *testing.T) {
 	fetcher := createFetcher(transport, "")
 
 	// Act
-	result := fetcher.getConfigurationAsync().get().(fetchResponse).body
+	result := fetcher.getConfigurationAsync().get().(fetchResponse).config
 
 	// Assert
-	if body2 != result {
+	if body2 != result.body() {
 		t.Error("same result expected")
 	}
 
@@ -155,10 +154,10 @@ func TestConfigFetcher_ShouldRedirectToAnotherServerWhenForced(t *testing.T) {
 	fetcher := createFetcher(transport, "")
 
 	// Act
-	result := fetcher.getConfigurationAsync().get().(fetchResponse).body
+	result := fetcher.getConfigurationAsync().get().(fetchResponse).config
 
 	// Assert
-	if body2 != result {
+	if body2 != result.body() {
 		t.Error("same result expected")
 	}
 
@@ -187,10 +186,10 @@ func TestConfigFetcher_ShouldBreakRedirectLoop(t *testing.T) {
 	fetcher := createFetcher(transport, "")
 
 	// Act
-	result := fetcher.getConfigurationAsync().get().(fetchResponse).body
+	result := fetcher.getConfigurationAsync().get().(fetchResponse).config
 
 	// Assert
-	if body1 != result {
+	if body1 != result.body() {
 		t.Error("same result expected")
 	}
 
@@ -220,10 +219,10 @@ func TestConfigFetcher_ShouldRespectCustomUrlWhenNotForced(t *testing.T) {
 	fetcher := createFetcher(transport, customCdnUrl)
 
 	// Act
-	result := fetcher.getConfigurationAsync().get().(fetchResponse).body
+	result := fetcher.getConfigurationAsync().get().(fetchResponse).config
 
 	// Assert
-	if body != result {
+	if body != result.body() {
 		t.Error("same result expected")
 	}
 
@@ -247,10 +246,10 @@ func TestConfigFetcher_ShouldNotRespectCustomUrlWhenForced(t *testing.T) {
 	fetcher := createFetcher(transport, customCdnUrl)
 
 	// Act
-	result := fetcher.getConfigurationAsync().get().(fetchResponse).body
+	result := fetcher.getConfigurationAsync().get().(fetchResponse).config
 
 	// Assert
-	if body2 != result {
+	if body2 != result.body() {
 		t.Error("same result expected")
 	}
 
@@ -271,7 +270,7 @@ func createFetcher(transport http.RoundTripper, url string) *configFetcher {
 	config := defaultConfig()
 	config.BaseUrl = url
 	config.Transport = transport
-	return newConfigFetcher("fakeKey", config, newParser(DefaultLogger(LogLevelWarn)))
+	return newConfigFetcher("fakeKey", config)
 }
 
 type mockHttpTransport struct {

@@ -3,7 +3,7 @@ package configcat
 // fetchResponse represents a configuration fetch response.
 type fetchResponse struct {
 	status fetchStatus
-	body   string
+	config *config
 }
 
 // isFailed returns true if the fetch is failed, otherwise false.

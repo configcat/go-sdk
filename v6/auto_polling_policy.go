@@ -47,7 +47,7 @@ func AutoPollWithChangeListener(
 // newAutoPollingPolicy initializes a new autoPollingPolicy.
 func newAutoPollingPolicy(
 	configFetcher configProvider,
-	cache ConfigCache,
+	cache configCache,
 	logger Logger,
 	sdkKey string,
 	autoPollConfig autoPollConfig) *autoPollingPolicy {
@@ -105,8 +105,8 @@ func (policy *autoPollingPolicy) poll() {
 	policy.logger.Debugln("Polling the latest configuration.")
 	response := policy.configFetcher.getConfigurationAsync().get().(fetchResponse)
 	cached := policy.get()
-	if response.isFetched() && cached != response.body {
-		policy.set(response.body)
+	if response.isFetched() && cached.body() != response.config.body() {
+		policy.set(response.config)
 		if policy.configChanged != nil {
 			policy.configChanged()
 		}

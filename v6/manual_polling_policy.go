@@ -24,7 +24,7 @@ func ManualPoll() RefreshMode {
 // newManualPollingPolicy initializes a new manualPollingPolicy.
 func newManualPollingPolicy(
 	configFetcher configProvider,
-	cache ConfigCache,
+	cache configCache,
 	logger Logger,
 	sdkKey string) *manualPollingPolicy {
 

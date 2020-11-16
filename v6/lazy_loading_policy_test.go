@@ -8,31 +8,31 @@ import (
 func TestLazyLoadingPolicy_GetConfigurationAsync_DoNotUseAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":1}`)})
 	logger := DefaultLogger(LogLevelWarn)
 	policy := newLazyLoadingPolicy(
 		fetcher,
-		newInMemoryConfigCache(),
+		inMemoryConfigCache{},
 		logger,
 		"",
 		lazyLoadConfig{time.Second * 2, false})
-	config := policy.getConfigurationAsync().get().(string)
+	conf := policy.getConfigurationAsync().get().(*config)
 
-	if config != "test" {
+	if conf.body() != `{"test":1}` {
 		t.Error("Expecting test as result")
 	}
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test2"})
-	config = policy.getConfigurationAsync().get().(string)
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":2}`)})
+	conf = policy.getConfigurationAsync().get().(*config)
 
-	if config != "test" {
+	if conf.body() != `{"test":1}` {
 		t.Error("Expecting test as result")
 	}
 
 	time.Sleep(time.Second * 2)
-	config = policy.getConfigurationAsync().get().(string)
+	conf = policy.getConfigurationAsync().get().(*config)
 
-	if config != "test2" {
+	if conf.body() != `{"test":2}` {
 		t.Error("Expecting test2 as result")
 	}
 }
@@ -40,17 +40,17 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_DoNotUseAsync(t *testing.T) {
 func TestLazyLoadingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
-	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
+	fetcher.SetResponse(fetchResponse{status: Failure})
 	logger := DefaultLogger(LogLevelWarn)
 	policy := newLazyLoadingPolicy(
 		fetcher,
-		newInMemoryConfigCache(),
+		inMemoryConfigCache{},
 		logger,
 		"",
 		lazyLoadConfig{time.Second * 2, false})
-	config := policy.getConfigurationAsync().get().(string)
+	config := policy.getConfigurationAsync().get().(*config)
 
-	if config != "" {
+	if config != nil {
 		t.Error("Expecting default")
 	}
 }
@@ -58,33 +58,33 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 func TestLazyLoadingPolicy_GetConfigurationAsync_UseAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":1}`)})
 	logger := DefaultLogger(LogLevelWarn)
 	policy := newLazyLoadingPolicy(
 		fetcher,
-		newInMemoryConfigCache(),
+		inMemoryConfigCache{},
 		logger,
 		"",
 		lazyLoadConfig{time.Second * 2, true})
-	config := policy.getConfigurationAsync().get().(string)
+	conf := policy.getConfigurationAsync().get().(*config)
 
-	if config != "test" {
+	if conf.body() != `{"test":1}` {
 		t.Error("Expecting test as result")
 	}
 
 	time.Sleep(time.Second * 2)
 
-	fetcher.SetResponseWithDelay(fetchResponse{status: Fetched, body: "test2"}, time.Second*1)
-	config = policy.getConfigurationAsync().get().(string)
+	fetcher.SetResponseWithDelay(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":2}`)}, time.Second*1)
+	conf = policy.getConfigurationAsync().get().(*config)
 
-	if config != "test" {
+	if conf.body() != `{"test":1}` {
 		t.Error("Expecting test as result")
 	}
 
 	time.Sleep(time.Second * 2)
-	config = policy.getConfigurationAsync().get().(string)
+	conf = policy.getConfigurationAsync().get().(*config)
 
-	if config != "test2" {
-		t.Error("Expecting test2 as result")
+	if conf.body() != `{"test":2}` {
+		t.Errorf("Expecting test2 as result, got %s", conf.body())
 	}
 }
