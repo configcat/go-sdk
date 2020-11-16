@@ -3,12 +3,11 @@ package configcat
 import (
 	"bufio"
 	"encoding/csv"
-	"fmt"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 )
 
@@ -17,26 +16,62 @@ const (
 	variationKind = 1
 )
 
-func TestRolloutIntegration(t *testing.T) {
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A", "testmatrix.csv", AutoPoll(120), valueKind, t)
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA", "testmatrix_semantic.csv", LazyLoad(120, false), valueKind, t)
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw", "testmatrix_number.csv", ManualPoll(), valueKind, t)
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w", "testmatrix_semantic_2.csv", AutoPoll(120), valueKind, t)
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/qX3TP2dTj06ZpCCT1h_SPA", "testmatrix_sensitive.csv", AutoPoll(120), valueKind, t)
-	doIntegrationTest("PKDVCLf-Hq-h-kCzMp-L7Q/nQ5qkhRAUEa6beEyyrVLBA", "testmatrix_variationId.csv", AutoPoll(120), variationKind, t)
+type integrationTest struct {
+	sdkKey   string
+	fileName string
+	mode     RefreshMode
+	kind     int
 }
 
-func doIntegrationTest(sdkKey string, fileName string, mode RefreshMode, kind int, t *testing.T) {
+var integrationTests = []integrationTest{{
+	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A",
+	fileName: "testmatrix.csv",
+	mode:     AutoPoll(120),
+	kind:     valueKind,
+}, {
+	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA",
+	fileName: "testmatrix_semantic.csv",
+	mode:     LazyLoad(120, false),
+	kind:     valueKind,
+}, {
+	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw",
+	fileName: "testmatrix_number.csv",
+	mode:     ManualPoll(),
+	kind:     valueKind,
+}, {
+	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w",
+	fileName: "testmatrix_semantic_2.csv",
+	mode:     AutoPoll(120),
+	kind:     valueKind,
+}, {
+	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/qX3TP2dTj06ZpCCT1h_SPA",
+	fileName: "testmatrix_sensitive.csv",
+	mode:     AutoPoll(120),
+	kind:     valueKind,
+}, {
+	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/nQ5qkhRAUEa6beEyyrVLBA",
+	fileName: "testmatrix_variationId.csv",
+	mode:     AutoPoll(120),
+	kind:     variationKind,
+}}
 
+func TestRolloutIntegration(t *testing.T) {
+	for _, test := range integrationTests {
+		t.Run(test.fileName, test.runTest)
+	}
+}
+
+func (test integrationTest) runTest(t *testing.T) {
 	logger := DefaultLogger(LogLevelWarn)
-	client := NewCustomClient(sdkKey, ClientConfig{Logger: logger, Mode: mode})
+	client := NewCustomClient(test.sdkKey, ClientConfig{Logger: logger, Mode: test.mode})
 	client.Refresh()
 	defer client.Close()
 
-	file, fileErr := os.Open("../resources/" + fileName)
+	file, fileErr := os.Open(filepath.Join("../resources", test.fileName))
 	if fileErr != nil {
 		log.Fatal(fileErr)
 	}
+	defer file.Close()
 
 	reader := csv.NewReader(bufio.NewReader(file))
 	reader.Comma = ';'
@@ -45,8 +80,7 @@ func doIntegrationTest(sdkKey string, fileName string, mode RefreshMode, kind in
 	settingKeys := header[4:]
 	customKey := header[3]
 
-	var errors []string
-
+	lineNumber := 1
 	for {
 		line, err := reader.Read()
 		if err == io.EOF {
@@ -54,89 +88,59 @@ func doIntegrationTest(sdkKey string, fileName string, mode RefreshMode, kind in
 		} else if err != nil {
 			log.Fatal(err)
 		}
-
+		lineNumber++
 		var user *User
 		if line[0] != "##null##" {
-
-			email := ""
-			country := ""
 			identifier := line[0]
-
-			if len(line[1]) > 0 && line[1] != "##null##" {
-				email = line[1]
-			}
-
-			if len(line[2]) > 0 && line[2] != "##null##" {
-				country = line[2]
-			}
-
+			email := nullStr(line[1])
+			country := nullStr(line[2])
 			custom := map[string]string{}
-			if len(line[3]) > 0 && line[3] != "##null##" {
+			if s := nullStr(line[3]); s != "" {
 				custom[customKey] = line[3]
 			}
-
 			user = NewUserWithAdditionalAttributes(identifier, email, country, custom)
 		}
 
-		var i = 0
-		for _, settingKey := range settingKeys {
-			val := getTestValue(settingKey, kind, user, client)
+		for i, settingKey := range settingKeys {
+			var val interface{}
+			switch test.kind {
+			case valueKind:
+				val = client.GetValueForUser(settingKey, nil, user)
+			case variationKind:
+				val = client.GetVariationIdForUser(settingKey, "", user)
+			default:
+				t.Fatalf("unexpected kind %v", test.kind)
+			}
 			expected := line[i+4]
-			boolVal, ok := val.(bool)
-			if ok {
-				expectedVal, err := strconv.ParseBool(strings.ToLower(expected))
-				if err == nil && boolVal != expectedVal {
-					err := fmt.Sprintf("Identifier: %s, Key: %s. Expected: %v, Result: %v \n", line[0], settingKey, expectedVal, boolVal)
-					errors = append(errors, err)
-					fmt.Print(err)
-				}
-				i++
-				continue
+			var expectedVal interface{}
+			var err error
+			switch val := val.(type) {
+			case bool:
+				expectedVal, err = strconv.ParseBool(expected)
+			case int:
+				expectedVal, err = strconv.Atoi(expected)
+			case float64:
+				expectedVal, err = strconv.ParseFloat(expected, 64)
+			case string:
+				expectedVal = expected
+			default:
+				t.Fatalf("Value was not handled %#v", val)
 			}
-
-			intVal, ok := val.(int)
-			if ok {
-				expectedVal, err := strconv.Atoi(strings.ToLower(expected))
-				if err == nil && intVal != expectedVal {
-					err := fmt.Sprintf("Identifier: %s, Key: %s. Expected: %v, Result: %v \n", line[0], settingKey, expectedVal, intVal)
-					errors = append(errors, err)
-					fmt.Print(err)
-				}
-				i++
-				continue
+			if err != nil {
+				t.Fatalf("cannot parse expected value %q as %T: %v", expected, val, err)
 			}
-
-			doubleVal, ok := val.(float64)
-			if ok {
-				expectedVal, err := strconv.ParseFloat(strings.ToLower(expected), 64)
-				if err == nil && doubleVal != expectedVal {
-					err := fmt.Sprintf("Identifier: %s, Key: %s. Expected: %v, Result: %v \n", line[0], settingKey, expectedVal, doubleVal)
-					errors = append(errors, err)
-					fmt.Print(err)
-				}
-				i++
-				continue
+			if val != expectedVal {
+				t.Errorf("unexpected result at %s:%d: identifier %s; key %s; got %#v want %#v", file.Name(), lineNumber, line[0], settingKey, val, expectedVal)
 			}
-
-			stringVal, ok := val.(string)
-			if ok {
-				expectedVal := strings.ToLower(expected)
-				if strings.ToLower(stringVal) != expectedVal {
-					err := fmt.Sprintf("Identifier: %s, Key: %s. Expected: %v, Result: %v \n", line[0], settingKey, expectedVal, strings.ToLower(stringVal))
-					errors = append(errors, err)
-					fmt.Print(err)
-				}
-				i++
-				continue
-			}
-
-			t.Fatalf("Value was not handled %v", val)
 		}
 	}
+}
 
-	if len(errors) > 0 {
-		t.Error("Expecting no errors")
+func nullStr(s string) string {
+	if s == "##null##" {
+		return ""
 	}
+	return s
 }
 
 func getTestValue(settingKey string, kind int, user *User, client *Client) interface{} {
