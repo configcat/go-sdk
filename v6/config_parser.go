@@ -129,7 +129,7 @@ type rootNode struct {
 type entry struct {
 	VariationID     string           `json:"i"`
 	Value           interface{}      `json:"v"`
-	RolloutRules    []rolloutRule    `json:"r"`
+	RolloutRules    []*rolloutRule   `json:"r"`
 	PercentageRules []percentageRule `json:"p"`
 }
 
