@@ -8,9 +8,9 @@ import (
 const (
 	ConfigJsonName = "config_v5"
 
-	NoRedirect = 0
+	NoRedirect     = 0
 	ShouldRedirect = 1
-	ForceRedirect = 2
+	ForceRedirect  = 2
 )
 
 type configProvider interface {
@@ -60,44 +60,41 @@ func (fetcher *configFetcher) executeFetchAsync(executionCount int) *asyncResult
 			return asCompletedAsyncResult(result)
 		}
 
-		rootNode, err := fetcher.parser.deserialize(fetchResponse.body)
+		root, err := fetcher.parser.deserialize(fetchResponse.body)
 		if err != nil {
 			return asCompletedAsyncResult(fetchResponse)
 		}
 
-		preferences, ok := rootNode[preferences].(map[string]interface{})
-		if !ok {
+		if root.Preferences == nil {
 			return asCompletedAsyncResult(fetchResponse)
 		}
 
-		newUrl, ok := preferences[preferencesUrl].(string)
-		if !ok || len(newUrl) == 0 || newUrl == fetcher.baseUrl {
+		if root.Preferences.URL == "" || root.Preferences.URL == fetcher.baseUrl {
 			return asCompletedAsyncResult(fetchResponse)
 		}
 
-		redirect, ok := preferences[preferencesRedirect].(float64)
-		if !ok {
+		if root.Preferences.Redirect == nil {
 			return asCompletedAsyncResult(fetchResponse)
 		}
+		redirect := *root.Preferences.Redirect
 
 		if fetcher.urlIsCustom && redirect != ForceRedirect {
 			return asCompletedAsyncResult(fetchResponse)
 		}
 
-		fetcher.baseUrl = newUrl
+		fetcher.baseUrl = root.Preferences.URL
 		if redirect == NoRedirect {
 			return asCompletedAsyncResult(fetchResponse)
-		} else {
-			if redirect == ShouldRedirect {
-				fetcher.logger.Warnln("Your config.DataGovernance parameter at ConfigCatClient " +
-					"initialization is not in sync with your preferences on the ConfigCat " +
-					"Dashboard: https://app.configcat.com/organization/data-governance. " +
-					"Only Organization Admins can access this preference.")
-			}
+		}
+		if redirect == ShouldRedirect {
+			fetcher.logger.Warnln("Your config.DataGovernance parameter at ConfigCatClient " +
+				"initialization is not in sync with your preferences on the ConfigCat " +
+				"Dashboard: https://app.configcat.com/organization/data-governance. " +
+				"Only Organization Admins can access this preference.")
+		}
 
-			if executionCount > 0 {
-				return fetcher.executeFetchAsync(executionCount - 1)
-			}
+		if executionCount > 0 {
+			return fetcher.executeFetchAsync(executionCount - 1)
 		}
 
 		fetcher.logger.Errorln("Redirect loop during config.json fetch. Please contact support@configcat.com.")

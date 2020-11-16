@@ -34,14 +34,14 @@ func (parser *configParser) parseVariationId(jsonBody string, key string, user *
 }
 
 func (parser *configParser) getAllKeys(jsonBody string) ([]string, error) {
-	rootNode, err := parser.getEntries(jsonBody)
+	entries, err := parser.getEntries(jsonBody)
 	if err != nil {
 		return nil, err
 	}
 
-	keys := make([]string, len(rootNode))
+	keys := make([]string, len(entries))
 	i := 0
-	for k := range rootNode {
+	for k := range entries {
 		keys[i] = k
 		i++
 	}
@@ -50,31 +50,23 @@ func (parser *configParser) getAllKeys(jsonBody string) ([]string, error) {
 }
 
 func (parser *configParser) parseKeyValue(jsonBody string, variationId string) (string, interface{}, error) {
-	rootNode, err := parser.getEntries(jsonBody)
+	entries, err := parser.getEntries(jsonBody)
 	if err != nil {
 		return "", nil, &parseError{"JSON parsing failed. " + err.Error() + "."}
 	}
 
-	for key, value := range rootNode {
-		node := value.(map[string]interface{})
-		if node[settingVariationId].(string) == variationId {
-			return key, node[settingValue], nil
+	for key, entry := range entries {
+		if entry.VariationID == variationId {
+			return key, entry.Value, nil
 		}
-
-		rolloutRules := node[settingRolloutRules].([]interface{})
-		percentageRules := node[settingRolloutPercentageItems].([]interface{})
-
-		for _, rolloutItem := range rolloutRules {
-			rule := rolloutItem.(map[string]interface{})
-			if rule[rolloutVariationId].(string) == variationId {
-				return key, rule[rolloutValue], nil
+		for _, rule := range entry.RolloutRules {
+			if rule.VariationID == variationId {
+				return key, rule.Value, nil
 			}
 		}
-
-		for _, percentageItem := range percentageRules {
-			rule := percentageItem.(map[string]interface{})
-			if rule[percentageItemVariationId].(string) == variationId {
-				return key, rule[percentageItemValue], nil
+		for _, rule := range entry.PercentageRules {
+			if rule.VariationID == variationId {
+				return key, rule.Value, nil
 			}
 		}
 	}
@@ -87,16 +79,16 @@ func (parser *configParser) parseInternal(jsonBody string, key string, user *Use
 		panic("Key cannot be empty")
 	}
 
-	rootNode, err := parser.getEntries(jsonBody)
+	entries, err := parser.getEntries(jsonBody)
 	if err != nil {
 		return nil, "", &parseError{"JSON parsing failed. " + err.Error() + "."}
 	}
 
-	node := rootNode[key]
-	if node == nil {
-		keys := make([]string, len(rootNode))
+	entryNode := entries[key]
+	if entryNode == nil {
+		keys := make([]string, len(entries))
 		i := 0
-		for k := range rootNode {
+		for k := range entries {
 			keys[i] = k
 			i++
 		}
@@ -105,7 +97,7 @@ func (parser *configParser) parseInternal(jsonBody string, key string, user *Use
 			". Here are the available keys: " + strings.Join(keys, ", ")}
 	}
 
-	parsed, variationId := parser.evaluator.evaluate(node, key, user)
+	parsed, variationId := parser.evaluator.evaluate(entryNode, key, user)
 	if parsed == nil {
 		return nil, "", &parseError{"Null evaluated for key " + key + "."}
 	}
@@ -113,31 +105,49 @@ func (parser *configParser) parseInternal(jsonBody string, key string, user *Use
 	return parsed, variationId, nil
 }
 
-func (parser *configParser) getEntries(jsonBody string) (map[string]interface{}, error) {
-	rootNode, err := parser.deserialize(jsonBody)
+func (parser *configParser) getEntries(jsonBody string) (map[string]*entry, error) {
+	root, err := parser.deserialize(jsonBody)
 	if err != nil {
 		return nil, err
 	}
-
-	entries, ok := rootNode[entries].(map[string]interface{})
-	if !ok {
-		return nil, &parseError{"JSON mapping failed, json: " + jsonBody}
-	}
-
-	return entries, nil
+	return root.Entries, nil
 }
 
-func (parser *configParser) deserialize(jsonBody string) (map[string]interface{}, error) {
-	var root interface{}
-	err := json.Unmarshal([]byte(jsonBody), &root)
-	if err != nil {
+func (parser *configParser) deserialize(jsonBody string) (*rootNode, error) {
+	var root rootNode
+	if err := json.Unmarshal([]byte(jsonBody), &root); err != nil {
 		return nil, err
 	}
+	return &root, nil
+}
 
-	rootNode, ok := root.(map[string]interface{})
-	if !ok {
-		return nil, &parseError{"JSON mapping failed, json: " + jsonBody}
-	}
+type rootNode struct {
+	Entries     map[string]*entry `json:"f"`
+	Preferences *preferences      `json:"p"`
+}
 
-	return rootNode, nil
+type entry struct {
+	VariationID     string           `json:"i"`
+	Value           interface{}      `json:"v"`
+	RolloutRules    []rolloutRule    `json:"r"`
+	PercentageRules []percentageRule `json:"p"`
+}
+
+type rolloutRule struct {
+	VariationID         string      `json:"i"`
+	Value               interface{} `json:"v"`
+	ComparisonAttribute string      `json:"a"`
+	ComparisonValue     string      `json:"c"`
+	Comparator          operator    `json:"t"`
+}
+
+type percentageRule struct {
+	VariationID string      `json:"i"`
+	Value       interface{} `json:"v"`
+	Percentage  int64       `json:"p"`
+}
+
+type preferences struct {
+	URL      string `json:"u"`
+	Redirect *int   `json:"r"` // NoRedirect, ShouldRedirect or ForceRedirect
 }
