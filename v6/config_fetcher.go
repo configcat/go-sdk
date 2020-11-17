@@ -28,17 +28,16 @@ func newConfigFetcher(sdkKey string, config ClientConfig) *configFetcher {
 	fetcher := &configFetcher{sdkKey: sdkKey,
 		mode:   config.Mode.getModeIdentifier(),
 		logger: config.Logger,
-		client: &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport}}
+		client: &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport},
+	}
 
-	if len(config.BaseUrl) == 0 {
+	if config.BaseUrl == "" {
 		fetcher.urlIsCustom = false
-		fetcher.baseUrl = func() string {
-			if config.DataGovernance == Global {
-				return globalBaseUrl
-			} else {
-				return euOnlyBaseUrl
-			}
-		}()
+		if config.DataGovernance == Global {
+			fetcher.baseUrl = globalBaseUrl
+		} else {
+			fetcher.baseUrl = euOnlyBaseUrl
+		}
 	} else {
 		fetcher.urlIsCustom = true
 		fetcher.baseUrl = config.BaseUrl
