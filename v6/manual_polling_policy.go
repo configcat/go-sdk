@@ -12,8 +12,8 @@ func (config manualPollConfig) getModeIdentifier() string {
 	return "m"
 }
 
-func (config manualPollConfig) accept(visitor pollingModeVisitor) refreshPolicy {
-	return visitor.visitManualPoll(config)
+func (config manualPollConfig) refreshPolicy(rconfig refreshPolicyConfig) refreshPolicy {
+	return newManualPollingPolicy(rconfig)
 }
 
 // ManualPoll creates a manual loading refresh mode.
@@ -22,13 +22,11 @@ func ManualPoll() RefreshMode {
 }
 
 // newManualPollingPolicy initializes a new manualPollingPolicy.
-func newManualPollingPolicy(
-	configFetcher configProvider,
-	cache configCache,
-	logger Logger,
-	sdkKey string) *manualPollingPolicy {
+func newManualPollingPolicy(rconfig refreshPolicyConfig) *manualPollingPolicy {
 
-	return &manualPollingPolicy{configRefresher: newConfigRefresher(configFetcher, cache, logger, sdkKey)}
+	return &manualPollingPolicy{
+		configRefresher: newConfigRefresher(rconfig),
+	}
 }
 
 // getConfigurationAsync reads the current configuration value.

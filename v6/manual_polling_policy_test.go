@@ -8,12 +8,12 @@ func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 	logger := DefaultLogger(LogLevelWarn)
 	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":1}`)})
-	policy := newManualPollingPolicy(
-		fetcher,
-		inMemoryConfigCache{},
-		logger,
-		"",
-	)
+	policy := newManualPollingPolicy(refreshPolicyConfig{
+		configFetcher: fetcher,
+		cache:         inMemoryConfigCache{},
+		logger:        logger,
+		sdkKey:        "",
+	})
 
 	policy.refreshAsync().wait()
 	conf := policy.getConfigurationAsync().get().(*config)
@@ -35,12 +35,12 @@ func TestManualPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher := newFakeConfigProvider()
 	logger := DefaultLogger(LogLevelWarn)
 	fetcher.SetResponse(fetchResponse{status: Failure})
-	policy := newManualPollingPolicy(
-		fetcher,
-		inMemoryConfigCache{},
-		logger,
-		"",
-	)
+	policy := newManualPollingPolicy(refreshPolicyConfig{
+		configFetcher: fetcher,
+		cache:         inMemoryConfigCache{},
+		logger:        logger,
+		sdkKey:        "",
+	})
 	config := policy.getConfigurationAsync().get().(*config)
 
 	if config != nil {

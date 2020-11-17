@@ -27,12 +27,16 @@ type configRefresher struct {
 	sync.RWMutex
 }
 
-func newConfigRefresher(configFetcher configProvider, cache configCache, logger Logger, sdkKey string) configRefresher {
+func newConfigRefresher(conf refreshPolicyConfig) configRefresher {
 	sha := sha1.New()
-	sha.Write([]byte(sdkKey))
+	sha.Write([]byte(conf.sdkKey))
 	hash := hex.EncodeToString(sha.Sum(nil))
-	cacheKey := fmt.Sprintf(CacheBase, hash)
-	return configRefresher{configFetcher: configFetcher, cache: cache, logger: logger, cacheKey: cacheKey}
+	return configRefresher{
+		configFetcher: conf.configFetcher,
+		cache:         conf.cache,
+		logger:        conf.logger,
+		cacheKey:      fmt.Sprintf(CacheBase, hash),
+	}
 }
 
 func (refresher *configRefresher) refreshAsync() *async {

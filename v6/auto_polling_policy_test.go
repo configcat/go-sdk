@@ -11,11 +11,15 @@ func TestAutoPollingPolicy_GetConfigurationAsync(t *testing.T) {
 	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":1}`)})
 	logger := DefaultLogger(LogLevelWarn)
 	policy := newAutoPollingPolicy(
-		fetcher,
-		inMemoryConfigCache{},
-		logger,
-		"",
-		autoPollConfig{time.Second * 2, nil},
+		autoPollConfig{
+			autoPollInterval: time.Second * 2,
+		},
+		refreshPolicyConfig{
+			configFetcher: fetcher,
+			cache:         inMemoryConfigCache{},
+			logger:        logger,
+			sdkKey:        "",
+		},
 	)
 	defer policy.close()
 
@@ -46,13 +50,14 @@ func TestAutoPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher.SetResponse(fetchResponse{status: Failure})
 	logger := DefaultLogger(LogLevelWarn)
 	policy := newAutoPollingPolicy(
-		fetcher,
-		inMemoryConfigCache{},
-		logger,
-		"",
 		autoPollConfig{
-			time.Second * 2,
-			nil,
+			autoPollInterval: time.Second * 2,
+		},
+		refreshPolicyConfig{
+			configFetcher: fetcher,
+			cache:         inMemoryConfigCache{},
+			logger:        logger,
+			sdkKey:        "",
 		},
 	)
 	defer policy.close()
@@ -71,14 +76,16 @@ func TestAutoPollingPolicy_GetConfigurationAsync_WithListener(t *testing.T) {
 	c := make(chan bool, 1)
 	defer close(c)
 	policy := newAutoPollingPolicy(
-		fetcher,
-		inMemoryConfigCache{},
-		logger,
-		"",
 		AutoPollWithChangeListener(
 			time.Second*2,
 			func() { c <- true },
 		).(autoPollConfig),
+		refreshPolicyConfig{
+			configFetcher: fetcher,
+			cache:         inMemoryConfigCache{},
+			logger:        logger,
+			sdkKey:        "",
+		},
 	)
 	defer policy.close()
 	called := <-c

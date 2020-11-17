@@ -30,8 +30,8 @@ func (config lazyLoadConfig) getModeIdentifier() string {
 	return "l"
 }
 
-func (config lazyLoadConfig) accept(visitor pollingModeVisitor) refreshPolicy {
-	return visitor.visitLazyLoad(config)
+func (config lazyLoadConfig) refreshPolicy(rconfig refreshPolicyConfig) refreshPolicy {
+	return newLazyLoadingPolicy(config, rconfig)
 }
 
 // LazyLoad creates a lazy loading refresh mode.
@@ -41,20 +41,18 @@ func LazyLoad(cacheInterval time.Duration, useAsyncRefresh bool) RefreshMode {
 
 // newLazyLoadingPolicy initializes a new lazyLoadingPolicy.
 func newLazyLoadingPolicy(
-	configFetcher configProvider,
-	cache configCache,
-	logger Logger,
-	sdkKey string,
 	config lazyLoadConfig,
+	rconfig refreshPolicyConfig,
 ) *lazyLoadingPolicy {
 	return &lazyLoadingPolicy{
-		configRefresher: newConfigRefresher(configFetcher, cache, logger, sdkKey),
+		configRefresher: newConfigRefresher(rconfig),
 		cacheInterval:   config.cacheInterval,
 		isFetching:      no,
 		initialized:     no,
 		useAsyncRefresh: config.useAsyncRefresh,
 		lastRefreshTime: time.Time{},
-		init:            newAsync()}
+		init:            newAsync(),
+	}
 }
 
 // getConfigurationAsync reads the current configuration value.

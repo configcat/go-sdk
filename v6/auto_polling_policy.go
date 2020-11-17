@@ -28,8 +28,8 @@ func (config autoPollConfig) getModeIdentifier() string {
 	return "a"
 }
 
-func (config autoPollConfig) accept(visitor pollingModeVisitor) refreshPolicy {
-	return visitor.visitAutoPoll(config)
+func (config autoPollConfig) refreshPolicy(rconfig refreshPolicyConfig) refreshPolicy {
+	return newAutoPollingPolicy(config, rconfig)
 }
 
 // AutoPoll creates an auto polling refresh mode.
@@ -46,13 +46,11 @@ func AutoPollWithChangeListener(
 
 // newAutoPollingPolicy initializes a new autoPollingPolicy.
 func newAutoPollingPolicy(
-	configFetcher configProvider,
-	cache configCache,
-	logger Logger,
-	sdkKey string,
-	autoPollConfig autoPollConfig) *autoPollingPolicy {
+	autoPollConfig autoPollConfig,
+	config refreshPolicyConfig,
+) *autoPollingPolicy {
 	policy := &autoPollingPolicy{
-		configRefresher:  newConfigRefresher(configFetcher, cache, logger, sdkKey),
+		configRefresher:  newConfigRefresher(config),
 		autoPollInterval: autoPollConfig.autoPollInterval,
 		init:             newAsync(),
 		initialized:      no,
