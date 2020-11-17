@@ -35,9 +35,16 @@ type ClientConfig struct {
 	DataGovernance DataGovernance
 }
 
+type refreshPolicyConfig struct {
+	configFetcher configProvider
+	cache         configCache
+	logger        Logger
+	sdkKey        string
+}
+
 type RefreshMode interface {
 	getModeIdentifier() string
-	accept(visitor pollingModeVisitor) refreshPolicy
+	refreshPolicy(rconfig refreshPolicyConfig) refreshPolicy
 }
 
 func defaultConfig() ClientConfig {
@@ -101,7 +108,12 @@ func newInternal(sdkKey string, config ClientConfig, fetcher configProvider) *Cl
 	}
 
 	return &Client{
-		refreshPolicy:           config.Mode.accept(newRefreshPolicyFactory(fetcher, cache, config.Logger, sdkKey)),
+		refreshPolicy: config.Mode.refreshPolicy(refreshPolicyConfig{
+			configFetcher: fetcher,
+			cache:         cache,
+			logger:        config.Logger,
+			sdkKey:        sdkKey,
+		}),
 		maxWaitTimeForSyncCalls: config.MaxWaitTimeForSyncCalls,
 		logger:                  config.Logger,
 	}

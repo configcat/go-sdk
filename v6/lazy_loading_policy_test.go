@@ -11,11 +11,17 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_DoNotUseAsync(t *testing.T) {
 	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":1}`)})
 	logger := DefaultLogger(LogLevelWarn)
 	policy := newLazyLoadingPolicy(
-		fetcher,
-		inMemoryConfigCache{},
-		logger,
-		"",
-		lazyLoadConfig{time.Second * 2, false})
+		lazyLoadConfig{
+			cacheInterval:   time.Second * 2,
+			useAsyncRefresh: false,
+		},
+		refreshPolicyConfig{
+			configFetcher: fetcher,
+			cache:         inMemoryConfigCache{},
+			logger:        logger,
+			sdkKey:        "",
+		},
+	)
 	conf := policy.getConfigurationAsync().get().(*config)
 
 	if conf.body() != `{"test":1}` {
@@ -43,11 +49,17 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
 	fetcher.SetResponse(fetchResponse{status: Failure})
 	logger := DefaultLogger(LogLevelWarn)
 	policy := newLazyLoadingPolicy(
-		fetcher,
-		inMemoryConfigCache{},
-		logger,
-		"",
-		lazyLoadConfig{time.Second * 2, false})
+		lazyLoadConfig{
+			cacheInterval:   time.Second * 2,
+			useAsyncRefresh: false,
+		},
+		refreshPolicyConfig{
+			configFetcher: fetcher,
+			cache:         inMemoryConfigCache{},
+			logger:        logger,
+			sdkKey:        "",
+		},
+	)
 	config := policy.getConfigurationAsync().get().(*config)
 
 	if config != nil {
@@ -61,11 +73,17 @@ func TestLazyLoadingPolicy_GetConfigurationAsync_UseAsync(t *testing.T) {
 	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":1}`)})
 	logger := DefaultLogger(LogLevelWarn)
 	policy := newLazyLoadingPolicy(
-		fetcher,
-		inMemoryConfigCache{},
-		logger,
-		"",
-		lazyLoadConfig{time.Second * 2, true})
+		lazyLoadConfig{
+			cacheInterval:   time.Second * 2,
+			useAsyncRefresh: true,
+		},
+		refreshPolicyConfig{
+			configFetcher: fetcher,
+			cache:         inMemoryConfigCache{},
+			logger:        logger,
+			sdkKey:        "",
+		},
+	)
 	conf := policy.getConfigurationAsync().get().(*config)
 
 	if conf.body() != `{"test":1}` {
