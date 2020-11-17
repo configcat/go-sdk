@@ -20,15 +20,13 @@ type configProvider interface {
 type configFetcher struct {
 	sdkKey, eTag, mode, baseUrl string
 	urlIsCustom                 bool
-	parser                      *configParser
 	client                      *http.Client
 	logger                      Logger
 }
 
-func newConfigFetcher(sdkKey string, config ClientConfig, parser *configParser) *configFetcher {
+func newConfigFetcher(sdkKey string, config ClientConfig) *configFetcher {
 	fetcher := &configFetcher{sdkKey: sdkKey,
 		mode:   config.Mode.getModeIdentifier(),
-		parser: parser,
 		logger: config.Logger,
 		client: &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport}}
 
@@ -60,29 +58,26 @@ func (fetcher *configFetcher) executeFetchAsync(executionCount int) *asyncResult
 			return asCompletedAsyncResult(result)
 		}
 
-		root, err := fetcher.parser.deserialize(fetchResponse.body)
-		if err != nil {
+		preferences := fetchResponse.config.root.Preferences
+
+		if preferences == nil {
 			return asCompletedAsyncResult(fetchResponse)
 		}
 
-		if root.Preferences == nil {
+		if preferences.URL == "" || preferences.URL == fetcher.baseUrl {
 			return asCompletedAsyncResult(fetchResponse)
 		}
 
-		if root.Preferences.URL == "" || root.Preferences.URL == fetcher.baseUrl {
+		if preferences.Redirect == nil {
 			return asCompletedAsyncResult(fetchResponse)
 		}
-
-		if root.Preferences.Redirect == nil {
-			return asCompletedAsyncResult(fetchResponse)
-		}
-		redirect := *root.Preferences.Redirect
+		redirect := *preferences.Redirect
 
 		if fetcher.urlIsCustom && redirect != ForceRedirect {
 			return asCompletedAsyncResult(fetchResponse)
 		}
 
-		fetcher.baseUrl = root.Preferences.URL
+		fetcher.baseUrl = preferences.URL
 		if redirect == NoRedirect {
 			return asCompletedAsyncResult(fetchResponse)
 		}
@@ -121,7 +116,7 @@ func (fetcher *configFetcher) sendFetchRequestAsync() *asyncResult {
 		response, responseError := fetcher.client.Do(request)
 		if responseError != nil {
 			fetcher.logger.Errorf("Config fetch failed: %s.", responseError.Error())
-			result.complete(fetchResponse{status: Failure, body: ""})
+			result.complete(fetchResponse{status: Failure})
 			return
 		}
 
@@ -134,16 +129,22 @@ func (fetcher *configFetcher) sendFetchRequestAsync() *asyncResult {
 		}
 
 		if response.StatusCode >= 200 && response.StatusCode < 300 {
-			body, bodyError := ioutil.ReadAll(response.Body)
-			if bodyError != nil {
-				fetcher.logger.Errorf("Config fetch failed: %s.", bodyError.Error())
+			body, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				fetcher.logger.Errorf("Config fetch failed: %v", err)
+				result.complete(fetchResponse{status: Failure})
+				return
+			}
+			config, err := parseConfig(body)
+			if err != nil {
+				fetcher.logger.Errorf("Config fetch returned invalid body: %v", err)
 				result.complete(fetchResponse{status: Failure})
 				return
 			}
 
 			fetcher.logger.Debugln("Config fetch succeeded: new config fetched.")
 			fetcher.eTag = response.Header.Get("Etag")
-			result.complete(fetchResponse{status: Fetched, body: string(body)})
+			result.complete(fetchResponse{status: Fetched, config: config})
 			return
 		}
 

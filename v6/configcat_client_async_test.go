@@ -13,7 +13,7 @@ func TestClient_RefreshAsync(t *testing.T) {
 		config,
 		fetcher)
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "\"value\"")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "\"value\""))})
 	client.Refresh()
 	c := make(chan string, 1)
 	defer close(c)
@@ -27,7 +27,7 @@ func TestClient_RefreshAsync(t *testing.T) {
 		t.Error("Expecting non default string value")
 	}
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "\"value2\"")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "\"value2\""))})
 	client.Refresh()
 	c2 := make(chan string, 1)
 	defer close(c2)
@@ -42,7 +42,7 @@ func TestClient_RefreshAsync(t *testing.T) {
 
 func TestClient_GetAsync(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "3213"))})
 	c := make(chan interface{}, 1)
 	defer close(c)
 	client.GetValueAsync("key", 0, func(result interface{}) {
@@ -58,7 +58,7 @@ func TestClient_GetAsync(t *testing.T) {
 
 func TestClient_GetAsync_Default(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
+	fetcher.SetResponse(fetchResponse{status: Failure})
 	c := make(chan interface{}, 1)
 	defer close(c)
 	client.GetValueAsync("key", 0, func(result interface{}) {
@@ -74,7 +74,7 @@ func TestClient_GetAsync_Default(t *testing.T) {
 
 func TestClient_GetAsync_Latest(t *testing.T) {
 	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "3213"))})
 	c := make(chan interface{}, 1)
 	defer close(c)
 	client.GetValueAsync("key", 0, func(result interface{}) {
@@ -87,7 +87,7 @@ func TestClient_GetAsync_Latest(t *testing.T) {
 		t.Error("Expecting non default value")
 	}
 
-	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
+	fetcher.SetResponse(fetchResponse{status: Failure})
 
 	c2 := make(chan interface{}, 1)
 	defer close(c2)

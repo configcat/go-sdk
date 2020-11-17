@@ -42,11 +42,13 @@ func LazyLoad(cacheInterval time.Duration, useAsyncRefresh bool) RefreshMode {
 // newLazyLoadingPolicy initializes a new lazyLoadingPolicy.
 func newLazyLoadingPolicy(
 	configFetcher configProvider,
-	cache ConfigCache,
+	cache configCache,
 	logger Logger,
 	sdkKey string,
-	config lazyLoadConfig) *lazyLoadingPolicy {
-	return &lazyLoadingPolicy{configRefresher: newConfigRefresher(configFetcher, cache, logger, sdkKey),
+	config lazyLoadConfig,
+) *lazyLoadingPolicy {
+	return &lazyLoadingPolicy{
+		configRefresher: newConfigRefresher(configFetcher, cache, logger, sdkKey),
 		cacheInterval:   config.cacheInterval,
 		isFetching:      no,
 		initialized:     no,
@@ -99,8 +101,8 @@ func (policy *lazyLoadingPolicy) fetch() *asyncResult {
 		cached := policy.get()
 		fetched := response.isFetched()
 
-		if fetched && response.body != cached {
-			policy.set(response.body)
+		if fetched && response.config.body() != cached.body() {
+			policy.set(response.config)
 		}
 
 		if !response.isFailed() {
@@ -112,7 +114,7 @@ func (policy *lazyLoadingPolicy) fetch() *asyncResult {
 		}
 
 		if fetched {
-			return response.body
+			return response.config
 		}
 
 		return cached
