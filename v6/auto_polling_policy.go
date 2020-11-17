@@ -7,7 +7,7 @@ import (
 
 // autoPollingPolicy describes a refreshPolicy which polls the latest configuration over HTTP and updates the local cache repeatedly.
 type autoPollingPolicy struct {
-	configRefresher
+	refresher        configRefresher
 	autoPollInterval time.Duration
 	init             *async
 	initialized      uint32
@@ -50,7 +50,7 @@ func newAutoPollingPolicy(
 	config refreshPolicyConfig,
 ) *autoPollingPolicy {
 	policy := &autoPollingPolicy{
-		configRefresher:  newConfigRefresher(config),
+		refresher:        newConfigRefresher(config),
 		autoPollInterval: autoPollConfig.autoPollInterval,
 		init:             newAsync(),
 		initialized:      no,
@@ -68,7 +68,7 @@ func (policy *autoPollingPolicy) getConfigurationAsync() *asyncResult {
 	}
 
 	return policy.init.apply(func() interface{} {
-		return policy.get()
+		return policy.refresher.get()
 	})
 }
 
@@ -80,7 +80,7 @@ func (policy *autoPollingPolicy) close() {
 }
 
 func (policy *autoPollingPolicy) startPolling() {
-	policy.logger.Debugf("Auto polling started with %+v interval.", policy.autoPollInterval)
+	policy.refresher.logger.Debugf("Auto polling started with %+v interval.", policy.autoPollInterval)
 
 	ticker := time.NewTicker(policy.autoPollInterval)
 
@@ -90,7 +90,7 @@ func (policy *autoPollingPolicy) startPolling() {
 		for {
 			select {
 			case <-policy.stop:
-				policy.logger.Debugf("Auto polling stopped.")
+				policy.refresher.logger.Debugf("Auto polling stopped.")
 				return
 			case <-ticker.C:
 				policy.poll()
@@ -100,11 +100,11 @@ func (policy *autoPollingPolicy) startPolling() {
 }
 
 func (policy *autoPollingPolicy) poll() {
-	policy.logger.Debugln("Polling the latest configuration.")
-	response := policy.configFetcher.getConfigurationAsync().get().(fetchResponse)
-	cached := policy.get()
+	policy.refresher.logger.Debugln("Polling the latest configuration.")
+	response := policy.refresher.configFetcher.getConfigurationAsync().get().(fetchResponse)
+	cached := policy.refresher.get()
 	if response.isFetched() && cached.body() != response.config.body() {
-		policy.set(response.config)
+		policy.refresher.set(response.config)
 		if policy.configChanged != nil {
 			policy.configChanged()
 		}
@@ -116,6 +116,14 @@ func (policy *autoPollingPolicy) poll() {
 }
 
 func (policy *autoPollingPolicy) readCache() *asyncResult {
-	policy.logger.Debugln("Reading from cache.")
-	return asCompletedAsyncResult(policy.get())
+	policy.refresher.logger.Debugln("Reading from cache.")
+	return asCompletedAsyncResult(policy.refresher.get())
+}
+
+func (policy *autoPollingPolicy) getLastCachedConfig() *config {
+	return policy.refresher.getLastCachedConfig()
+}
+
+func (policy *autoPollingPolicy) refreshAsync() *async {
+	return policy.refresher.refreshAsync()
 }
