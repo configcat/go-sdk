@@ -123,19 +123,7 @@ func (client *Client) GetValueForUser(key string, defaultValue interface{}, user
 	if len(key) == 0 {
 		panic("key cannot be empty")
 	}
-
-	if client.maxWaitTimeForSyncCalls > 0 {
-		conf, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
-		if err != nil {
-			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
-			return client.getValue(client.refreshPolicy.getLastCachedConfig(), key, defaultValue, user)
-		}
-
-		return client.getValue(conf.(*config), key, defaultValue, user)
-	}
-
-	conf, _ := client.refreshPolicy.getConfigurationAsync().get().(*config)
-	return client.getValue(conf, key, defaultValue, user)
+	return client.getValue(client.getConfig(), key, defaultValue, user)
 }
 
 // GetValueAsyncForUser reads and sends a value asynchronously to a callback function as interface{} from the configuration identified by the given key.
@@ -144,7 +132,6 @@ func (client *Client) GetValueAsyncForUser(key string, defaultValue interface{},
 	if len(key) == 0 {
 		panic("key cannot be empty")
 	}
-
 	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
 		completion(client.getValue(res.(*config), key, defaultValue, user))
 	})
@@ -166,19 +153,7 @@ func (client *Client) GetVariationIdForUser(key string, defaultVariationId strin
 	if len(key) == 0 {
 		panic("key cannot be empty")
 	}
-
-	if client.maxWaitTimeForSyncCalls > 0 {
-		conf, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
-		if err != nil {
-			client.logger.Errorf("Policy could not provide the configuration: %v", err)
-			return client.getVariationId(client.refreshPolicy.getLastCachedConfig(), key, defaultVariationId, user)
-		}
-
-		return client.getVariationId(conf.(*config), key, defaultVariationId, user)
-	}
-
-	conf, _ := client.refreshPolicy.getConfigurationAsync().get().(*config)
-	return client.getVariationId(conf, key, defaultVariationId, user)
+	return client.getVariationId(client.getConfig(), key, defaultVariationId, user)
 }
 
 // GetVariationIdAsyncForUser reads and sends a Variation Id asynchronously to a callback function as string from the configuration identified by the given key.
@@ -187,7 +162,6 @@ func (client *Client) GetVariationIdAsyncForUser(key string, defaultVariationId 
 	if len(key) == 0 {
 		panic("key cannot be empty")
 	}
-
 	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
 		completion(client.getVariationId(res.(*config), key, defaultVariationId, user))
 	})
@@ -206,18 +180,7 @@ func (client *Client) GetAllVariationIdsAsync(completion func(result []string, e
 // GetAllVariationIdsForUser returns the Variation IDs synchronously as []string from the configuration.
 // Optional user argument can be passed to identify the caller.
 func (client *Client) GetAllVariationIdsForUser(user *User) ([]string, error) {
-	if client.maxWaitTimeForSyncCalls > 0 {
-		conf, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
-		if err != nil {
-			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
-			return nil, err
-		}
-
-		return client.getVariationIds(conf.(*config), user)
-	}
-
-	conf, _ := client.refreshPolicy.getConfigurationAsync().get().(*config)
-	return client.getVariationIds(conf, user)
+	return client.getVariationIds(client.getConfig(), user)
 }
 
 // GetAllVariationIdsAsyncForUser reads and sends a Variation ID asynchronously to a callback function as []string from the configuration.
@@ -230,18 +193,20 @@ func (client *Client) GetAllVariationIdsAsyncForUser(user *User, completion func
 
 // GetKeyAndValue returns the key of a setting and its value identified by the given Variation ID.
 func (client *Client) GetKeyAndValue(variationId string) (string, interface{}) {
+	return client.getKeyAndValueForVariation(client.getConfig(), variationId)
+}
+
+func (client *Client) getConfig() *config {
 	if client.maxWaitTimeForSyncCalls > 0 {
 		conf, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
 		if err != nil {
 			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
-			return "", nil
+			return client.refreshPolicy.getLastCachedConfig()
 		}
-
-		return client.getKeyAndValueForVariation(conf.(*config), variationId)
+		return conf.(*config)
 	}
-
 	conf, _ := client.refreshPolicy.getConfigurationAsync().get().(*config)
-	return client.getKeyAndValueForVariation(conf, variationId)
+	return conf
 }
 
 // GetAllVariationIdsAsyncForUser reads and sends the key of a setting and its value identified by the given
