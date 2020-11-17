@@ -123,7 +123,7 @@ func (client *Client) GetValueForUser(key string, defaultValue interface{}, user
 	if len(key) == 0 {
 		panic("key cannot be empty")
 	}
-	return client.getValue(client.getConfigWithFallback(), key, defaultValue, user)
+	return client.getValue(client.getConfig(), key, defaultValue, user)
 }
 
 // GetValueAsyncForUser reads and sends a value asynchronously to a callback function as interface{} from the configuration identified by the given key.
@@ -153,7 +153,7 @@ func (client *Client) GetVariationIdForUser(key string, defaultVariationId strin
 	if len(key) == 0 {
 		panic("key cannot be empty")
 	}
-	return client.getVariationId(client.getConfigWithFallback(), key, defaultVariationId, user)
+	return client.getVariationId(client.getConfig(), key, defaultVariationId, user)
 }
 
 // GetVariationIdAsyncForUser reads and sends a Variation Id asynchronously to a callback function as string from the configuration identified by the given key.
@@ -180,11 +180,7 @@ func (client *Client) GetAllVariationIdsAsync(completion func(result []string, e
 // GetAllVariationIdsForUser returns the Variation IDs synchronously as []string from the configuration.
 // Optional user argument can be passed to identify the caller.
 func (client *Client) GetAllVariationIdsForUser(user *User) ([]string, error) {
-	conf, err := client.getConfig()
-	if err != nil {
-		return nil, err
-	}
-	return client.getVariationIds(conf, user)
+	return client.getVariationIds(client.getConfig(), user)
 }
 
 // GetAllVariationIdsAsyncForUser reads and sends a Variation ID asynchronously to a callback function as []string from the configuration.
@@ -197,32 +193,20 @@ func (client *Client) GetAllVariationIdsAsyncForUser(user *User, completion func
 
 // GetKeyAndValue returns the key of a setting and its value identified by the given Variation ID.
 func (client *Client) GetKeyAndValue(variationId string) (string, interface{}) {
-	conf, err := client.getConfig()
-	if err != nil {
-		return "", nil
-	}
-	return client.getKeyAndValueForVariation(conf, variationId)
+	return client.getKeyAndValueForVariation(client.getConfig(), variationId)
 }
 
-func (client *Client) getConfigWithFallback() *config {
-	conf, err := client.getConfig()
-	if err != nil {
-		return client.refreshPolicy.getLastCachedConfig()
-	}
-	return conf
-}
-
-func (client *Client) getConfig() (*config, error) {
+func (client *Client) getConfig() *config {
 	if client.maxWaitTimeForSyncCalls > 0 {
 		conf, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
 		if err != nil {
 			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
-			return nil, err
+			return client.refreshPolicy.getLastCachedConfig()
 		}
-		return conf.(*config), nil
+		return conf.(*config)
 	}
 	conf, _ := client.refreshPolicy.getConfigurationAsync().get().(*config)
-	return conf, nil
+	return conf
 }
 
 // GetAllVariationIdsAsyncForUser reads and sends the key of a setting and its value identified by the given
