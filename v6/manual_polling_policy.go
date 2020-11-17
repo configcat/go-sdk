@@ -2,7 +2,7 @@ package configcat
 
 // manualPollingPolicy describes a refreshPolicy which fetches the latest configuration over HTTP every time when a get configuration is called.
 type manualPollingPolicy struct {
-	refresher configRefresher
+	refresher *configRefresher
 }
 
 type manualPollConfig struct {

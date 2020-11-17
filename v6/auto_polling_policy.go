@@ -7,7 +7,7 @@ import (
 
 // autoPollingPolicy describes a refreshPolicy which polls the latest configuration over HTTP and updates the local cache repeatedly.
 type autoPollingPolicy struct {
-	refresher        configRefresher
+	refresher        *configRefresher
 	autoPollInterval time.Duration
 	init             *async
 	initialized      uint32

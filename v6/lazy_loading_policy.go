@@ -7,7 +7,7 @@ import (
 
 // lazyLoadingPolicy describes a refreshPolicy which uses an expiring cache to maintain the internally stored configuration.
 type lazyLoadingPolicy struct {
-	refresher       configRefresher
+	refresher       *configRefresher
 	cacheInterval   time.Duration
 	isFetching      uint32
 	initialized     uint32

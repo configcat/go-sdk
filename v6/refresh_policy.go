@@ -22,16 +22,16 @@ type configRefresher struct {
 	configFetcher configProvider
 	cache         configCache
 	logger        Logger
-	inMemoryValue *config
 	cacheKey      string
-	sync.RWMutex
+	mu            sync.RWMutex
+	inMemoryValue *config
 }
 
-func newConfigRefresher(conf refreshPolicyConfig) configRefresher {
+func newConfigRefresher(conf refreshPolicyConfig) *configRefresher {
 	sha := sha1.New()
 	sha.Write([]byte(conf.sdkKey))
 	hash := hex.EncodeToString(sha.Sum(nil))
-	return configRefresher{
+	return &configRefresher{
 		configFetcher: conf.configFetcher,
 		cache:         conf.cache,
 		logger:        conf.logger,
@@ -48,13 +48,16 @@ func (refresher *configRefresher) refreshAsync() *async {
 }
 
 func (refresher *configRefresher) getLastCachedConfig() *config {
+	refresher.mu.RLock()
+	defer refresher.mu.RUnlock()
+
 	return refresher.inMemoryValue
 }
 
 // get reads the configuration.
 func (refresher *configRefresher) get() *config {
-	refresher.RLock()
-	defer refresher.RUnlock()
+	refresher.mu.RLock()
+	defer refresher.mu.RUnlock()
 	value, err := refresher.cache.get(refresher.cacheKey)
 	if err != nil {
 		refresher.logger.Errorf("Reading from the cache failed, %s", err)
@@ -66,8 +69,8 @@ func (refresher *configRefresher) get() *config {
 
 // set writes the configuration.
 func (refresher *configRefresher) set(value *config) {
-	refresher.Lock()
-	defer refresher.Unlock()
+	refresher.mu.Lock()
+	defer refresher.mu.Unlock()
 	refresher.inMemoryValue = value
 	err := refresher.cache.set(refresher.cacheKey, value)
 	if err != nil {
