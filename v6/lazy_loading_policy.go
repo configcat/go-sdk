@@ -7,7 +7,7 @@ import (
 
 // lazyLoadingPolicy describes a refreshPolicy which uses an expiring cache to maintain the internally stored configuration.
 type lazyLoadingPolicy struct {
-	configRefresher
+	refresher       configRefresher
 	cacheInterval   time.Duration
 	isFetching      uint32
 	initialized     uint32
@@ -45,7 +45,7 @@ func newLazyLoadingPolicy(
 	rconfig refreshPolicyConfig,
 ) *lazyLoadingPolicy {
 	return &lazyLoadingPolicy{
-		configRefresher: newConfigRefresher(rconfig),
+		refresher:       newConfigRefresher(rconfig),
 		cacheInterval:   config.cacheInterval,
 		isFetching:      no,
 		initialized:     no,
@@ -67,7 +67,7 @@ func (policy *lazyLoadingPolicy) getConfigurationAsync() *asyncResult {
 			return policy.fetching
 		}
 
-		policy.logger.Debugln("Cache expired, refreshing.")
+		policy.refresher.logger.Debugln("Cache expired, refreshing.")
 		if initialized {
 			policy.fetching = policy.fetch()
 			if policy.useAsyncRefresh {
@@ -80,7 +80,7 @@ func (policy *lazyLoadingPolicy) getConfigurationAsync() *asyncResult {
 			policy.fetching = policy.fetch()
 		}
 		return policy.init.apply(func() interface{} {
-			return policy.get()
+			return policy.refresher.get()
 		})
 	}
 
@@ -92,15 +92,15 @@ func (policy *lazyLoadingPolicy) close() {
 }
 
 func (policy *lazyLoadingPolicy) fetch() *asyncResult {
-	return policy.configFetcher.getConfigurationAsync().applyThen(func(result interface{}) interface{} {
+	return policy.refresher.configFetcher.getConfigurationAsync().applyThen(func(result interface{}) interface{} {
 		defer atomic.StoreUint32(&policy.isFetching, no)
 
 		response := result.(fetchResponse)
-		cached := policy.get()
+		cached := policy.refresher.get()
 		fetched := response.isFetched()
 
 		if fetched && response.config.body() != cached.body() {
-			policy.set(response.config)
+			policy.refresher.set(response.config)
 		}
 
 		if !response.isFailed() {
@@ -120,6 +120,14 @@ func (policy *lazyLoadingPolicy) fetch() *asyncResult {
 }
 
 func (policy *lazyLoadingPolicy) readCache() *asyncResult {
-	policy.logger.Debugln("Reading from cache.")
-	return asCompletedAsyncResult(policy.get())
+	policy.refresher.logger.Debugln("Reading from cache.")
+	return asCompletedAsyncResult(policy.refresher.get())
+}
+
+func (policy *lazyLoadingPolicy) getLastCachedConfig() *config {
+	return policy.refresher.getLastCachedConfig()
+}
+
+func (policy *lazyLoadingPolicy) refreshAsync() *async {
+	return policy.refresher.refreshAsync()
 }

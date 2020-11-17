@@ -2,7 +2,7 @@ package configcat
 
 // manualPollingPolicy describes a refreshPolicy which fetches the latest configuration over HTTP every time when a get configuration is called.
 type manualPollingPolicy struct {
-	configRefresher
+	refresher configRefresher
 }
 
 type manualPollConfig struct {
@@ -25,15 +25,23 @@ func ManualPoll() RefreshMode {
 func newManualPollingPolicy(rconfig refreshPolicyConfig) *manualPollingPolicy {
 
 	return &manualPollingPolicy{
-		configRefresher: newConfigRefresher(rconfig),
+		refresher: newConfigRefresher(rconfig),
 	}
 }
 
 // getConfigurationAsync reads the current configuration value.
 func (policy *manualPollingPolicy) getConfigurationAsync() *asyncResult {
-	return asCompletedAsyncResult(policy.get())
+	return asCompletedAsyncResult(policy.refresher.get())
 }
 
 // close shuts down the policy.
 func (policy *manualPollingPolicy) close() {
+}
+
+func (policy *manualPollingPolicy) getLastCachedConfig() *config {
+	return policy.refresher.getLastCachedConfig()
+}
+
+func (policy *manualPollingPolicy) refreshAsync() *async {
+	return policy.refresher.refreshAsync()
 }
