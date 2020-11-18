@@ -1,97 +1,81 @@
 package configcat
 
 import (
+	"net/http"
 	"testing"
 	"time"
+
+	qt "github.com/frankban/quicktest"
 )
 
-func TestAutoPollingPolicy_GetConfigurationAsync(t *testing.T) {
-	fetcher := newFakeConfigProvider()
+func TestAutoPollingPolicy_PollChange(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{body: `{"test":1}`})
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":1}`)})
-	logger := DefaultLogger(LogLevelWarn)
-	policy := newAutoPollingPolicy(
-		autoPollConfig{
-			autoPollInterval: time.Second * 2,
-		},
-		refreshPolicyConfig{
-			configFetcher: fetcher,
-			cache:         inMemoryConfigCache{},
-			logger:        logger,
-			sdkKey:        "",
-		},
-	)
-	defer policy.close()
+	cfg := srv.config()
+	cfg.Mode = AutoPoll(10 * time.Millisecond)
+	client := NewCustomClient(srv.sdkKey(), cfg)
+	defer client.Close()
 
-	conf := policy.getConfigurationAsync().get().(*config)
+	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
 
-	if conf.body() != `{"test":1}` {
-		t.Errorf("Expecting test as result, got %s", conf.body())
-	}
+	srv.setResponse(configResponse{body: `{"test":2}`})
+	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":2}`)})
-	conf = policy.getConfigurationAsync().get().(*config)
-
-	if conf.body() != `{"test":1}` {
-		t.Error("Expecting test as result")
-	}
-
-	time.Sleep(time.Second * 4)
-	conf = policy.getConfigurationAsync().get().(*config)
-
-	if conf.body() != `{"test":2}` {
-		t.Error("Expecting test2 as result")
-	}
+	time.Sleep(40 * time.Millisecond)
+	c.Assert(client.getConfig().body(), qt.Equals, `{"test":2}`)
 }
 
-func TestAutoPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
-	fetcher := newFakeConfigProvider()
+func TestAutoPollingPolicy_FetchFail(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		status: http.StatusInternalServerError,
+		body:   `something wrong`,
+	})
+	cfg := srv.config()
+	cfg.Mode = AutoPoll(2 * time.Second)
+	client := NewCustomClient(srv.sdkKey(), cfg)
+	defer client.Close()
 
-	fetcher.SetResponse(fetchResponse{status: Failure})
-	logger := DefaultLogger(LogLevelWarn)
-	policy := newAutoPollingPolicy(
-		autoPollConfig{
-			autoPollInterval: time.Second * 2,
-		},
-		refreshPolicyConfig{
-			configFetcher: fetcher,
-			cache:         inMemoryConfigCache{},
-			logger:        logger,
-			sdkKey:        "",
-		},
-	)
-	defer policy.close()
-
-	config := policy.getConfigurationAsync().get().(*config)
-
-	if config.body() != "" {
-		t.Error("Expecting default")
-	}
+	conf := client.getConfig()
+	c.Assert(conf, qt.IsNil)
 }
 
-func TestAutoPollingPolicy_GetConfigurationAsync_WithListener(t *testing.T) {
-	fetcher := newFakeConfigProvider()
-	logger := DefaultLogger(LogLevelWarn)
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":1}`)})
-	c := make(chan bool, 1)
-	defer close(c)
-	policy := newAutoPollingPolicy(
-		AutoPollWithChangeListener(
-			time.Second*2,
-			func() { c <- true },
-		).(autoPollConfig),
-		refreshPolicyConfig{
-			configFetcher: fetcher,
-			cache:         inMemoryConfigCache{},
-			logger:        logger,
-			sdkKey:        "",
-		},
+func TestAutoPollingPolicy_WithNotify(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{body: `{"test":1}`})
+	cfg := srv.config()
+	notifyc := make(chan struct{})
+	cfg.Mode = AutoPollWithChangeListener(
+		time.Millisecond,
+		func() { notifyc <- struct{}{} },
 	)
-	defer policy.close()
-	called := <-c
+	client := NewCustomClient(srv.sdkKey(), cfg)
+	defer client.Close()
+	select {
+	case <-notifyc:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for notification")
+	}
+	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
 
-	if !called {
-		t.Error("Expecting test as result")
+	// Change the content and we should see another notification.
+	srv.setResponse(configResponse{body: `{"test":2}`})
+	select {
+	case <-notifyc:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for notification")
+	}
+	c.Assert(client.getConfig().body(), qt.Equals, `{"test":2}`)
+
+	// Check that we don't see any more notifications.
+	select {
+	case <-notifyc:
+		t.Fatalf("unexpected notification received")
+	case <-time.After(20 * time.Millisecond):
 	}
 }
 

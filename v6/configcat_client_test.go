@@ -3,8 +3,11 @@ package configcat
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
+
+	qt "github.com/frankban/quicktest"
 )
 
 const (
@@ -12,16 +15,208 @@ const (
 	variationJsonFormat = `{ "f": { "first": { "v": false, "p": [], "r": [], "i":"fakeIdFirst" }, "second": { "v": true, "p": [], "r": [], "i":"fakeIdSecond" }}}`
 )
 
-type FailingCache struct {
+func TestClient_Refresh(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	cfg := srv.config()
+	cfg.Mode = ManualPoll()
+	client := NewCustomClient(srv.sdkKey(), cfg)
+	defer client.Close()
+
+	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", `"value"`)})
+	client.Refresh()
+	result := client.GetValue("key", "default")
+
+	c.Assert(result, qt.Equals, "value")
+
+	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", `"value2"`)})
+	client.Refresh()
+	result = client.GetValue("key", "default")
+	if result != "value2" {
+		t.Error("Expecting non default string value")
+	}
 }
 
+func TestClient_Refresh_Timeout(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	cfg := srv.config()
+	cfg.Mode = ManualPoll()
+	cfg.MaxWaitTimeForSyncCalls = 10 * time.Millisecond
+	client := NewCustomClient(srv.sdkKey(), cfg)
+	defer client.Close()
+
+	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", `"value"`)})
+	client.Refresh()
+	result := client.GetValue("key", "default")
+	c.Assert(result, qt.Equals, "value")
+
+	srv.setResponse(configResponse{
+		body:  fmt.Sprintf(jsonFormat, "key", `"value"`),
+		sleep: time.Second,
+	})
+	t0 := time.Now()
+	client.Refresh()
+	if d := time.Since(t0); d < 10*time.Millisecond || d > 50*time.Millisecond {
+		t.Errorf("refresh returned too quickly; got %v want >10ms, <50ms", d)
+	}
+	result = client.GetValue("key", "default")
+	c.Assert(result, qt.Equals, "value")
+}
+
+func TestClient_Get(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	client.Refresh()
+	result := client.GetValue("key", 0)
+
+	c.Assert(result, qt.Equals, 3213.0)
+}
+
+func TestClient_Get_Default(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponse(configResponse{
+		status: http.StatusInternalServerError,
+		body:   `something failed`,
+	})
+	result := client.GetValue("key", 0)
+	c.Assert(result, qt.Equals, 0)
+}
+
+func TestClient_Get_Latest(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	client.Refresh()
+
+	result := client.GetValue("key", 0)
+	c.Assert(result, qt.Equals, 3213.0)
+
+	srv.setResponse(configResponse{
+		status: http.StatusInternalServerError,
+		body:   `something failed`,
+	})
+
+	result = client.GetValue("key", 0)
+	c.Assert(result, qt.Equals, 3213.0)
+}
+
+func TestClient_Get_WithTimeout(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	cfg := srv.config()
+	cfg.MaxWaitTimeForSyncCalls = 10 * time.Millisecond
+	client := NewCustomClient(srv.sdkKey(), cfg)
+	defer client.Close()
+
+	srv.setResponse(configResponse{
+		body:  fmt.Sprintf(jsonFormat, "key", "3213"),
+		sleep: time.Second,
+	})
+	t0 := time.Now()
+	result := client.GetValue("key", 0)
+	c.Assert(result, qt.Equals, 0)
+	if d := time.Since(t0); d < 10*time.Millisecond || d > 50*time.Millisecond {
+		t.Errorf("refresh returned too quickly; got %v want >10ms, <50ms", d)
+	}
+}
+
+func TestClient_Get_WithFailingCacheSet(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	cfg := srv.config()
+	cfg.Cache = failingCache{}
+	client := NewCustomClient(srv.sdkKey(), cfg)
+	defer client.Close()
+
+	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	client.Refresh()
+	result := client.GetValue("key", 0)
+	c.Assert(result, qt.Equals, 3213.0)
+}
+
+func TestClient_GetAllKeys(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.sdkKey(), srv.config())
+
+	keys, err := client.GetAllKeys()
+	c.Assert(err, qt.IsNil)
+	c.Assert(keys, qt.HasLen, 16)
+}
+
+func TestClient_GetVariationId(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponse(configResponse{body: fmt.Sprintf(variationJsonFormat)})
+	client.Refresh()
+	result := client.GetVariationId("first", "")
+	c.Assert(result, qt.Equals, "fakeIdFirst")
+}
+
+func TestClient_GetVariationId_Default(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponse(configResponse{body: fmt.Sprintf(variationJsonFormat)})
+	client.Refresh()
+	result := client.GetVariationId("nonexisting", "")
+	c.Assert(result, qt.Equals, "")
+}
+
+func TestClient_GetAllVariationIds(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponse(configResponse{body: fmt.Sprintf(variationJsonFormat)})
+	client.Refresh()
+	result, err := client.GetAllVariationIds()
+	c.Assert(err, qt.IsNil)
+	c.Assert(result, qt.HasLen, 2)
+}
+
+func TestClient_GetAllVariationIds_Empty(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponse(configResponse{body: `{ "f": {} }`})
+	client.Refresh()
+	result, err := client.GetAllVariationIds()
+	c.Assert(err, qt.IsNil)
+	c.Assert(result, qt.HasLen, 0)
+}
+
+func TestClient_GetKeyAndValue(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponse(configResponse{body: fmt.Sprintf(variationJsonFormat)})
+	client.Refresh()
+	key, value := client.GetKeyAndValue("fakeIdSecond")
+	c.Assert(key, qt.Equals, "second")
+	c.Assert(value, qt.Equals, true)
+}
+
+func TestClient_GetKeyAndValue_Empty(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponse(configResponse{body: fmt.Sprintf(variationJsonFormat)})
+	client.Refresh()
+	key, value := client.GetKeyAndValue("nonexisting")
+	c.Assert(key, qt.Equals, "")
+	c.Assert(value, qt.Equals, nil)
+}
+
+type failingCache struct{}
+
 // get reads the configuration from the cache.
-func (cache *FailingCache) Get(key string) (string, error) {
+func (cache failingCache) Get(key string) (string, error) {
 	return "", errors.New("fake failing cache fails to get")
 }
 
 // set writes the configuration into the cache.
-func (cache *FailingCache) Set(key string, value string) error {
+func (cache failingCache) Set(key string, value string) error {
 	return errors.New("fake failing cache fails to set")
 }
 
@@ -38,229 +233,11 @@ func (cache *KeyCheckerCache) Set(key string, value string) error {
 	return nil
 }
 
-func getTestClients() (*fakeConfigProvider, *Client) {
-
-	config := ClientConfig{Mode: ManualPoll()}
-	fetcher := newFakeConfigProvider()
-	client := newInternal("fakeKey",
-		config,
-		fetcher)
-
-	return fetcher, client
-}
-
-func TestClient_Refresh(t *testing.T) {
-
-	config := ClientConfig{Mode: ManualPoll()}
-	fetcher := newFakeConfigProvider()
-	client := newInternal("fakeKey",
-		config,
-		fetcher)
-
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "\"value\""))})
-	client.Refresh()
-	result := client.GetValue("key", "default")
-
-	if result != "value" {
-		t.Error("Expecting non default string value")
-	}
-
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "\"value2\""))})
-	client.Refresh()
-	result = client.GetValue("key", "default")
-	if result != "value2" {
-		t.Error("Expecting non default string value")
-	}
-}
-
-func TestClient_Refresh_Timeout(t *testing.T) {
-
-	config := ClientConfig{Mode: ManualPoll(), MaxWaitTimeForSyncCalls: time.Second * 1}
-	fetcher := newFakeConfigProvider()
-	client := newInternal("fakeKey",
-		config,
-		fetcher)
-
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "\"value\""))})
-	client.Refresh()
-	result := client.GetValue("key", "default")
-
-	if result != "value" {
-		t.Error("Expecting non default string value")
-	}
-
-	fetcher.SetResponseWithDelay(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "\"value2\""))}, time.Second*10)
-	client.Refresh()
-	result = client.GetValue("key", "default")
-	if result != "value" {
-		t.Error("Expecting non default string value")
-	}
-}
-
-func TestClient_Get(t *testing.T) {
-	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "3213"))})
-	client.Refresh()
-	result := client.GetValue("key", 0)
-
-	if result == nil || result == 0 {
-		t.Error("Expecting non default value")
-	}
-}
-
-func TestClient_Get_Default(t *testing.T) {
-	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Failure})
-	result := client.GetValue("key", 0)
-
-	if result != 0 {
-		t.Error("Expecting default int value")
-	}
-}
-
-func TestClient_Get_Latest(t *testing.T) {
-	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "3213"))})
-	client.Refresh()
-	result := client.GetValue("key", 0)
-
-	if result == nil || result == 0 {
-		t.Error("Expecting non default value")
-	}
-
-	fetcher.SetResponse(fetchResponse{status: Failure})
-
-	result = client.GetValue("key", 0)
-
-	if result == nil || result == 0 {
-		t.Error("Expecting non default value")
-	}
-}
-
-func TestClient_Get_WithTimeout(t *testing.T) {
-	config := ClientConfig{Mode: ManualPoll(), MaxWaitTimeForSyncCalls: time.Second * 1}
-	fetcher := newFakeConfigProvider()
-	client := newInternal("fakeKey",
-		config,
-		fetcher)
-
-	fetcher.SetResponseWithDelay(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "3213"))}, time.Second*10)
-	result := client.GetValue("key", 0)
-
-	if result != 0 {
-		t.Error("Expecting default value")
-	}
-}
-
-func TestClient_Get_WithFailingCache(t *testing.T) {
-	config := ClientConfig{Mode: ManualPoll(), Cache: &FailingCache{}}
-	fetcher := newFakeConfigProvider()
-	client := newInternal("fakeKey",
-		config,
-		fetcher)
-
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(jsonFormat, "key", "3213"))})
-	client.Refresh()
-	result := client.GetValue("key", 0)
-
-	if result == 0 {
-		t.Error("Expecting non default value")
-	}
-}
-
-func TestClient_GetAllKeys(t *testing.T) {
-	client := NewClient("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A")
-
-	keys, err := client.GetAllKeys()
-
-	if err != nil {
-		t.Error(err)
-	}
-
-	if len(keys) != 16 {
-		t.Error("Expecting 16 items")
-	}
-}
-
-func TestClient_GetVariationId(t *testing.T) {
-	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(variationJsonFormat))})
-	client.Refresh()
-	result := client.GetVariationId("first", "")
-
-	if result != "fakeIdFirst" {
-		t.Error("Expecting non default value")
-	}
-}
-
-func TestClient_GetVariationId_Default(t *testing.T) {
-	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(variationJsonFormat))})
-	client.Refresh()
-	result := client.GetVariationId("nonexisting", "")
-
-	if result != "" {
-		t.Error("Expecting default value")
-	}
-}
-
-func TestClient_GetAllVariationIds(t *testing.T) {
-	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(variationJsonFormat))})
-	client.Refresh()
-	result, err := client.GetAllVariationIds()
-
-	if err != nil {
-		t.Error(err)
-	}
-
-	if len(result) != 2 {
-		t.Error("Expecting 2 items")
-	}
-}
-
-func TestClient_GetAllVariationIds_Empty(t *testing.T) {
-	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{ "f": {} }`)})
-	client.Refresh()
-	result, err := client.GetAllVariationIds()
-
-	if err != nil {
-		t.Error(err)
-	}
-
-	if len(result) != 0 {
-		t.Error("Expecting 0 items")
-	}
-}
-
-func TestClient_GetKeyAndValue(t *testing.T) {
-	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(variationJsonFormat))})
-	client.Refresh()
-	key, value := client.GetKeyAndValue("fakeIdSecond")
-
-	if key != "second" {
-		t.Error("Expecting second")
-	}
-
-	result, ok := value.(bool)
-	if !ok || !result {
-		t.Error("Invalid result")
-	}
-}
-
-func TestClient_GetKeyAndValue_Empty(t *testing.T) {
-	fetcher, client := getTestClients()
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(fmt.Sprintf(variationJsonFormat))})
-	client.Refresh()
-	key, value := client.GetKeyAndValue("nonexisting")
-
-	if key != "" {
-		t.Error("Expecting empty key")
-	}
-
-	if value != nil {
-		t.Error("Expecting nil value")
-	}
+func getTestClients(t *testing.T) (*configServer, *Client) {
+	srv := newConfigServer(t)
+	cfg := srv.config()
+	cfg.Mode = ManualPoll()
+	client := NewCustomClient(srv.sdkKey(), cfg)
+	t.Cleanup(client.Close)
+	return srv, client
 }

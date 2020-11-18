@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 )
 
 const (
@@ -42,12 +43,12 @@ func BenchmarkGetValue(b *testing.B) {
 var integrationTests = []integrationTest{{
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A",
 	fileName: "testmatrix.csv",
-	mode:     AutoPoll(120),
+	mode:     AutoPoll(120 * time.Second),
 	kind:     valueKind,
 }, {
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA",
 	fileName: "testmatrix_semantic.csv",
-	mode:     LazyLoad(120, false),
+	mode:     LazyLoad(120*time.Second, false),
 	kind:     valueKind,
 }, {
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw",
@@ -57,17 +58,17 @@ var integrationTests = []integrationTest{{
 }, {
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w",
 	fileName: "testmatrix_semantic_2.csv",
-	mode:     AutoPoll(120),
+	mode:     AutoPoll(120 * time.Second),
 	kind:     valueKind,
 }, {
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/qX3TP2dTj06ZpCCT1h_SPA",
 	fileName: "testmatrix_sensitive.csv",
-	mode:     AutoPoll(120),
+	mode:     AutoPoll(120 * time.Second),
 	kind:     valueKind,
 }, {
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/nQ5qkhRAUEa6beEyyrVLBA",
 	fileName: "testmatrix_variationId.csv",
-	mode:     AutoPoll(120),
+	mode:     AutoPoll(120 * time.Second),
 	kind:     variationKind,
 }}
 
@@ -78,8 +79,14 @@ func TestRolloutIntegration(t *testing.T) {
 }
 
 func (test integrationTest) runTest(t *testing.T) {
-	logger := DefaultLogger(LogLevelWarn)
-	client := NewCustomClient(test.sdkKey, ClientConfig{Logger: logger, Mode: test.mode})
+	var cfg ClientConfig
+	if os.Getenv("CONFIGCAT_DISABLE_INTEGRATION_TESTS") != "" {
+		srv := newConfigServerWithKey(t, test.sdkKey)
+		srv.setResponse(configResponse{body: contentForIntegrationTestKey(test.sdkKey)})
+		cfg = srv.config()
+	}
+	cfg.Mode = test.mode
+	client := NewCustomClient(test.sdkKey, cfg)
 	client.Refresh()
 	defer client.Close()
 
@@ -157,12 +164,4 @@ func nullStr(s string) string {
 		return ""
 	}
 	return s
-}
-
-func getTestValue(settingKey string, kind int, user *User, client *Client) interface{} {
-	if kind == valueKind {
-		return client.GetValueForUser(settingKey, nil, user)
-	} else {
-		return client.GetVariationIdForUser(settingKey, "", user)
-	}
 }
