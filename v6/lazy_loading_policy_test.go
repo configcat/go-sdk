@@ -1,108 +1,74 @@
 package configcat
 
 import (
+	"net/http"
 	"testing"
 	"time"
+
+	qt "github.com/frankban/quicktest"
 )
 
-func TestLazyLoadingPolicy_GetConfigurationAsync_DoNotUseAsync(t *testing.T) {
-	fetcher := newFakeConfigProvider()
+func TestLazyLoadingPolicy_NoAsync(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{body: `{"test":1}`})
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":1}`)})
-	logger := DefaultLogger(LogLevelWarn)
-	policy := newLazyLoadingPolicy(
-		lazyLoadConfig{
-			cacheInterval:   time.Second * 2,
-			useAsyncRefresh: false,
-		},
-		refreshPolicyConfig{
-			configFetcher: fetcher,
-			cache:         inMemoryConfigCache{},
-			logger:        logger,
-			sdkKey:        "",
-		},
-	)
-	conf := policy.getConfigurationAsync().get().(*config)
+	cfg := srv.config()
+	cfg.Mode = LazyLoad(50*time.Millisecond, false)
+	client := NewCustomClient(srv.sdkKey(), cfg)
+	defer client.Close()
 
-	if conf.body() != `{"test":1}` {
-		t.Error("Expecting test as result")
-	}
+	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":2}`)})
-	conf = policy.getConfigurationAsync().get().(*config)
+	srv.setResponse(configResponse{
+		body:  `{"test":2}`,
+		sleep: 40 * time.Millisecond,
+	})
+	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
 
-	if conf.body() != `{"test":1}` {
-		t.Error("Expecting test as result")
-	}
-
-	time.Sleep(time.Second * 2)
-	conf = policy.getConfigurationAsync().get().(*config)
-
-	if conf.body() != `{"test":2}` {
-		t.Error("Expecting test2 as result")
-	}
+	time.Sleep(100 * time.Millisecond)
+	c.Assert(client.getConfig().body(), qt.Equals, `{"test":2}`)
 }
 
-func TestLazyLoadingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
-	fetcher := newFakeConfigProvider()
+func TestLazyLoadingPolicy_FetchFail(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		status: http.StatusInternalServerError,
+		body:   `something failed`,
+	})
 
-	fetcher.SetResponse(fetchResponse{status: Failure})
-	logger := DefaultLogger(LogLevelWarn)
-	policy := newLazyLoadingPolicy(
-		lazyLoadConfig{
-			cacheInterval:   time.Second * 2,
-			useAsyncRefresh: false,
-		},
-		refreshPolicyConfig{
-			configFetcher: fetcher,
-			cache:         inMemoryConfigCache{},
-			logger:        logger,
-			sdkKey:        "",
-		},
-	)
-	config := policy.getConfigurationAsync().get().(*config)
+	cfg := srv.config()
+	cfg.Mode = LazyLoad(50*time.Millisecond, false)
+	client := NewCustomClient(srv.sdkKey(), cfg)
+	defer client.Close()
 
-	if config != nil {
-		t.Error("Expecting default")
-	}
+	c.Assert(client.getConfig(), qt.IsNil)
 }
 
-func TestLazyLoadingPolicy_GetConfigurationAsync_UseAsync(t *testing.T) {
-	fetcher := newFakeConfigProvider()
+func TestLazyLoadingPolicy_Async(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{body: `{"test":1}`})
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":1}`)})
-	logger := DefaultLogger(LogLevelWarn)
-	policy := newLazyLoadingPolicy(
-		lazyLoadConfig{
-			cacheInterval:   time.Second * 2,
-			useAsyncRefresh: true,
-		},
-		refreshPolicyConfig{
-			configFetcher: fetcher,
-			cache:         inMemoryConfigCache{},
-			logger:        logger,
-			sdkKey:        "",
-		},
-	)
-	conf := policy.getConfigurationAsync().get().(*config)
+	cfg := srv.config()
+	cfg.Mode = LazyLoad(50*time.Millisecond, true)
+	client := NewCustomClient(srv.sdkKey(), cfg)
+	defer client.Close()
 
-	if conf.body() != `{"test":1}` {
-		t.Error("Expecting test as result")
-	}
+	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
 
-	time.Sleep(time.Second * 2)
+	srv.setResponse(configResponse{
+		body:  `{"test":2}`,
+		sleep: 40 * time.Millisecond,
+	})
+	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
 
-	fetcher.SetResponseWithDelay(fetchResponse{status: Fetched, config: mustParseConfig(`{"test":2}`)}, time.Second*1)
-	conf = policy.getConfigurationAsync().get().(*config)
+	time.Sleep(100 * time.Millisecond)
+	// The config is fetched lazily and takes at least 40ms, so
+	// we'll still see the old value.
+	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
 
-	if conf.body() != `{"test":1}` {
-		t.Error("Expecting test as result")
-	}
-
-	time.Sleep(time.Second * 2)
-	conf = policy.getConfigurationAsync().get().(*config)
-
-	if conf.body() != `{"test":2}` {
-		t.Errorf("Expecting test2 as result, got %s", conf.body())
-	}
+	time.Sleep(50 * time.Millisecond)
+	c.Assert(client.getConfig().body(), qt.Equals, `{"test":2}`)
 }
