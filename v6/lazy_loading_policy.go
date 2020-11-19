@@ -1,21 +1,9 @@
 package configcat
 
 import (
-	"sync/atomic"
+	"context"
 	"time"
 )
-
-// lazyLoadingPolicy describes a refreshPolicy which uses an expiring cache to maintain the internally stored configuration.
-type lazyLoadingPolicy struct {
-	refresher       *configRefresher
-	cacheInterval   time.Duration
-	isFetching      uint32
-	initialized     uint32
-	useAsyncRefresh bool
-	lastRefreshTime time.Time
-	fetching        *asyncResult
-	init            *async
-}
 
 // lazyLoadConfig describes the configuration for auto polling.
 type lazyLoadConfig struct {
@@ -31,103 +19,84 @@ func (config lazyLoadConfig) getModeIdentifier() string {
 }
 
 func (config lazyLoadConfig) refreshPolicy(rconfig refreshPolicyConfig) refreshPolicy {
-	return newLazyLoadingPolicy(config, rconfig)
+	if config.useAsyncRefresh {
+		return newLazyLoadingPolicyWithAsyncRefresh(config, rconfig)
+	}
+	return newLazyLoadingPolicyWithSyncRefresh(config, rconfig)
 }
 
-// LazyLoad creates a lazy loading refresh mode.
+// LazyLoad creates a lazy loading refresh mode. The configuration is fetched
+// on demand the first time it's needed and then when the
+// previous fetch is more than cacheInterval earlier.
+// If useAsyncRefresh is true, the previous configuration will continue
+// to be used while the configuration is refreshing rather
+// than waiting for the new configuration to be received.
 func LazyLoad(cacheInterval time.Duration, useAsyncRefresh bool) RefreshMode {
-	return lazyLoadConfig{cacheInterval: cacheInterval, useAsyncRefresh: useAsyncRefresh}
+	return lazyLoadConfig{
+		cacheInterval:   cacheInterval,
+		useAsyncRefresh: useAsyncRefresh,
+	}
 }
 
-// newLazyLoadingPolicy initializes a new lazyLoadingPolicy.
-func newLazyLoadingPolicy(
+type lazyLoadingPolicyWithAsyncRefresh struct {
+	cacheInterval time.Duration
+	fetcher       *configFetcher
+}
+
+func newLazyLoadingPolicyWithAsyncRefresh(
 	config lazyLoadConfig,
 	rconfig refreshPolicyConfig,
-) *lazyLoadingPolicy {
-	return &lazyLoadingPolicy{
-		refresher:       newConfigRefresher(rconfig),
-		cacheInterval:   config.cacheInterval,
-		isFetching:      no,
-		initialized:     no,
-		useAsyncRefresh: config.useAsyncRefresh,
-		lastRefreshTime: time.Time{},
-		init:            newAsync(),
+) *lazyLoadingPolicyWithAsyncRefresh {
+	return &lazyLoadingPolicyWithAsyncRefresh{
+		fetcher:       rconfig.fetcher,
+		cacheInterval: config.cacheInterval,
 	}
 }
 
-// getConfigurationAsync reads the current configuration value.
-func (policy *lazyLoadingPolicy) getConfigurationAsync() *asyncResult {
-	if time.Since(policy.lastRefreshTime) > policy.cacheInterval {
-		initialized := policy.init.isCompleted()
-
-		if initialized && !atomic.CompareAndSwapUint32(&policy.isFetching, no, yes) {
-			if policy.useAsyncRefresh {
-				return policy.readCache()
-			}
-			return policy.fetching
+func (p *lazyLoadingPolicyWithAsyncRefresh) get(ctx context.Context) *config {
+	if conf := p.fetcher.config(ctx); conf != nil {
+		if time.Since(conf.fetchTime) >= p.cacheInterval {
+			p.fetcher.startRefresh()
 		}
-
-		policy.refresher.logger.Debugln("Cache expired, refreshing.")
-		if initialized {
-			policy.fetching = policy.fetch()
-			if policy.useAsyncRefresh {
-				return policy.readCache()
-			}
-			return policy.fetching
-		}
-
-		if atomic.CompareAndSwapUint32(&policy.isFetching, no, yes) {
-			policy.fetching = policy.fetch()
-		}
-		return policy.init.apply(func() interface{} {
-			return policy.refresher.get()
-		})
+		return conf
 	}
-
-	return policy.readCache()
+	p.fetcher.startRefresh()
+	return p.fetcher.config(ctx)
 }
 
-// close shuts down the policy.
-func (policy *lazyLoadingPolicy) close() {
+func (p *lazyLoadingPolicyWithAsyncRefresh) refresh(ctx context.Context) {
+	p.fetcher.refresh(ctx)
 }
 
-func (policy *lazyLoadingPolicy) fetch() *asyncResult {
-	return policy.refresher.configFetcher.getConfigurationAsync().applyThen(func(result interface{}) interface{} {
-		defer atomic.StoreUint32(&policy.isFetching, no)
-
-		response := result.(fetchResponse)
-		cached := policy.refresher.get()
-		fetched := response.isFetched()
-
-		if fetched && response.config.body() != cached.body() {
-			policy.refresher.set(response.config)
-		}
-
-		if !response.isFailed() {
-			policy.lastRefreshTime = time.Now()
-		}
-
-		if atomic.CompareAndSwapUint32(&policy.initialized, no, yes) {
-			policy.init.complete()
-		}
-
-		if fetched {
-			return response.config
-		}
-
-		return cached
-	})
+func (p *lazyLoadingPolicyWithAsyncRefresh) close() {
 }
 
-func (policy *lazyLoadingPolicy) readCache() *asyncResult {
-	policy.refresher.logger.Debugln("Reading from cache.")
-	return asCompletedAsyncResult(policy.refresher.get())
+type lazyLoadingPolicyWithSyncRefresh struct {
+	cacheInterval time.Duration
+	fetcher       *configFetcher
 }
 
-func (policy *lazyLoadingPolicy) getLastCachedConfig() *config {
-	return policy.refresher.getLastCachedConfig()
+func newLazyLoadingPolicyWithSyncRefresh(
+	config lazyLoadConfig,
+	rconfig refreshPolicyConfig,
+) *lazyLoadingPolicyWithSyncRefresh {
+	return &lazyLoadingPolicyWithSyncRefresh{
+		fetcher:       rconfig.fetcher,
+		cacheInterval: config.cacheInterval,
+	}
 }
 
-func (policy *lazyLoadingPolicy) refreshAsync() *async {
-	return policy.refresher.refreshAsync()
+func (p *lazyLoadingPolicyWithSyncRefresh) get(ctx context.Context) *config {
+	if conf := p.fetcher.config(ctx); conf != nil && time.Since(conf.fetchTime) < p.cacheInterval {
+		return conf
+	}
+	p.fetcher.invalidateAndStartRefresh()
+	return p.fetcher.config(ctx)
+}
+
+func (p *lazyLoadingPolicyWithSyncRefresh) refresh(ctx context.Context) {
+	p.fetcher.refresh(ctx)
+}
+
+func (p *lazyLoadingPolicyWithSyncRefresh) close() {
 }

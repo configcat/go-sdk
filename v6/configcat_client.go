@@ -2,6 +2,7 @@
 package configcat
 
 import (
+	"context"
 	"net/http"
 	"time"
 )
@@ -36,15 +37,19 @@ type ClientConfig struct {
 }
 
 type refreshPolicyConfig struct {
-	configFetcher configProvider
-	cache         configCache
-	logger        Logger
-	sdkKey        string
+	fetcher *configFetcher
+	logger  Logger
 }
 
 type RefreshMode interface {
 	getModeIdentifier() string
 	refreshPolicy(rconfig refreshPolicyConfig) refreshPolicy
+}
+
+type refreshPolicy interface {
+	get(ctx context.Context) *config
+	refresh(ctx context.Context)
+	close()
 }
 
 func defaultConfig() ClientConfig {
@@ -66,10 +71,6 @@ func NewClient(sdkKey string) *Client {
 
 // NewCustomClient initializes a new ConfigCat Client with advanced configuration. The sdkKey parameter is mandatory.
 func NewCustomClient(sdkKey string, config ClientConfig) *Client {
-	return newInternal(sdkKey, config, nil)
-}
-
-func newInternal(sdkKey string, config ClientConfig, fetcher configProvider) *Client {
 	if len(sdkKey) == 0 {
 		panic("sdkKey cannot be empty")
 	}
@@ -103,16 +104,10 @@ func newInternal(sdkKey string, config ClientConfig, fetcher configProvider) *Cl
 		config.Mode = defaultConfig.Mode
 	}
 
-	if fetcher == nil {
-		fetcher = newConfigFetcher(sdkKey, config)
-	}
-
 	return &Client{
 		refreshPolicy: config.Mode.refreshPolicy(refreshPolicyConfig{
-			configFetcher: fetcher,
-			cache:         cache,
-			logger:        config.Logger,
-			sdkKey:        sdkKey,
+			fetcher: newConfigFetcher(sdkKey, cache, config),
+			logger:  config.Logger,
 		}),
 		maxWaitTimeForSyncCalls: config.MaxWaitTimeForSyncCalls,
 		logger:                  config.Logger,
@@ -144,9 +139,10 @@ func (client *Client) GetValueAsyncForUser(key string, defaultValue interface{},
 	if len(key) == 0 {
 		panic("key cannot be empty")
 	}
-	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
-		completion(client.getValue(res.(*config), key, defaultValue, user))
-	})
+	go func() {
+		result := client.getValue(client.getConfigAsync(), key, defaultValue, user)
+		completion(result)
+	}()
 }
 
 // GetVariationId returns a Variation ID synchronously as string from the configuration identified by the given key.
@@ -174,9 +170,10 @@ func (client *Client) GetVariationIdAsyncForUser(key string, defaultVariationId 
 	if len(key) == 0 {
 		panic("key cannot be empty")
 	}
-	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
-		completion(client.getVariationId(res.(*config), key, defaultVariationId, user))
-	})
+	go func() {
+		result := client.getVariationId(client.getConfigAsync(), key, defaultVariationId, user)
+		completion(result)
+	}()
 }
 
 // GetAllVariationIds returns the Variation IDs synchronously as []string from the configuration.
@@ -198,9 +195,10 @@ func (client *Client) GetAllVariationIdsForUser(user *User) ([]string, error) {
 // GetAllVariationIdsAsyncForUser reads and sends a Variation ID asynchronously to a callback function as []string from the configuration.
 // Optional user argument can be passed to identify the caller.
 func (client *Client) GetAllVariationIdsAsyncForUser(user *User, completion func(result []string, err error)) {
-	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
-		completion(client.getVariationIds(res.(*config), user))
-	})
+	go func() {
+		result, err := client.getVariationIds(client.getConfigAsync(), user)
+		completion(result, err)
+	}()
 }
 
 // GetKeyAndValue returns the key of a setting and its value identified by the given Variation ID.
@@ -209,64 +207,60 @@ func (client *Client) GetKeyAndValue(variationId string) (string, interface{}) {
 }
 
 func (client *Client) getConfig() *config {
-	if client.maxWaitTimeForSyncCalls > 0 {
-		conf, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
-		if err != nil {
-			client.logger.Errorf("Policy could not provide the configuration: %s", err.Error())
-			return client.refreshPolicy.getLastCachedConfig()
-		}
-		return conf.(*config)
+	if client.maxWaitTimeForSyncCalls == 0 {
+		return client.refreshPolicy.get(context.Background())
 	}
-	conf, _ := client.refreshPolicy.getConfigurationAsync().get().(*config)
-	return conf
+	ctx, cancel := context.WithTimeout(context.Background(), client.maxWaitTimeForSyncCalls)
+	defer cancel()
+	return client.refreshPolicy.get(ctx)
+}
+
+func (client *Client) getConfigAsync() *config {
+	return client.refreshPolicy.get(context.Background())
 }
 
 // GetAllVariationIdsAsyncForUser reads and sends the key of a setting and its value identified by the given
 // Variation ID asynchronously to a callback function as (string, interface{}) from the configuration.
 func (client *Client) GetKeyAndValueAsync(variationId string, completion func(key string, value interface{})) {
-	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
-		completion(client.getKeyAndValueForVariation(res.(*config), variationId))
-	})
+	go func() {
+		key, value := client.getKeyAndValueForVariation(client.getConfigAsync(), variationId)
+		completion(key, value)
+	}()
 }
 
 // GetAllKeys retrieves all the setting keys.
 func (client *Client) GetAllKeys() ([]string, error) {
-	if client.maxWaitTimeForSyncCalls > 0 {
-		conf, err := client.refreshPolicy.getConfigurationAsync().getOrTimeout(client.maxWaitTimeForSyncCalls)
-		if err != nil {
-			client.logger.Errorf("Policy could not provide the configuration: %v", err)
-			return nil, err
-		}
-
-		return conf.(*config).getAllKeys(), nil
-	}
-
-	conf, _ := client.refreshPolicy.getConfigurationAsync().get().(*config)
-	return conf.getAllKeys(), nil
+	return client.getConfig().getAllKeys(), nil
 }
 
 // GetAllKeysAsync retrieves all the setting keys asynchronously.
 func (client *Client) GetAllKeysAsync(completion func(result []string, err error)) {
-	client.refreshPolicy.getConfigurationAsync().accept(func(res interface{}) {
-		completion(res.(*config).getAllKeys(), nil)
-	})
+	go func() {
+		result := client.getConfigAsync().getAllKeys()
+		completion(result, nil)
+	}()
 }
 
 // Refresh initiates a force refresh synchronously on the cached configuration.
 func (client *Client) Refresh() {
-	if client.maxWaitTimeForSyncCalls > 0 {
-		client.refreshPolicy.refreshAsync().waitOrTimeout(client.maxWaitTimeForSyncCalls)
-	} else {
-		client.refreshPolicy.refreshAsync().wait()
+	ctx := context.Background()
+	if timeout := client.maxWaitTimeForSyncCalls; timeout > 0 {
+		ctx1, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		ctx = ctx1
 	}
+	client.refreshPolicy.refresh(ctx)
 }
 
 // RefreshAsync initiates a force refresh asynchronously on the cached configuration.
 func (client *Client) RefreshAsync(completion func()) {
-	client.refreshPolicy.refreshAsync().accept(completion)
+	go func() {
+		client.refreshPolicy.refresh(context.Background())
+		completion()
+	}()
 }
 
-// Close shuts down the client, after closing, it shouldn't be used
+// Close shuts down the client. After closing, it shouldn't be used.
 func (client *Client) Close() {
 	client.refreshPolicy.close()
 }

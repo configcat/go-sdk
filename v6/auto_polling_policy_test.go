@@ -52,6 +52,16 @@ func TestAutoPollingPolicy_FetchFailWithCacheFallback(t *testing.T) {
 	)
 }
 
+func TestAutoPollingPolicy_DoubleClose(t *testing.T) {
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{body: `{"test":1}`})
+	cfg := srv.config()
+	cfg.Mode = AutoPoll(time.Millisecond)
+	client := NewCustomClient(srv.sdkKey(), cfg)
+	client.Close()
+	client.Close()
+}
+
 func TestAutoPollingPolicy_WithNotify(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
@@ -86,12 +96,4 @@ func TestAutoPollingPolicy_WithNotify(t *testing.T) {
 		t.Fatalf("unexpected notification received")
 	case <-time.After(20 * time.Millisecond):
 	}
-}
-
-func mustParseConfig(s string) *config {
-	conf, err := parseConfig([]byte(s))
-	if err != nil {
-		panic(err)
-	}
-	return conf
 }

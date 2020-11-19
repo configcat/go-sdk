@@ -1,27 +1,15 @@
 package configcat
 
 import (
-	"sync/atomic"
+	"context"
+	"sync"
 	"time"
 )
 
-// autoPollingPolicy describes a refreshPolicy which polls the latest configuration over HTTP and updates the local cache repeatedly.
-type autoPollingPolicy struct {
-	refresher        *configRefresher
-	autoPollInterval time.Duration
-	init             *async
-	initialized      uint32
-	stop             chan struct{}
-	closed           uint32
-	configChanged    func()
-}
-
 // autoPollConfig describes the configuration for auto polling.
 type autoPollConfig struct {
-	// The auto polling interval.
-	autoPollInterval time.Duration
-	// The configuration change listener.
-	changeListener func()
+	interval     time.Duration
+	changeNotify func()
 }
 
 func (config autoPollConfig) getModeIdentifier() string {
@@ -32,98 +20,104 @@ func (config autoPollConfig) refreshPolicy(rconfig refreshPolicyConfig) refreshP
 	return newAutoPollingPolicy(config, rconfig)
 }
 
-// AutoPoll creates an auto polling refresh mode.
+// AutoPoll creates an auto polling refresh mode that polls for changes
+// at the given interval.
 func AutoPoll(interval time.Duration) RefreshMode {
-	return autoPollConfig{autoPollInterval: interval}
+	return autoPollConfig{
+		interval: interval,
+	}
 }
 
-// AutoPollWithChangeListener creates an auto polling refresh mode with change listener callback.
+// AutoPollWithChangeListener creates an auto polling refresh mode. It polls for changes
+// at the given interval, and calls changeNotify whenever the configuration has changed.
+//
+// If changeNotify is nil, this is equvalent to AutoPoll.
 func AutoPollWithChangeListener(
 	interval time.Duration,
-	changeListener func()) RefreshMode {
-	return autoPollConfig{autoPollInterval: interval, changeListener: changeListener}
+	changeNotify func(),
+) RefreshMode {
+	return autoPollConfig{
+		interval:     interval,
+		changeNotify: changeNotify,
+	}
+}
+
+// autoPollingPolicy implements the AutoPoll policy.
+type autoPollingPolicy struct {
+	fetcher      *configFetcher
+	changeNotify func()
+	logger       Logger
+	// mu guards the closing of the closed channel.
+	mu     sync.Mutex
+	closed chan struct{}
 }
 
 // newAutoPollingPolicy initializes a new autoPollingPolicy.
 func newAutoPollingPolicy(
-	autoPollConfig autoPollConfig,
-	config refreshPolicyConfig,
+	config autoPollConfig,
+	rconfig refreshPolicyConfig,
 ) *autoPollingPolicy {
 	policy := &autoPollingPolicy{
-		refresher:        newConfigRefresher(config),
-		autoPollInterval: autoPollConfig.autoPollInterval,
-		init:             newAsync(),
-		initialized:      no,
-		stop:             make(chan struct{}),
-		configChanged:    autoPollConfig.changeListener,
+		fetcher:      rconfig.fetcher,
+		closed:       make(chan struct{}),
+		changeNotify: config.changeNotify,
+		logger:       rconfig.logger,
 	}
-	policy.startPolling()
+	policy.logger.Debugf("Auto polling started with %+v interval.", config.interval)
+	policy.fetcher.startRefresh()
+	go policy.poller(config.interval)
 	return policy
 }
 
-// getConfigurationAsync reads the current configuration value.
-func (policy *autoPollingPolicy) getConfigurationAsync() *asyncResult {
-	if policy.init.isCompleted() {
-		return policy.readCache()
-	}
-
-	return policy.init.apply(func() interface{} {
-		return policy.refresher.get()
-	})
+func (p *autoPollingPolicy) refresh(ctx context.Context) {
+	p.fetcher.refresh(ctx)
 }
 
-// close shuts down the policy.
-func (policy *autoPollingPolicy) close() {
-	if atomic.CompareAndSwapUint32(&policy.closed, no, yes) {
-		close(policy.stop)
-	}
+func (p *autoPollingPolicy) get(ctx context.Context) *config {
+	return p.fetcher.config(ctx)
 }
 
-func (policy *autoPollingPolicy) startPolling() {
-	policy.refresher.logger.Debugf("Auto polling started with %+v interval.", policy.autoPollInterval)
-
-	ticker := time.NewTicker(policy.autoPollInterval)
-
+func (policy *autoPollingPolicy) poller(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		defer ticker.Stop()
-		policy.poll()
-		for {
-			select {
-			case <-policy.stop:
-				policy.refresher.logger.Debugf("Auto polling stopped.")
-				return
-			case <-ticker.C:
-				policy.poll()
+		<-policy.closed
+		cancel()
+	}()
+	config := policy.fetcher.config(ctx)
+	policy.notify()
+	for {
+		select {
+		case <-policy.closed:
+			policy.logger.Debugf("Auto polling stopped.")
+			return
+		case <-ticker.C:
+			policy.refresh(ctx)
+			newConfig := policy.fetcher.config(ctx)
+			if newConfig.body() != config.body() {
+				config = newConfig
+				policy.notify()
 			}
 		}
-	}()
-}
-
-func (policy *autoPollingPolicy) poll() {
-	policy.refresher.logger.Debugln("Polling the latest configuration.")
-	response := policy.refresher.configFetcher.getConfigurationAsync().get().(fetchResponse)
-	cached := policy.refresher.get()
-	if response.isFetched() && cached.body() != response.config.body() {
-		policy.refresher.set(response.config)
-		if policy.configChanged != nil {
-			policy.configChanged()
-		}
-	}
-
-	if atomic.CompareAndSwapUint32(&policy.initialized, no, yes) {
-		policy.init.complete()
 	}
 }
 
-func (policy *autoPollingPolicy) readCache() *asyncResult {
-	policy.refresher.logger.Debugln("Reading from cache.")
-	return asCompletedAsyncResult(policy.refresher.get())
+// notify calls the changeNotify function if necessary.
+func (policy *autoPollingPolicy) notify() {
+	if policy.changeNotify != nil {
+		go policy.changeNotify()
+	}
 }
 
-func (policy *autoPollingPolicy) getLastCachedConfig() *config {
-	return policy.refresher.getLastCachedConfig()
-}
-
-func (policy *autoPollingPolicy) refreshAsync() *async {
-	return policy.refresher.refreshAsync()
+func (policy *autoPollingPolicy) close() {
+	// Guard against double-close.
+	policy.mu.Lock()
+	defer policy.mu.Unlock()
+	select {
+	case <-policy.closed:
+		return
+	default:
+		close(policy.closed)
+	}
 }

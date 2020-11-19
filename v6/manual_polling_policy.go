@@ -1,12 +1,11 @@
 package configcat
 
-// manualPollingPolicy describes a refreshPolicy which fetches the latest configuration over HTTP every time when a get configuration is called.
-type manualPollingPolicy struct {
-	refresher *configRefresher
-}
+import (
+	"context"
+	"time"
+)
 
-type manualPollConfig struct {
-}
+type manualPollConfig struct{}
 
 func (config manualPollConfig) getModeIdentifier() string {
 	return "m"
@@ -16,32 +15,34 @@ func (config manualPollConfig) refreshPolicy(rconfig refreshPolicyConfig) refres
 	return newManualPollingPolicy(rconfig)
 }
 
-// ManualPoll creates a manual loading refresh mode.
+// ManualPoll creates a manual loading refresh mode which fetches the latest configuration
+// only when explicitly refreshed. It uses the cache if a configuration hasn't been fetched.
 func ManualPoll() RefreshMode {
 	return manualPollConfig{}
 }
 
+type manualPollingPolicy struct {
+	fetcher *configFetcher
+}
+
 // newManualPollingPolicy initializes a new manualPollingPolicy.
 func newManualPollingPolicy(rconfig refreshPolicyConfig) *manualPollingPolicy {
-
 	return &manualPollingPolicy{
-		refresher: newConfigRefresher(rconfig),
+		fetcher: rconfig.fetcher,
 	}
 }
 
-// getConfigurationAsync reads the current configuration value.
-func (policy *manualPollingPolicy) getConfigurationAsync() *asyncResult {
-	return asCompletedAsyncResult(policy.refresher.get())
+var expiredContext, _ = context.WithDeadline(context.Background(), time.Time{})
+
+func (p *manualPollingPolicy) get(ctx context.Context) *config {
+	// Note: use an expired context so we'll always hit the cache
+	// if there's no configuration immediately available.
+	return p.fetcher.config(expiredContext)
 }
 
-// close shuts down the policy.
+func (p *manualPollingPolicy) refresh(ctx context.Context) {
+	p.fetcher.refresh(ctx)
+}
+
 func (policy *manualPollingPolicy) close() {
-}
-
-func (policy *manualPollingPolicy) getLastCachedConfig() *config {
-	return policy.refresher.getLastCachedConfig()
-}
-
-func (policy *manualPollingPolicy) refreshAsync() *async {
-	return policy.refresher.refreshAsync()
 }

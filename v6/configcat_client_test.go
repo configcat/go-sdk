@@ -466,16 +466,3 @@ func (m *mockHTTPTransport) enqueue(statusCode int, body string) {
 		Body:       ioutil.NopCloser(strings.NewReader(body)),
 	})
 }
-
-type callbackCache struct {
-	get func(key string) (string, error)
-	set func(key, value string) error
-}
-
-func (c callbackCache) Get(key string) (string, error) {
-	return c.get(key)
-}
-
-func (c callbackCache) Set(key, value string) error {
-	return c.set(key, value)
-}
