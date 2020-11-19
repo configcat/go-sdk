@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type parseError struct {
@@ -17,19 +18,29 @@ func (p *parseError) Error() string {
 }
 
 type config struct {
-	jsonBody string
-	root     *rootNode
+	jsonBody  string
+	etag      string
+	root      *rootNode
+	fetchTime time.Time
 }
 
-func parseConfig(jsonBody []byte) (*config, error) {
+func parseConfig(jsonBody []byte, etag string, fetchTime time.Time) (*config, error) {
 	var root rootNode
 	if err := json.Unmarshal([]byte(jsonBody), &root); err != nil {
 		return nil, err
 	}
 	return &config{
-		jsonBody: string(jsonBody),
-		root:     &root,
+		jsonBody:  string(jsonBody),
+		root:      &root,
+		etag:      etag,
+		fetchTime: fetchTime,
 	}, nil
+}
+
+func (c *config) withFetchTime(t time.Time) *config {
+	c1 := *c
+	c1.fetchTime = t
+	return &c1
 }
 
 func (c *config) body() string {

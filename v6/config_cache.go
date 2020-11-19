@@ -1,6 +1,9 @@
 package configcat
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // ConfigCache is a cache API used to make custom cache implementations.
 type ConfigCache interface {
@@ -43,7 +46,7 @@ func (c *cacheAdaptor) get(key string) (*config, error) {
 	if err != nil {
 		return nil, err
 	}
-	conf, err := parseConfig([]byte(val))
+	conf, err := parseConfig([]byte(val), "", time.Time{})
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse config from cache: %v", err)
 	}

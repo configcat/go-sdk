@@ -2,6 +2,7 @@ package configcat
 
 import (
 	"testing"
+	"time"
 )
 
 func TestConfigParser_Parse(t *testing.T) {
@@ -16,7 +17,7 @@ func TestConfigParser_Parse(t *testing.T) {
 
 func TestConfigParser_BadJson(t *testing.T) {
 	jsonBody := ""
-	_, err := parseConfig([]byte(jsonBody))
+	_, err := parseConfig([]byte(jsonBody), "", time.Time{})
 	if err == nil {
 		t.Error("Expecting JSON error")
 	}
@@ -42,4 +43,12 @@ func TestConfigParser_EmptyNode(t *testing.T) {
 		t.Error("Expecting key not found error")
 	}
 	t.Log(err)
+}
+
+func mustParseConfig(s string) *config {
+	conf, err := parseConfig([]byte(s), "", time.Time{})
+	if err != nil {
+		panic(err)
+	}
+	return conf
 }

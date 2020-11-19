@@ -1,8 +1,14 @@
 package configcat
 
 import (
+	"context"
+	"crypto/sha1"
+	"encoding/hex"
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sync"
+	"time"
 )
 
 const (
@@ -13,144 +19,269 @@ const (
 	ForceRedirect  = 2
 )
 
-type configProvider interface {
-	getConfigurationAsync() *asyncResult
+// fetchResponse represents a configuration fetch response.
+type fetchResponse struct {
+	status fetchStatus
+	config *config
 }
 
 type configFetcher struct {
-	sdkKey, eTag, mode, baseUrl string
-	urlIsCustom                 bool
-	client                      *http.Client
-	logger                      Logger
+	userAgent string
+	sdkKey    string
+	cacheKey  string
+	cache     configCache
+	logger    Logger
+	client    *http.Client
+
+	urlIsCustom bool
+
+	// baseUrl is maintained by the fetcher goroutine.
+	baseUrl string
+
+	mu            sync.Mutex
+	currentConfig *config
+	prevConfig    *config
+	fetchDone     chan struct{}
 }
 
-func newConfigFetcher(sdkKey string, config ClientConfig) *configFetcher {
-	fetcher := &configFetcher{sdkKey: sdkKey,
-		mode:   config.Mode.getModeIdentifier(),
-		logger: config.Logger,
-		client: &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport},
+// newConfigFetcher returns a
+func newConfigFetcher(sdkKey string, cache configCache, config ClientConfig) *configFetcher {
+	f := &configFetcher{
+		sdkKey:    sdkKey,
+		cache:     cache,
+		cacheKey:  sdkKeyToCacheKey(sdkKey),
+		userAgent: "ConfigCat-Go/" + config.Mode.getModeIdentifier() + "-" + version,
+		logger:    config.Logger,
+		client:    &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport},
 	}
-
 	if config.BaseUrl == "" {
-		fetcher.urlIsCustom = false
 		if config.DataGovernance == Global {
-			fetcher.baseUrl = globalBaseUrl
+			f.baseUrl = globalBaseUrl
 		} else {
-			fetcher.baseUrl = euOnlyBaseUrl
+			f.baseUrl = euOnlyBaseUrl
 		}
 	} else {
-		fetcher.urlIsCustom = true
-		fetcher.baseUrl = config.BaseUrl
+		f.urlIsCustom = true
+		f.baseUrl = config.BaseUrl
 	}
-
-	return fetcher
+	return f
 }
 
-func (fetcher *configFetcher) getConfigurationAsync() *asyncResult {
-	return fetcher.executeFetchAsync(2)
+// config returns the current config. If the current config isn't
+// available, it'll wait until it is. If the context expires when waiting,
+// it returns the configuration from the cache, or the most recent
+// if that also fails.
+func (f *configFetcher) config(ctx context.Context) *config {
+	// We loop here, because it's possible that even if we've
+	// waited for a running fetch to be completed, it might
+	// have completed, the value invalidated and another
+	// fetch to have been started. In practice we'll almost
+	// never go round the loop more than twice.
+	for {
+		f.mu.Lock()
+		conf := f.currentConfig
+		fetchDone := f.fetchDone
+		f.mu.Unlock()
+
+		if conf != nil {
+			return conf
+		}
+		if fetchDone == nil {
+			// No fetch in progress, so return a cached value immediately.
+			return f.cachedConfig()
+		}
+		select {
+		case <-fetchDone:
+		case <-ctx.Done():
+			return f.cachedConfig()
+		}
+	}
 }
 
-func (fetcher *configFetcher) executeFetchAsync(executionCount int) *asyncResult {
-	return fetcher.sendFetchRequestAsync().compose(func(result interface{}) *asyncResult {
-		fetchResponse, ok := result.(fetchResponse)
-		if !ok || !fetchResponse.isFetched() {
-			return asCompletedAsyncResult(result)
+// startRefresh starts a refresh going asynchronously if there's
+// not one in progress already. It does not invalidate
+// the current configuration.
+func (f *configFetcher) startRefresh() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f._startRefresh()
+}
+
+// refresh starts a refresh and waits for it to complete
+// or the context to be canceled.
+func (f *configFetcher) refresh(ctx context.Context) {
+	f.mu.Lock()
+	f._startRefresh()
+	fetchDone := f.fetchDone
+	f.mu.Unlock()
+	select {
+	case <-fetchDone:
+	case <-ctx.Done():
+	}
+}
+
+// invalidateAndStartRefresh invalidates the current config
+// and starts fetching a new one.
+func (f *configFetcher) invalidateAndStartRefresh() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.currentConfig = nil
+	f._startRefresh()
+}
+
+// _startRefresh is the fetcher-internal version of startRefresh.
+// It's called with c.mu held.
+func (f *configFetcher) _startRefresh() {
+	if f.fetchDone == nil {
+		f.fetchDone = make(chan struct{})
+		go f.fetch()
+	}
+}
+
+// cachedConfig returns the configuration from the cache,
+// or the most recently returned configuration if that fails.
+func (f *configFetcher) cachedConfig() *config {
+	conf, err := f.cache.get(f.cacheKey)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err != nil || conf == nil {
+		return f.prevConfig
+	}
+	// Note: don't update f.conf, because cached data
+	// is by-definition potentially stale, but do update
+	// prevConfig so that if the cache fails in the future,
+	// we'll fall back to using this configuration.
+	f.prevConfig = conf
+	return conf
+}
+
+// fetch fetches the the current configuration from the HTTP server.
+// Note: although this is started asynchronously, the configFetcher
+// logic guarantees that there's never more than one goroutine
+// at a time running fetch.
+//
+// When it's finished, it closes the fetchDone channel to wake
+// up anyone that's waiting for the configuration, and
+// sets it to nil to signify that there's no longer an outstanding
+// fetch running.
+func (f *configFetcher) fetch() {
+	f.mu.Lock()
+	prevConfig := f.prevConfig
+	f.mu.Unlock()
+
+	resp := f.fetchHTTP(prevConfig)
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	// Note: don't invalidate any existing config because
+	// we can't fetch it.
+	if resp.status == Fetched {
+		f.currentConfig = resp.config
+		f.prevConfig = resp.config
+		f.cache.set(f.cacheKey, resp.config)
+	}
+	close(f.fetchDone)
+	f.fetchDone = nil
+}
+
+// fetchHTTP does fetches the configuration while respecting redirects.
+// The prevConfig argument is used to avoid network traffic when the
+// configuration hasn't changed on the server. The NotModified
+// fetch status is never used.
+func (f *configFetcher) fetchHTTP(prevConfig *config) fetchResponse {
+	attempts := 2
+	for {
+		resp := f.fetchHTTPWithoutRedirect(prevConfig)
+		if resp.status != Fetched {
+			return resp
 		}
-
-		preferences := fetchResponse.config.root.Preferences
-
-		if preferences == nil {
-			return asCompletedAsyncResult(fetchResponse)
-		}
-
-		if preferences.URL == "" || preferences.URL == fetcher.baseUrl {
-			return asCompletedAsyncResult(fetchResponse)
-		}
-
-		if preferences.Redirect == nil {
-			return asCompletedAsyncResult(fetchResponse)
+		preferences := resp.config.root.Preferences
+		if preferences == nil ||
+			preferences.URL == "" ||
+			preferences.URL == f.baseUrl ||
+			preferences.Redirect == nil {
+			return resp
 		}
 		redirect := *preferences.Redirect
 
-		if fetcher.urlIsCustom && redirect != ForceRedirect {
-			return asCompletedAsyncResult(fetchResponse)
+		if f.urlIsCustom && redirect != ForceRedirect {
+			return resp
 		}
 
-		fetcher.baseUrl = preferences.URL
+		// Note: it's only OK to set this without acquiring the mutex because
+		// of the guarantee that there's only one fetcher active at a time.
+		f.baseUrl = preferences.URL
 		if redirect == NoRedirect {
-			return asCompletedAsyncResult(fetchResponse)
+			return resp
 		}
+
 		if redirect == ShouldRedirect {
-			fetcher.logger.Warnln("Your config.DataGovernance parameter at ConfigCatClient " +
+			f.logger.Warnln("Your config.DataGovernance parameter at ConfigCatClient " +
 				"initialization is not in sync with your preferences on the ConfigCat " +
 				"Dashboard: https://app.configcat.com/organization/data-governance. " +
 				"Only Organization Admins can access this preference.")
 		}
-
-		if executionCount > 0 {
-			return fetcher.executeFetchAsync(executionCount - 1)
+		if attempts <= 0 {
+			f.logger.Errorln("Redirect loop during config.json fetch. Please contact support@configcat.com.")
+			return resp
 		}
-
-		fetcher.logger.Errorln("Redirect loop during config.json fetch. Please contact support@configcat.com.")
-		return asCompletedAsyncResult(fetchResponse)
-	})
+		attempts--
+	}
 }
 
-func (fetcher *configFetcher) sendFetchRequestAsync() *asyncResult {
-	result := newAsyncResult()
+// fetchHTTPWithoutRedirect does the actual HTTP fetch of the config.
+func (f *configFetcher) fetchHTTPWithoutRedirect(prevConfig *config) fetchResponse {
+	request, err := http.NewRequest("GET", f.baseUrl+"/configuration-files/"+f.sdkKey+"/"+ConfigJsonName+".json", nil)
+	if err != nil {
+		return fetchResponse{status: Failure}
+	}
+	request.Header.Add("X-ConfigCat-UserAgent", f.userAgent)
 
-	go func() {
-		request, requestError := http.NewRequest("GET", fetcher.baseUrl+"/configuration-files/"+fetcher.sdkKey+"/"+ConfigJsonName+".json", nil)
-		if requestError != nil {
-			result.complete(fetchResponse{status: Failure})
-			return
+	if prevConfig != nil && prevConfig.etag != "" {
+		request.Header.Add("If-None-Match", prevConfig.etag)
+	}
+
+	response, err := f.client.Do(request)
+	if err != nil {
+		f.logger.Errorf("Config fetch failed: %v", err)
+		return fetchResponse{status: Failure}
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode == 304 {
+		f.logger.Debugln("Config fetch succeeded: not modified.")
+		return fetchResponse{
+			status: Fetched,
+			config: prevConfig.withFetchTime(time.Now()),
+		}
+	}
+
+	if response.StatusCode >= 200 && response.StatusCode < 300 {
+		body, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			f.logger.Errorf("Config fetch failed: %v", err)
+			return fetchResponse{status: Failure}
+		}
+		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now())
+		if err != nil {
+			f.logger.Errorf("Config fetch returned invalid body: %v", err)
+			return fetchResponse{status: Failure}
 		}
 
-		request.Header.Add("X-ConfigCat-UserAgent", "ConfigCat-Go/"+fetcher.mode+"-"+version)
+		f.logger.Debugln("Config fetch succeeded: new config fetched.")
+		return fetchResponse{status: Fetched, config: config}
+	}
 
-		if fetcher.eTag != "" {
-			request.Header.Add("If-None-Match", fetcher.eTag)
-		}
+	f.logger.Errorf("Double-check your SDK KEY at https://app.configcat.com/sdkkey. "+
+		"Received unexpected response: %v.", response.StatusCode)
+	return fetchResponse{status: Failure}
+}
 
-		response, responseError := fetcher.client.Do(request)
-		if responseError != nil {
-			fetcher.logger.Errorf("Config fetch failed: %s.", responseError.Error())
-			result.complete(fetchResponse{status: Failure})
-			return
-		}
+const CacheBase = "go_" + ConfigJsonName + "_%s"
 
-		defer response.Body.Close()
-
-		if response.StatusCode == http.StatusNotModified {
-			fetcher.logger.Debugln("Config fetch succeeded: not modified.")
-			result.complete(fetchResponse{status: NotModified})
-			return
-		}
-
-		if response.StatusCode >= 200 && response.StatusCode < 300 {
-			body, err := ioutil.ReadAll(response.Body)
-			if err != nil {
-				fetcher.logger.Errorf("Config fetch failed: %v", err)
-				result.complete(fetchResponse{status: Failure})
-				return
-			}
-			config, err := parseConfig(body)
-			if err != nil {
-				fetcher.logger.Errorf("Config fetch returned invalid body: %v", err)
-				result.complete(fetchResponse{status: Failure})
-				return
-			}
-
-			fetcher.logger.Debugln("Config fetch succeeded: new config fetched.")
-			fetcher.eTag = response.Header.Get("Etag")
-			result.complete(fetchResponse{status: Fetched, config: config})
-			return
-		}
-
-		fetcher.logger.Errorf("Double-check your SDK KEY at https://app.configcat.com/sdkkey. "+
-			"Received unexpected response: %v.", response.StatusCode)
-		result.complete(fetchResponse{status: Failure})
-	}()
-
-	return result
+func sdkKeyToCacheKey(sdkKey string) string {
+	sha := sha1.New()
+	sha.Write([]byte(sdkKey))
+	hash := hex.EncodeToString(sha.Sum(nil))
+	return fmt.Sprintf(CacheBase, hash)
 }
