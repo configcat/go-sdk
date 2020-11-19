@@ -57,12 +57,15 @@ func (refresher *configRefresher) getLastCachedConfig() *config {
 // get reads the configuration.
 func (refresher *configRefresher) get() *config {
 	refresher.mu.RLock()
-	defer refresher.mu.RUnlock()
 	value, err := refresher.cache.get(refresher.cacheKey)
+	refresher.mu.RUnlock()
 	if err != nil {
 		refresher.logger.Errorf("Reading from the cache failed, %s", err)
 		return refresher.inMemoryValue
 	}
+	refresher.mu.Lock()
+	defer refresher.mu.Unlock()
+	refresher.inMemoryValue = value
 
 	return value
 }

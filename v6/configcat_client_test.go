@@ -3,7 +3,9 @@ package configcat
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,13 +25,13 @@ func TestClient_Refresh(t *testing.T) {
 	client := NewCustomClient(srv.sdkKey(), cfg)
 	defer client.Close()
 
-	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", `"value"`)})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value"))
 	client.Refresh()
 	result := client.GetValue("key", "default")
 
 	c.Assert(result, qt.Equals, "value")
 
-	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", `"value2"`)})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
 	client.Refresh()
 	result = client.GetValue("key", "default")
 	if result != "value2" {
@@ -46,13 +48,13 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 	client := NewCustomClient(srv.sdkKey(), cfg)
 	defer client.Close()
 
-	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", `"value"`)})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value"))
 	client.Refresh()
 	result := client.GetValue("key", "default")
 	c.Assert(result, qt.Equals, "value")
 
 	srv.setResponse(configResponse{
-		body:  fmt.Sprintf(jsonFormat, "key", `"value"`),
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value")),
 		sleep: time.Second,
 	})
 	t0 := time.Now()
@@ -67,7 +69,7 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 func TestClient_Get(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213))
 	client.Refresh()
 	result := client.GetValue("key", 0)
 
@@ -88,7 +90,7 @@ func TestClient_Get_Default(t *testing.T) {
 func TestClient_Get_Latest(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213))
 	client.Refresh()
 
 	result := client.GetValue("key", 0)
@@ -112,7 +114,7 @@ func TestClient_Get_WithTimeout(t *testing.T) {
 	defer client.Close()
 
 	srv.setResponse(configResponse{
-		body:  fmt.Sprintf(jsonFormat, "key", "3213"),
+		body:  marshalJSON(rootNodeWithKeyValue("key", 3213)),
 		sleep: time.Second,
 	})
 	t0 := time.Now()
@@ -131,7 +133,7 @@ func TestClient_Get_WithFailingCacheSet(t *testing.T) {
 	client := NewCustomClient(srv.sdkKey(), cfg)
 	defer client.Close()
 
-	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213))
 	client.Refresh()
 	result := client.GetValue("key", 0)
 	c.Assert(result, qt.Equals, 3213.0)
@@ -208,6 +210,208 @@ func TestClient_GetKeyAndValue_Empty(t *testing.T) {
 	c.Assert(value, qt.Equals, nil)
 }
 
+func TestClient_GetWithRedirectSuccess(t *testing.T) {
+	c := qt.New(t)
+	srv1, client := getTestClients(t)
+	srv2, _ := getTestClients(t)
+	srv2.key = srv1.key
+	redirect := ForceRedirect
+	srv1.setResponseJSON(&rootNode{
+		Preferences: &preferences{
+			URL:      srv2.config().BaseUrl,
+			Redirect: &redirect,
+		},
+	})
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value"))
+	client.Refresh()
+	result := client.GetValue("key", "default")
+	c.Assert(result, qt.Equals, "value")
+	c.Assert(srv1.allResponses(), qt.HasLen, 1)
+	c.Assert(srv2.allResponses(), qt.HasLen, 1)
+
+	// Another request should go direct to the second server.
+	client.Refresh()
+	c.Assert(srv1.allResponses(), qt.HasLen, 1)
+	c.Assert(srv2.allResponses(), qt.HasLen, 2)
+}
+
+func TestClient_GetWithDifferentURLAndNoRedirect(t *testing.T) {
+	c := qt.New(t)
+	srv1, client := getTestClients(t)
+	srv2, _ := getTestClients(t)
+	srv2.key = srv1.key
+	redirect := NoRedirect
+	srv1.setResponseJSON(&rootNode{
+		Preferences: &preferences{
+			URL:      srv2.config().BaseUrl,
+			Redirect: &redirect,
+		},
+		Entries: map[string]*entry{
+			"key": &entry{
+				Value: "value1",
+			},
+		},
+	})
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
+	client.Refresh()
+
+	// Check that the value still comes from the same server and
+	// that no requests were made to the second server.
+	result := client.GetValue("key", "default")
+	c.Assert(result, qt.Equals, "value1")
+
+	c.Assert(srv2.allResponses(), qt.HasLen, 0)
+}
+
+func TestClient_GetWithRedirectToSameURL(t *testing.T) {
+	c := qt.New(t)
+	srv1, client := getTestClients(t)
+	srv2, _ := getTestClients(t)
+	srv2.key = srv1.key
+	redirect := ForceRedirect
+	srv1.setResponseJSON(&rootNode{
+		Preferences: &preferences{
+			URL:      srv1.config().BaseUrl,
+			Redirect: &redirect,
+		},
+		Entries: map[string]*entry{
+			"key": &entry{
+				Value: "value1",
+			},
+		},
+	})
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
+	client.Refresh()
+	result := client.GetValue("key", "default")
+	c.Assert(result, qt.Equals, "value1")
+
+	// Check that it hasn't made another request to the same server.
+	c.Assert(srv1.allResponses(), qt.HasLen, 1)
+}
+
+func TestClient_GetWithCustomURLAndShouldRedirect(t *testing.T) {
+	c := qt.New(t)
+	srv1, client := getTestClients(t)
+	srv2, _ := getTestClients(t)
+	srv2.key = srv1.key
+	redirect := ShouldRedirect
+	srv1.setResponseJSON(&rootNode{
+		Preferences: &preferences{
+			URL:      srv2.config().BaseUrl,
+			Redirect: &redirect,
+		},
+		Entries: map[string]*entry{
+			"key": &entry{
+				Value: "value1",
+			},
+		},
+	})
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
+	client.Refresh()
+
+	// Check that the value still comes from the same server and
+	// that no requests were made to the second server.
+	result := client.GetValue("key", "default")
+	c.Assert(result, qt.Equals, "value1")
+
+	c.Assert(srv2.allResponses(), qt.HasLen, 0)
+}
+
+func TestClient_GetWithStandardURLAndShouldRedirect(t *testing.T) {
+	c := qt.New(t)
+	// Use a mock transport so that we can serve the request even though it's
+	// going to a non localhost address.
+	transport := newMockHTTPTransport()
+	redirect := ShouldRedirect
+	transport.enqueue(200, marshalJSON(&rootNode{
+		Preferences: &preferences{
+			URL:      "https://fakeUrl",
+			Redirect: &redirect,
+		},
+	}))
+	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value")))
+	client := NewCustomClient("fakeKey", ClientConfig{
+		Logger:    testLogger{t},
+		Transport: transport,
+	})
+	result := client.GetValue("key", "default")
+	c.Assert(result, qt.Equals, "value")
+	c.Assert(transport.requests, qt.HasLen, 2)
+	c.Assert(transport.requests[0].URL.Host, qt.Equals, strings.TrimPrefix(globalBaseUrl, "https://"))
+	c.Assert(transport.requests[1].URL.Host, qt.Equals, "fakeUrl")
+}
+
+func TestClient_GetWithStandardURLAndNoRedirect(t *testing.T) {
+	c := qt.New(t)
+	// Use a mock transport so that we can serve the request even though it's
+	// going to a non localhost address.
+	transport := newMockHTTPTransport()
+	redirect := NoRedirect
+	transport.enqueue(200, marshalJSON(&rootNode{
+		Preferences: &preferences{
+			URL:      "https://fakeUrl",
+			Redirect: &redirect,
+		},
+		Entries: map[string]*entry{
+			"key": &entry{
+				Value: "value1",
+			},
+		},
+	}))
+	client := NewCustomClient("fakeKey", ClientConfig{
+		Logger:    testLogger{t},
+		Transport: transport,
+	})
+	result := client.GetValue("key", "default")
+	c.Assert(result, qt.Equals, "value1")
+
+	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value2")))
+	// The next request should go to the redirected server.
+	client.Refresh()
+
+	result = client.GetValue("key", "default")
+	c.Assert(result, qt.Equals, "value2")
+
+	c.Assert(transport.requests, qt.HasLen, 2)
+	c.Assert(transport.requests[0].URL.Host, qt.Equals, strings.TrimPrefix(globalBaseUrl, "https://"))
+	c.Assert(transport.requests[1].URL.Host, qt.Equals, "fakeUrl")
+}
+
+func TestClient_GetWithRedirectLoop(t *testing.T) {
+	c := qt.New(t)
+	srv1, client := getTestClients(t)
+	srv2, _ := getTestClients(t)
+	srv2.key = srv1.key
+	redirect := ForceRedirect
+	srv1.setResponseJSON(&rootNode{
+		Preferences: &preferences{
+			URL:      srv2.config().BaseUrl,
+			Redirect: &redirect,
+		},
+	})
+	srv2.setResponseJSON(&rootNode{
+		Preferences: &preferences{
+			URL:      srv1.config().BaseUrl,
+			Redirect: &redirect,
+		},
+	})
+	client.Refresh()
+
+	result := client.GetValue("key", "default")
+	c.Assert(result, qt.Equals, "default")
+	c.Assert(srv1.allResponses(), qt.HasLen, 2)
+	c.Assert(srv2.allResponses(), qt.HasLen, 1)
+}
+
+func TestClient_GetWithInvalidConfig(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponse(configResponse{body: "invalid-json"})
+	client.Refresh()
+	result := client.GetValue("key", "default")
+	c.Assert(result, qt.Equals, "default")
+}
+
 type failingCache struct{}
 
 // get reads the configuration from the cache.
@@ -220,19 +424,6 @@ func (cache failingCache) Set(key string, value string) error {
 	return errors.New("fake failing cache fails to set")
 }
 
-type KeyCheckerCache struct {
-	key string
-}
-
-func (cache *KeyCheckerCache) Get(key string) (string, error) {
-	return "", nil
-}
-
-func (cache *KeyCheckerCache) Set(key string, value string) error {
-	cache.key = key
-	return nil
-}
-
 func getTestClients(t *testing.T) (*configServer, *Client) {
 	srv := newConfigServer(t)
 	cfg := srv.config()
@@ -240,4 +431,51 @@ func getTestClients(t *testing.T) (*configServer, *Client) {
 	client := NewCustomClient(srv.sdkKey(), cfg)
 	t.Cleanup(client.Close)
 	return srv, client
+}
+
+func rootNodeWithKeyValue(key string, value interface{}) *rootNode {
+	return &rootNode{
+		Entries: map[string]*entry{
+			key: &entry{
+				Value: value,
+			},
+		},
+	}
+}
+
+type mockHTTPTransport struct {
+	requests  []*http.Request
+	responses []*http.Response
+}
+
+func newMockHTTPTransport() *mockHTTPTransport {
+	return &mockHTTPTransport{}
+}
+
+func (m *mockHTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.requests = append(m.requests, req)
+
+	nextResponseInQueue := m.responses[0]
+	m.responses = m.responses[1:]
+	return nextResponseInQueue, nil
+}
+
+func (m *mockHTTPTransport) enqueue(statusCode int, body string) {
+	m.responses = append(m.responses, &http.Response{
+		StatusCode: statusCode,
+		Body:       ioutil.NopCloser(strings.NewReader(body)),
+	})
+}
+
+type callbackCache struct {
+	get func(key string) (string, error)
+	set func(key, value string) error
+}
+
+func (c callbackCache) Get(key string) (string, error) {
+	return c.get(key)
+}
+
+func (c callbackCache) Set(key, value string) error {
+	return c.set(key, value)
 }
