@@ -26,14 +26,3 @@ const (
 	globalBaseUrl = "https://cdn-global.configcat.com"
 	euOnlyBaseUrl = "https://cdn-eu.configcat.com"
 )
-
-const (
-	no  = 0
-	yes = 1
-)
-
-// async statuses
-const (
-	pending   = 0
-	completed = 1
-)
