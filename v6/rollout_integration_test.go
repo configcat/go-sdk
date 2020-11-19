@@ -153,7 +153,10 @@ func (test integrationTest) runTest(t *testing.T) {
 				t.Fatalf("cannot parse expected value %q as %T: %v", expected, val, err)
 			}
 			if val != expectedVal {
-				t.Errorf("unexpected result at %s:%d: identifier %s; key %s; got %#v want %#v", file.Name(), lineNumber, line[0], settingKey, val, expectedVal)
+				t.Errorf("unexpected result for key %s at %s:%d; got %#v want %#v", settingKey, file.Name(), lineNumber, val, expectedVal)
+				for key, val := range user.attributes {
+					t.Logf("user %s: %q", key, val)
+				}
 			}
 		}
 	}
