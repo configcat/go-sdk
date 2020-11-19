@@ -121,7 +121,7 @@ func (fetcher *configFetcher) sendFetchRequestAsync() *asyncResult {
 
 		defer response.Body.Close()
 
-		if response.StatusCode == 304 {
+		if response.StatusCode == http.StatusNotModified {
 			fetcher.logger.Debugln("Config fetch succeeded: not modified.")
 			result.complete(fetchResponse{status: NotModified})
 			return

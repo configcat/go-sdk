@@ -43,6 +43,15 @@ func TestAutoPollingPolicy_FetchFail(t *testing.T) {
 	c.Assert(conf, qt.IsNil)
 }
 
+func TestAutoPollingPolicy_FetchFailWithCacheFallback(t *testing.T) {
+	testPolicy_FetchFailWithCacheFallback(t, AutoPoll(10*time.Millisecond),
+		func(client *Client) {},
+		func(client *Client) {
+			time.Sleep(20 * time.Millisecond)
+		},
+	)
+}
+
 func TestAutoPollingPolicy_WithNotify(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)

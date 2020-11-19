@@ -1,7 +1,6 @@
 package configcat
 
 import (
-	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -12,18 +11,15 @@ import (
 func TestClient_RefreshAsync(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponse(configResponse{
-		body: fmt.Sprintf(jsonFormat, "key", "\"value\""),
-	})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value"))
+
 	resultc := make(chan interface{})
 	client.RefreshAsync(func() {
 		resultc <- client.GetValue("key", "default")
 	})
 	c.Assert(waitChan(t, resultc), qt.Equals, "value")
 
-	srv.setResponse(configResponse{
-		body: fmt.Sprintf(jsonFormat, "key", "\"value2\""),
-	})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
 
 	resultc2 := make(chan interface{})
 	client.RefreshAsync(func() {
@@ -35,7 +31,7 @@ func TestClient_RefreshAsync(t *testing.T) {
 func TestClient_GetAsync(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213))
 	client.Refresh()
 	resultc := make(chan interface{}, 1)
 	client.GetValueAsync("key", 0, func(result interface{}) {
@@ -61,7 +57,7 @@ func TestClient_GetAsync_Default(t *testing.T) {
 func TestClient_GetAsync_Latest(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponse(configResponse{body: fmt.Sprintf(jsonFormat, "key", "3213")})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213))
 	resultc := make(chan interface{}, 1)
 	client.GetValueAsync("key", 0, func(result interface{}) {
 		resultc <- result

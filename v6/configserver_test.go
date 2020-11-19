@@ -1,6 +1,7 @@
 package configcat
 
 import (
+	"crypto/md5"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -17,13 +18,13 @@ type configServer struct {
 	key string
 	t   *testing.T
 
-	mu   sync.Mutex
-	resp *configResponse
+	mu        sync.Mutex
+	resp      *configResponse
+	responses []configResponse
 }
 
 type configResponse struct {
 	status int
-	etag   string
 	body   string
 	sleep  time.Duration
 }
@@ -49,6 +50,7 @@ func newConfigServerWithKey(t *testing.T, sdkKey string) *configServer {
 func (srv *configServer) config() ClientConfig {
 	return ClientConfig{
 		BaseUrl: srv.srv.URL,
+		Logger:  testLogger{srv.t},
 	}
 }
 
@@ -56,14 +58,26 @@ func (srv *configServer) sdkKey() string {
 	return srv.key
 }
 
-func (srv *configServer) close() {
-	srv.srv.Close()
-}
-
+// setResponse sets the response that will be returned from the server.
 func (srv *configServer) setResponse(response configResponse) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	srv.resp = &response
+}
+
+func (srv *configServer) setResponseJSON(x interface{}) {
+	srv.setResponse(configResponse{
+		body: marshalJSON(x),
+	})
+}
+
+// allResponses returns all the responses that have been served over
+// the lifetime of the server, excluding those that will have
+// caused the test to fail.
+func (srv *configServer) allResponses() []configResponse {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	return append([]configResponse(nil), srv.responses...)
 }
 
 func (srv *configServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -78,26 +92,28 @@ func (srv *configServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	srv.mu.Lock()
-	resp := srv.resp
-	srv.mu.Unlock()
-	if resp == nil {
+	resp0 := srv.resp
+	defer srv.mu.Unlock()
+	if resp0 == nil {
 		srv.t.Errorf("HTTP call with no response provided")
 		http.Error(w, "unexpected call", http.StatusInternalServerError)
 		return
 	}
+	resp := *resp0
 	time.Sleep(resp.sleep)
-	if resp.etag != "" {
-		w.Header().Set("Etag", resp.etag)
+	if resp.status == 0 {
+		w.Header().Set("Etag", etagOf(resp.body))
+		if req.Header.Get("If-None-Match") == etagOf(resp.body) {
+			resp.status = http.StatusNotModified
+			resp.body = ""
+		} else {
+			resp.status = http.StatusOK
+		}
 	}
-	if resp.status != 0 {
-		w.WriteHeader(resp.status)
-	}
+	w.WriteHeader(resp.status)
 	w.Write([]byte(resp.body))
-}
-
-func serverForIntegrationTestKey(t *testing.T, sdkKey string) *configServer {
-	srv := newConfigServer(t)
-	return srv
+	// Record the response so that it's possible to check what went on behind the scenes later.
+	srv.responses = append(srv.responses, resp)
 }
 
 var (
@@ -120,4 +136,82 @@ func contentForIntegrationTestKey(key string) string {
 		panic(fmt.Errorf("integration test content for key %q not found", key))
 	}
 	return string(content)
+}
+
+func etagOf(content string) string {
+	return fmt.Sprintf("%x", md5.Sum([]byte(content)))
+}
+
+func marshalJSON(x interface{}) string {
+	data, err := json.Marshal(x)
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
+}
+
+// testLogger implements the Logger interface by logging to the test.T
+// instance.
+type testLogger struct {
+	t *testing.T
+}
+
+func (log testLogger) Debugf(format string, args ...interface{}) {
+	log.logf("DEBUG", format, args...)
+}
+
+func (log testLogger) Infof(format string, args ...interface{}) {
+	log.logf("INFO", format, args...)
+}
+
+func (log testLogger) Warnf(format string, args ...interface{}) {
+	log.logf("WARN", format, args...)
+}
+
+func (log testLogger) Errorf(format string, args ...interface{}) {
+	log.logf("ERROR", format, args...)
+}
+
+func (log testLogger) Debug(args ...interface{}) {
+	log.log("DEBUG", args...)
+}
+
+func (log testLogger) Info(args ...interface{}) {
+	log.log("INFO", args...)
+}
+
+func (log testLogger) Warn(args ...interface{}) {
+	log.log("WARN", args...)
+}
+
+func (log testLogger) Error(args ...interface{}) {
+	log.log("ERROR", args...)
+}
+
+func (log testLogger) Debugln(args ...interface{}) {
+	log.logln("DEBUG", args...)
+}
+
+func (log testLogger) Infoln(args ...interface{}) {
+	log.logln("INFO", args...)
+}
+
+func (log testLogger) Warnln(args ...interface{}) {
+	log.logln("WARN", args...)
+}
+
+func (log testLogger) Errorln(args ...interface{}) {
+	log.logln("ERROR", args...)
+}
+
+func (log testLogger) logf(level string, format string, args ...interface{}) {
+	log.t.Logf("%s: %s", level, fmt.Sprintf(format, args...))
+}
+
+func (log testLogger) log(level string, args ...interface{}) {
+	log.t.Logf("%s: %s", level, fmt.Sprint(args...))
+}
+
+func (log testLogger) logln(level string, args ...interface{}) {
+	log.t.Logf("%s: %s", level, fmt.Sprintln(args...))
 }

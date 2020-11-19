@@ -3,6 +3,7 @@ package configcat
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	qt "github.com/frankban/quicktest"
 )
@@ -47,4 +48,15 @@ func TestManualPollingPolicy_FetchFail(t *testing.T) {
 	})
 	client.Refresh()
 	c.Assert(client.getConfig(), qt.IsNil)
+}
+
+func TestManualPollingPolicy_FetchFailWithCacheFallback(t *testing.T) {
+	testPolicy_FetchFailWithCacheFallback(t, ManualPoll(),
+		func(client *Client) {
+			client.Refresh()
+		},
+		func(client *Client) {
+			time.Sleep(60 * time.Millisecond)
+		},
+	)
 }
