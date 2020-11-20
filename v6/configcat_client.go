@@ -11,13 +11,20 @@ import (
 type Client struct {
 	refreshPolicy           refreshPolicy
 	maxWaitTimeForSyncCalls time.Duration
-	logger                  Logger
+	logger                  *leveledLogger
 }
 
 // ClientConfig describes custom configuration options for the Client.
 type ClientConfig struct {
-	// Base logger used to create new loggers
+	// Logger is used to log information about configuration evaluation
+	// and issues.
 	Logger Logger
+	// StaticLogLevel specifies whether the log level will remain the
+	// same throughout the lifetime of the client.
+	// If this is true and Logger implements the LoggerWithLevel
+	// interface (notably, the default logger, *logrus.Logger, implements this interface),
+	// the client can use a more efficient log implementation.
+	StaticLogLevel bool
 	// The custom cache implementation used to store the configuration.
 	Cache ConfigCache
 	// The maximum time how long at most the synchronous calls (e.g. client.get(...)) should block the caller.
@@ -38,7 +45,7 @@ type ClientConfig struct {
 
 type refreshPolicyConfig struct {
 	fetcher *configFetcher
-	logger  Logger
+	logger  *leveledLogger
 }
 
 type RefreshMode interface {
@@ -104,13 +111,21 @@ func NewCustomClient(sdkKey string, config ClientConfig) *Client {
 		config.Mode = defaultConfig.Mode
 	}
 
+	logger := &leveledLogger{
+		level:  LogLevelDebug,
+		Logger: config.Logger,
+	}
+	if levlog, ok := config.Logger.(LoggerWithLevel); ok && config.StaticLogLevel {
+		logger.level = levlog.GetLevel()
+	}
+
 	return &Client{
 		refreshPolicy: config.Mode.refreshPolicy(refreshPolicyConfig{
-			fetcher: newConfigFetcher(sdkKey, cache, config),
-			logger:  config.Logger,
+			fetcher: newConfigFetcher(sdkKey, cache, config, logger),
+			logger:  logger,
 		}),
 		maxWaitTimeForSyncCalls: config.MaxWaitTimeForSyncCalls,
-		logger:                  config.Logger,
+		logger:                  logger,
 	}
 }
 

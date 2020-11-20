@@ -61,12 +61,12 @@ func (op operator) String() string {
 
 // evaluator returns a function that returns the value and variation ID
 // with a key and user with respect to the given root node.
-func evaluator(root *rootNode) func(logger Logger, key string, user *User) (interface{}, string, error) {
-	entryFuncs := make(map[string]func(logger Logger, user *User) (interface{}, string))
+func evaluator(root *rootNode) func(logger *leveledLogger, key string, user *User) (interface{}, string, error) {
+	entryFuncs := make(map[string]func(logger *leveledLogger, user *User) (interface{}, string))
 	for key, entry := range root.Entries {
 		entryFuncs[key] = entryEvaluator(key, entry)
 	}
-	return func(logger Logger, key string, user *User) (interface{}, string, error) {
+	return func(logger *leveledLogger, key string, user *User) (interface{}, string, error) {
 		if len(key) == 0 {
 			return nil, "", fmt.Errorf("key cannot be empty")
 		}
@@ -82,14 +82,24 @@ func evaluator(root *rootNode) func(logger Logger, key string, user *User) (inte
 	}
 }
 
-func entryEvaluator(key string, node *entry) func(logger Logger, user *User) (interface{}, string) {
+func entryEvaluator(key string, node *entry) func(logger *leveledLogger, user *User) (interface{}, string) {
 	rules := node.RolloutRules
 	matchers := make([]func(string) (bool, error), len(rules))
 	for i, rule := range rules {
 		matchers[i] = rolloutMatcher(rule)
 	}
-	return func(logger Logger, user *User) (interface{}, string) {
+
+	return func(logger *leveledLogger, user *User) (interface{}, string) {
 		if user == nil {
+			if logger.enabled(LogLevelWarn) && (len(rules) > 0 || len(node.PercentageRules) > 0) {
+				logger.Warnf("Evaluating GetValue(%s). UserObject missing! You should pass a "+
+					"UserObject to GetValueForUser() in order to make targeting work properly. "+
+					"Read more: https://configcat.com/docs/advanced/user-object.", key)
+			}
+
+			if logger.enabled(LogLevelInfo) {
+				logger.Infof("Returning %v.", node.Value)
+			}
 			return node.Value, node.VariationID
 		}
 		for i, matcher := range matchers {
@@ -100,23 +110,27 @@ func entryEvaluator(key string, node *entry) func(logger Logger, user *User) (in
 			}
 			matched, err := matcher(userValue)
 			if matched {
-				logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => match, returning: %v",
-					rule.ComparisonAttribute,
-					user,
-					rule.Comparator,
-					rule.ComparisonValue,
-					rule.Value,
-				)
+				if logger.enabled(LogLevelInfo) {
+					logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => match, returning: %v",
+						rule.ComparisonAttribute,
+						user,
+						rule.Comparator,
+						rule.ComparisonValue,
+						rule.Value,
+					)
+				}
 				return rule.Value, rule.VariationID
 			}
 			if err != nil {
-				logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => SKIP rule. Validation error: %v",
-					rule.ComparisonAttribute,
-					user,
-					rule.Comparator,
-					rule.Value,
-					err,
-				)
+				if logger.enabled(LogLevelInfo) {
+					logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => SKIP rule. Validation error: %v",
+						rule.ComparisonAttribute,
+						user,
+						rule.Comparator,
+						rule.Value,
+						err,
+					)
+				}
 			}
 		}
 		// evaluate percentage rules
@@ -134,13 +148,17 @@ func entryEvaluator(key string, node *entry) func(logger Logger, user *User) (in
 				bucket += rule.Percentage
 				if scaled < bucket {
 					result := rule.Value
-					logger.Infof("Evaluating %% options. Returning %s", result)
+					if logger.enabled(LogLevelInfo) {
+						logger.Infof("Evaluating %% options. Returning %v", result)
+					}
 					return result, rule.VariationID
 				}
 			}
 		}
 		result := node.Value
-		logger.Infof("Returning %v.", result)
+		if logger.enabled(LogLevelInfo) {
+			logger.Infof("Returning %v.", result)
+		}
 		return result, node.VariationID
 	}
 }
