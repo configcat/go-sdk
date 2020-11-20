@@ -331,7 +331,7 @@ func TestClient_GetWithStandardURLAndShouldRedirect(t *testing.T) {
 	}))
 	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value")))
 	client := NewCustomClient("fakeKey", ClientConfig{
-		Logger:    testLogger{t},
+		Logger:    newTestLogger(t, LogLevelDebug),
 		Transport: transport,
 	})
 	result := client.GetValue("key", "default")
@@ -359,7 +359,7 @@ func TestClient_GetWithStandardURLAndNoRedirect(t *testing.T) {
 		},
 	}))
 	client := NewCustomClient("fakeKey", ClientConfig{
-		Logger:    testLogger{t},
+		Logger:    newTestLogger(t, LogLevelDebug),
 		Transport: transport,
 	})
 	result := client.GetValue("key", "default")

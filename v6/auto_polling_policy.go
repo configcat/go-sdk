@@ -46,7 +46,7 @@ func AutoPollWithChangeListener(
 type autoPollingPolicy struct {
 	fetcher      *configFetcher
 	changeNotify func()
-	logger       Logger
+	logger       *leveledLogger
 	// mu guards the closing of the closed channel.
 	mu     sync.Mutex
 	closed chan struct{}
@@ -63,7 +63,6 @@ func newAutoPollingPolicy(
 		changeNotify: config.changeNotify,
 		logger:       rconfig.logger,
 	}
-	policy.logger.Debugf("Auto polling started with %+v interval.", config.interval)
 	policy.fetcher.startRefresh()
 	go policy.poller(config.interval)
 	return policy
@@ -90,7 +89,6 @@ func (policy *autoPollingPolicy) poller(interval time.Duration) {
 	for {
 		select {
 		case <-policy.closed:
-			policy.logger.Debugf("Auto polling stopped.")
 			return
 		case <-ticker.C:
 			policy.refresh(ctx)

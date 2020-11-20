@@ -50,7 +50,7 @@ func newConfigServerWithKey(t *testing.T, sdkKey string) *configServer {
 func (srv *configServer) config() ClientConfig {
 	return ClientConfig{
 		BaseUrl: srv.srv.URL,
-		Logger:  testLogger{srv.t},
+		Logger:  newTestLogger(srv.t, LogLevelDebug),
 	}
 }
 
@@ -150,10 +150,25 @@ func marshalJSON(x interface{}) string {
 	return string(data)
 }
 
+func testLeveledLogger(t testing.TB) *leveledLogger {
+	return &leveledLogger{
+		level:  LogLevelDebug,
+		Logger: newTestLogger(t, LogLevelDebug),
+	}
+}
+
 // testLogger implements the Logger interface by logging to the test.T
 // instance.
 type testLogger struct {
-	t *testing.T
+	t     testing.TB
+	level LogLevel
+}
+
+func newTestLogger(t testing.TB, level LogLevel) Logger {
+	return &testLogger{
+		t:     t,
+		level: level,
+	}
 }
 
 func (log testLogger) Debugf(format string, args ...interface{}) {

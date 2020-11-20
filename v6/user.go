@@ -16,29 +16,19 @@ func NewUserWithAdditionalAttributes(identifier string, email string, country st
 	user := &User{identifier: identifier, attributes: map[string]string{}}
 	user.attributes["Identifier"] = identifier
 
-	if len(email) > 0 {
+	if email != "" {
 		user.attributes["Email"] = email
 	}
-
-	if len(country) > 0 {
+	if country != "" {
 		user.attributes["Country"] = country
 	}
-
-	if len(custom) > 0 {
-		for k, v := range custom {
-			user.attributes[k] = v
-		}
+	for k, v := range custom {
+		user.attributes[k] = v
 	}
-
 	return user
 }
 
 // GetAttribute retrieves a user attribute identified by a key.
 func (user *User) GetAttribute(key string) string {
-	val := user.attributes[key]
-	if len(val) > 0 {
-		return val
-	}
-
-	return ""
+	return user.attributes[key]
 }

@@ -30,7 +30,7 @@ type configFetcher struct {
 	sdkKey    string
 	cacheKey  string
 	cache     configCache
-	logger    Logger
+	logger    *leveledLogger
 	client    *http.Client
 
 	urlIsCustom bool
@@ -45,13 +45,13 @@ type configFetcher struct {
 }
 
 // newConfigFetcher returns a
-func newConfigFetcher(sdkKey string, cache configCache, config ClientConfig) *configFetcher {
+func newConfigFetcher(sdkKey string, cache configCache, config ClientConfig, logger *leveledLogger) *configFetcher {
 	f := &configFetcher{
 		sdkKey:    sdkKey,
 		cache:     cache,
 		cacheKey:  sdkKeyToCacheKey(sdkKey),
 		userAgent: "ConfigCat-Go/" + config.Mode.getModeIdentifier() + "-" + version,
-		logger:    config.Logger,
+		logger:    logger,
 		client:    &http.Client{Timeout: config.HttpTimeout, Transport: config.Transport},
 	}
 	if config.BaseUrl == "" {
@@ -216,13 +216,13 @@ func (f *configFetcher) fetchHTTP(prevConfig *config) fetchResponse {
 		}
 
 		if redirect == ShouldRedirect {
-			f.logger.Warnln("Your config.DataGovernance parameter at ConfigCatClient " +
+			f.logger.Warn("Your config.DataGovernance parameter at ConfigCatClient " +
 				"initialization is not in sync with your preferences on the ConfigCat " +
 				"Dashboard: https://app.configcat.com/organization/data-governance. " +
 				"Only Organization Admins can access this preference.")
 		}
 		if attempts <= 0 {
-			f.logger.Errorln("Redirect loop during config.json fetch. Please contact support@configcat.com.")
+			f.logger.Error("Redirect loop during config.json fetch. Please contact support@configcat.com.")
 			return resp
 		}
 		attempts--
@@ -249,7 +249,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(prevConfig *config) fetchRespon
 	defer response.Body.Close()
 
 	if response.StatusCode == 304 {
-		f.logger.Debugln("Config fetch succeeded: not modified.")
+		f.logger.Debug("Config fetch succeeded: not modified.")
 		return fetchResponse{
 			status: Fetched,
 			config: prevConfig.withFetchTime(time.Now()),
@@ -268,7 +268,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(prevConfig *config) fetchRespon
 			return fetchResponse{status: Failure}
 		}
 
-		f.logger.Debugln("Config fetch succeeded: new config fetched.")
+		f.logger.Debug("Config fetch succeeded: new config fetched.")
 		return fetchResponse{status: Fetched, config: config}
 	}
 

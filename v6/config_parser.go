@@ -18,7 +18,7 @@ type config struct {
 	jsonBody  string
 	etag      string
 	root      *rootNode
-	evaluate  func(logger Logger, key string, user *User) (interface{}, string, error)
+	evaluate  func(logger *leveledLogger, key string, user *User) (interface{}, string, error)
 	allKeys   []string
 	keyValues map[string]keyValue
 	fetchTime time.Time
@@ -62,7 +62,7 @@ func (conf *config) getAllKeys() []string {
 	return conf.allKeys
 }
 
-func (conf *config) getValueAndVariationId(logger Logger, key string, user *User) (interface{}, string, error) {
+func (conf *config) getValueAndVariationId(logger *leveledLogger, key string, user *User) (interface{}, string, error) {
 	if conf == nil {
 		return nil, "", fmt.Errorf("no configuration available")
 	}
