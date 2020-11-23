@@ -13,9 +13,7 @@ import (
 )
 
 const (
-	jsonFormat          = `{ "f": { "%s": { "v": %s, "p": [], "r": [] }}}`
 	variationJsonFormat = `{ "f": { "first": { "v": false, "p": [], "r": [], "i":"fakeIdFirst" }, "second": { "v": true, "p": [], "r": [], "i":"fakeIdSecond" }}}`
-	rolloutJsonFormat = `{ "f":{"feature":{"v":false,"i":"a377be39","t":0,"p":[],"r":[{"o":0,"a":"Identifier","t":0,"c":"example,foobar","v":true,"i":"8bcf8608"}]}}}`
 )
 
 func TestClient_Refresh(t *testing.T) {
@@ -80,7 +78,21 @@ func TestClient_Get(t *testing.T) {
 func TestClient_Get_IsOneOf_Uses_Contains_Semantics(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponse(configResponse{body: fmt.Sprintf(rolloutJsonFormat)})
+	srv.setResponseJSON(&rootNode{
+		Entries: map[string]*entry{
+			"feature": {
+				Value:       false,
+				VariationID: "a377be39",
+				RolloutRules: []*rolloutRule{{
+					Comparator:          opOneOf,
+					ComparisonAttribute: "Identifier",
+					ComparisonValue:     "example,foobar",
+					Value:               true,
+					VariationID:         "8bcf8608",
+				}},
+			},
+		},
+	})
 	client.Refresh()
 
 	matchingUser := NewUser("mple")

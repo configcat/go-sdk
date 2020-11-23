@@ -103,8 +103,8 @@ func entryEvaluator(key string, node *entry) func(logger *leveledLogger, user *U
 			return node.Value, node.VariationID
 		}
 		if logger.enabled(LogLevelInfo) {
-			logger.Info("Evaluating GetValue(%s).", key)
-			logger.Info("User object: %v", user)
+			logger.Infof("Evaluating GetValue(%s).", key)
+			logger.Infof("User object: %v", user)
 		}
 		for i, matcher := range matchers {
 			rule := rules[i]
@@ -185,6 +185,9 @@ func rolloutMatcher(rule *rolloutRule) func(userValue string) (bool, error) {
 	comparisonValue := rule.ComparisonValue
 	switch rule.Comparator {
 	case opOneOf, opNotOneOf:
+		// These comparators are using Contains to determine whether the user value is matching to the
+		// given rule. It's doing so just for compatibility reasons, in the next major version it'll use
+		// equality comparison for simple values and Contains only for collection user value types.
 		sep := strings.Split(rule.ComparisonValue, ",")
 		set := make([]string, len(sep))
 		for _, item := range sep {
