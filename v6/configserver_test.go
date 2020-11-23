@@ -171,6 +171,10 @@ func newTestLogger(t testing.TB, level LogLevel) Logger {
 	}
 }
 
+func (log testLogger) GetLevel() LogLevel {
+	return log.level
+}
+
 func (log testLogger) Debugf(format string, args ...interface{}) {
 	log.logf("DEBUG", format, args...)
 }
