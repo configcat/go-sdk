@@ -13,7 +13,6 @@ import (
 )
 
 const (
-	jsonFormat          = `{ "f": { "%s": { "v": %s, "p": [], "r": [] }}}`
 	variationJsonFormat = `{ "f": { "first": { "v": false, "p": [], "r": [], "i":"fakeIdFirst" }, "second": { "v": true, "p": [], "r": [], "i":"fakeIdSecond" }}}`
 )
 
@@ -74,6 +73,39 @@ func TestClient_Get(t *testing.T) {
 	result := client.GetValue("key", 0)
 
 	c.Assert(result, qt.Equals, 3213.0)
+}
+
+func TestClient_Get_IsOneOf_Uses_Contains_Semantics(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponseJSON(&rootNode{
+		Entries: map[string]*entry{
+			"feature": {
+				Value:       false,
+				VariationID: "a377be39",
+				RolloutRules: []*rolloutRule{{
+					Comparator:          opOneOf,
+					ComparisonAttribute: "Identifier",
+					ComparisonValue:     "example,foobar",
+					Value:               true,
+					VariationID:         "8bcf8608",
+				}},
+			},
+		},
+	})
+	client.Refresh()
+
+	matchingUser := NewUser("mple")
+	result := client.GetValueForUser("feature", 0, matchingUser)
+	c.Assert(result, qt.IsTrue)
+
+	matchingUser = NewUser("foobar")
+	result = client.GetValueForUser("feature", 0, matchingUser)
+	c.Assert(result, qt.IsTrue)
+
+	matchingUser = NewUser("nonexisting")
+	result = client.GetValueForUser("feature", 0, matchingUser)
+	c.Assert(result, qt.IsFalse)
 }
 
 func TestClient_Get_Default(t *testing.T) {

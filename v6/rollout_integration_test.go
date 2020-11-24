@@ -91,6 +91,7 @@ func (test integrationTest) runTest(t *testing.T) {
 		cfg = srv.config()
 	}
 	cfg.Mode = test.mode
+	cfg.StaticLogLevel = true
 	cfg.Logger = newTestLogger(t, LogLevelError)
 	client := NewCustomClient(test.sdkKey, cfg)
 	client.Refresh()
