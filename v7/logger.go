@@ -19,28 +19,13 @@ type LogLevel = logrus.Level
 
 // Logger defines the interface this library logs with.
 type Logger interface {
+	// GetLevel returns the current logging level.
+	GetLevel() LogLevel
+
 	Debugf(format string, args ...interface{})
 	Infof(format string, args ...interface{})
 	Warnf(format string, args ...interface{})
 	Errorf(format string, args ...interface{})
-
-	Debug(args ...interface{})
-	Info(args ...interface{})
-	Warn(args ...interface{})
-	Error(args ...interface{})
-
-	Debugln(args ...interface{})
-	Infoln(args ...interface{})
-	Warnln(args ...interface{})
-	Errorln(args ...interface{})
-}
-
-// LoggerWithLevel is optionally implemented by a Logger.
-// It is notably implemented by logrus.Logger and thus
-// by the DefaultLogger returned by this package.
-type LoggerWithLevel interface {
-	// GetLevel returns the current logging level.
-	GetLevel() LogLevel
 }
 
 // DefaultLogger creates the default logger with specified log level (logrus.New()).

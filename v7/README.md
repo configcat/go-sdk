@@ -26,7 +26,7 @@ go get github.com/configcat/go-sdk/v6
 
 ### 3. Import the *ConfigCat* client package to your application
 ```go
-import "github.com/configcat/go-sdk/v6"
+import "github.com/configcat/go-sdk/v7"
 ```
 
 ### 4. Create a *ConfigCat* client instance:
@@ -36,23 +36,12 @@ client := configcat.NewClient("#YOUR-SDK-KEY#")
 
 ### 5. Get your setting value:
 ```go
-isMyAwesomeFeatureEnabled, ok := client.GetValue("isMyAwesomeFeatureEnabled", false).(bool)
-if ok && isMyAwesomeFeatureEnabled {
+isMyAwesomeFeatureEnabled := client.Bool("isMyAwesomeFeatureEnabled", false, nil)
+if isMyAwesomeFeatureEnabled {
     DoTheNewThing()
 } else {
     DoTheOldThing()
 }
-```
-Or use the async SDKs:
-```go
-client.GetValueAsync("isMyAwesomeFeatureEnabled", false, func(result interface{}) {
-    isMyAwesomeFeatureEnabled, ok := result.(bool)
-    if ok && isMyAwesomeFeatureEnabled {
-        DoTheNewThing()
-    } else {
-        DoTheOldThing()
-    }
-})
 ```
 
 ### 6. Close *ConfigCat* client on application exit:
@@ -62,22 +51,25 @@ client.Close()
 
 
 ## Getting user specific setting values with Targeting
-Using this feature, you will be able to get different setting values for different users in your application by passing a `User Object` to the `getValue()` function.
+
+Using this feature, you will be able to get different setting values for different users in your application by passing a `User` value to the `ValueForUser()` method.
+
+You can use the `UserValue` struct for this, or implement your own struct type. The client will inspect values in struct fields; see the documentation for more details.
 
 Read more about [Targeting here](https://configcat.com/docs/advanced/targeting/).
 ```go
 user := configcat.NewUser("#USER-IDENTIFIER#")
 
-isMyAwesomeFeatureEnabled, ok := client.GetValueForUser("isMyAwesomeFeatureEnabled", user, false).(bool)
-if ok && isMyAwesomeFeatureEnabled {
+isMyAwesomeFeatureEnabled, ok := client.Bool("isMyAwesomeFeatureEnabled", false, user)
+if isMyAwesomeFeatureEnabled {
     DoTheNewThing()
 } else {
     DoTheOldThing()
 }
 ```
 
-## Polling Modes
-The ConfigCat SDK supports 3 different polling mechanisms to acquire the setting values from ConfigCat. After latest setting values are downloaded, they are stored in the internal cache then all requests are served from there. Read more about Polling Modes and how to use them at [ConfigCat Docs](https://configcat.com/docs/sdk-reference/go/).
+## Polling
+By default, the ConfigCat client will poll to find out when the values have changed. The polling interval can be configured in the `Config` that's passed to `NewCustomClient`. It's also possible to manually poll using the `Client.Refresh` method.
 
 ## Need help?
 https://configcat.com/support

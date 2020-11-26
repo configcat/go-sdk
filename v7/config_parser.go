@@ -1,6 +1,7 @@
 package configcat
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -15,7 +16,7 @@ func (p *parseError) Error() string {
 }
 
 type config struct {
-	jsonBody  string
+	jsonBody  []byte
 	etag      string
 	root      *rootNode
 	evaluate  func(logger *leveledLogger, key string, user *User) (interface{}, string, error)
@@ -30,7 +31,7 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time) (*config, er
 		return nil, err
 	}
 	return &config{
-		jsonBody:  string(jsonBody),
+		jsonBody:  jsonBody,
 		root:      &root,
 		evaluate:  evaluator(&root),
 		keyValues: keyValuesForRootNode(&root),
@@ -38,6 +39,20 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time) (*config, er
 		etag:      etag,
 		fetchTime: fetchTime,
 	}, nil
+}
+
+func (c *config) equal(c1 *config) bool {
+	if c == c1 || c == nil || c1 == nil {
+		return c == c1
+	}
+	return c.fetchTime.Equal(c1.fetchTime) && c.etag == c1.etag && bytes.Equal(c.jsonBody, c1.jsonBody)
+}
+
+func (c *config) equalContent(c1 *config) bool {
+	if c == c1 || c == nil || c1 == nil {
+		return c == c1
+	}
+	return bytes.Equal(c.jsonBody, c1.jsonBody)
 }
 
 func (c *config) withFetchTime(t time.Time) *config {
@@ -50,19 +65,22 @@ func (c *config) body() string {
 	if c == nil {
 		return ""
 	}
-	return c.jsonBody
+	return string(c.jsonBody)
 }
 
-func (conf *config) getKeyAndValueForVariation(variationId string) (string, interface{}) {
-	kv := conf.keyValues[variationId]
+func (conf *config) getKeyAndValueForVariation(variationID string) (string, interface{}) {
+	kv := conf.keyValues[variationID]
 	return kv.key, kv.value
 }
 
-func (conf *config) getAllKeys() []string {
+func (conf *config) keys() []string {
+	if conf == nil {
+		return nil
+	}
 	return conf.allKeys
 }
 
-func (conf *config) getValueAndVariationId(logger *leveledLogger, key string, user *User) (interface{}, string, error) {
+func (conf *config) getValueAndVariationID(logger *leveledLogger, key string, user *User) (interface{}, string, error) {
 	if conf == nil {
 		return nil, "", fmt.Errorf("no configuration available")
 	}
@@ -96,6 +114,26 @@ type percentageRule struct {
 }
 
 type preferences struct {
-	URL      string `json:"u"`
-	Redirect *int   `json:"r"` // NoRedirect, ShouldRedirect or ForceRedirect
+	URL      string           `json:"u"`
+	Redirect *redirectionKind `json:"r"` // NoRedirect, ShouldRedirect or ForceRedirect
 }
+
+type redirectionKind int
+
+const (
+	// noRedirect indicates that the configuration is available
+	// in this request, but that the next request should be
+	// made to the redirected address.
+	noRedirect redirectionKind = 0
+
+	// shouldRedirect indicates that there is no configuration
+	// available at this address, and that the client should
+	// redirect immediately. This does not take effect when
+	// talking to a custom URL.
+	shouldRedirect redirectionKind = 1
+
+	// forceRedirect indicates that there is no configuration
+	// available at this address, and that the client should redirect
+	// immediately even when talking to a custom URL.
+	forceRedirect redirectionKind = 2
+)

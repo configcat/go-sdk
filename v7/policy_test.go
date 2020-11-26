@@ -1,6 +1,7 @@
 package configcat
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sync"
@@ -12,30 +13,29 @@ import (
 
 // testPolicy_FetchFailWithCacheFallback tests that cache fallback behaviour
 // works as expected for the given refresh mode.
-// The refresh function will be called immediately after
-// creating a client; the wait function will be called to wait
-// for the config to expire.
-func testPolicy_FetchFailWithCacheFallback(t *testing.T, mode RefreshMode, refresh, wait func(*Client)) {
+func TestFetchFailWithCacheFallback(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
 	srv.setResponse(configResponse{body: `{"test":1}`})
 
 	// First use a client to populate the cache.
 	cfg := srv.config()
-	cfg.Mode = mode
+	cfg.PollInterval = 10 * time.Millisecond
 
 	cache := &customCache{
 		items: map[string]string{},
 	}
 	cfg.Cache = cache
 
-	client := NewCustomClient(srv.sdkKey(), cfg)
+	client := NewCustomClient(cfg)
 	defer client.Close()
-	refresh(client)
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	client.Refresh(context.Background())
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":1}`)
 
 	// Check that the cache has been populated.
 	c.Assert(cache.allItems(), qt.HasLen, 1)
+
+	c.Logf("cache populated")
 
 	// Check that a new client can fetch the response from
 	// the cache.
@@ -43,24 +43,25 @@ func testPolicy_FetchFailWithCacheFallback(t *testing.T, mode RefreshMode, refre
 		status: http.StatusInternalServerError,
 		body:   `something failed`,
 	})
-	client = NewCustomClient(srv.sdkKey(), cfg)
+	client = NewCustomClient(cfg)
+	client.Refresh(context.Background())
 	defer client.Close()
-	refresh(client)
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":1}`)
 
-	wait(client)
+	time.Sleep(20 * time.Millisecond)
 	// Check that the same client will fall back to the old
 	// value even when the cache fails subsequently.
 	cache.setGetError(fmt.Errorf("cache failure"))
 	time.Sleep(60 * time.Millisecond)
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":1}`)
 
 	// Check that if the cache value changes, it's still consulted.
 	cache.setGetError(nil)
 	for key := range cache.allItems() {
-		cache.Set(key, `{"test":2}`)
+		cache.Set(context.Background(), key, []byte(`{"test":2}`))
 	}
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":2}`)
+	time.Sleep(20 * time.Millisecond)
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":2}`)
 }
 
 type customCache struct {
@@ -69,19 +70,19 @@ type customCache struct {
 	items    map[string]string
 }
 
-func (c *customCache) Get(key string) (string, error) {
+func (c *customCache) Get(ctx context.Context, key string) ([]byte, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.getError != nil {
-		return "", c.getError
+		return nil, c.getError
 	}
-	return c.items[key], nil
+	return []byte(c.items[key]), nil
 }
 
-func (c *customCache) Set(key, value string) error {
+func (c *customCache) Set(ctx context.Context, key string, value []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.items[key] = value
+	c.items[key] = string(value)
 	return nil
 }
 

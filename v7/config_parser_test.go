@@ -8,7 +8,7 @@ import (
 func TestConfigParser_Parse(t *testing.T) {
 	jsonBody := `{ "f": { "keyDouble": { "v": 120.121238476, "p": [], "r": [], "i":"" }}}`
 	config := mustParseConfig(jsonBody)
-	val, _, err := config.getValueAndVariationId(testLeveledLogger(t), "keyDouble", nil)
+	val, _, err := config.getValueAndVariationID(testLeveledLogger(t), "keyDouble", nil)
 
 	if err != nil || val != 120.121238476 {
 		t.Error("Expecting 120.121238476 as interface")
@@ -27,7 +27,7 @@ func TestConfigParser_BadJson(t *testing.T) {
 func TestConfigParser_WrongKey(t *testing.T) {
 	jsonBody := `{ "keyDouble": { "Value": 120.121238476, "SettingType": 0, "RolloutPercentageItems": [], "RolloutRules": [] }}`
 	config := mustParseConfig(jsonBody)
-	_, _, err := config.getValueAndVariationId(testLeveledLogger(t), "wrongKey", nil)
+	_, _, err := config.getValueAndVariationID(testLeveledLogger(t), "wrongKey", nil)
 	if err == nil {
 		t.Error("Expecting key not found error")
 	}
@@ -38,7 +38,7 @@ func TestConfigParser_WrongKey(t *testing.T) {
 func TestConfigParser_EmptyNode(t *testing.T) {
 	jsonBody := `{ "keyDouble": { }}`
 	config := mustParseConfig(jsonBody)
-	_, _, err := config.getValueAndVariationId(testLeveledLogger(t), "keyDouble", nil)
+	_, _, err := config.getValueAndVariationID(testLeveledLogger(t), "keyDouble", nil)
 	if err == nil {
 		t.Error("Expecting key not found error")
 	}
