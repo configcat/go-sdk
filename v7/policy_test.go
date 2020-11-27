@@ -36,6 +36,8 @@ func TestFetchFailWithCacheFallback(t *testing.T) {
 	c.Assert(cache.allItems(), qt.HasLen, 1)
 
 	c.Logf("cache populated")
+	// Prevent the first client from changing the cache again.
+	client.Close()
 
 	// Check that a new client can fetch the response from
 	// the cache.
@@ -62,6 +64,11 @@ func TestFetchFailWithCacheFallback(t *testing.T) {
 	}
 	time.Sleep(20 * time.Millisecond)
 	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":2}`)
+
+	// Check that we still get the value from the server when it recovers.
+	srv.setResponse(configResponse{body: `{"test":99}`})
+	time.Sleep(20 * time.Millisecond)
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":99}`)
 }
 
 type customCache struct {

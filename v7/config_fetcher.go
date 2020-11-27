@@ -165,10 +165,10 @@ func (f *configFetcher) fetcher(prevConfig *config) {
 	f.fetchDone = nil
 }
 
-func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevConfig *config) (*config, string, error) {
+func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevConfig *config) (_ *config, _newURL string, _err error) {
 	cfg, newBaseURL, err := f.fetchHTTP(ctx, baseURL, prevConfig)
 	if err == nil {
-		return cfg, newBaseURL, err
+		return cfg, newBaseURL, nil
 	}
 	if f.cache == nil {
 		return nil, "", err
@@ -177,7 +177,7 @@ func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevCon
 	// Fall back to the cache
 	configText, cacheErr := f.cache.Get(ctx, f.cacheKey)
 	if cacheErr != nil {
-		f.logger.Errorf("cache get failed: %v", err)
+		f.logger.Errorf("cache get failed: %v", cacheErr)
 		return nil, "", err
 	}
 	if len(configText) == 0 {
@@ -191,7 +191,7 @@ func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevCon
 	}
 	if prevConfig == nil || !cfg.fetchTime.Before(prevConfig.fetchTime) {
 		f.logger.Debugf("returning cached config %v", cfg.body())
-		return cfg, "", nil
+		return cfg, baseURL, nil
 	}
 	// The cached config is older than the one we already had.
 	return nil, "", err
@@ -235,7 +235,11 @@ func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfi
 			// other than the redirection information itself, so error.
 			return nil, "", fmt.Errorf("refusing to redirect from custom URL without forced redirection")
 		}
+		if preferences.URL == "" {
+			return nil, "", fmt.Errorf("refusing to redirect to empty URL")
+		}
 		baseURL = preferences.URL
+
 		f.logger.Warnf(
 			"Your config.DataGovernance parameter at ConfigCatClient " +
 				"initialization is not in sync with your preferences on the ConfigCat " +
