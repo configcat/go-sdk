@@ -11,8 +11,8 @@ import (
 	qt "github.com/frankban/quicktest"
 )
 
-// testPolicy_FetchFailWithCacheFallback tests that cache fallback behaviour
-// works as expected for the given refresh mode.
+// TestFetchFailWithCacheFallback tests that cache fallback behaviour
+// works as expected.
 func TestFetchFailWithCacheFallback(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
@@ -20,7 +20,7 @@ func TestFetchFailWithCacheFallback(t *testing.T) {
 
 	// First use a client to populate the cache.
 	cfg := srv.config()
-	cfg.PollInterval = 10 * time.Millisecond
+	cfg.MaxAge = 10 * time.Millisecond
 
 	cache := &customCache{
 		items: map[string]string{},

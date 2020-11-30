@@ -37,6 +37,12 @@ type configFetcher struct {
 	// so that we can wait for them to finish when closed.
 	wg sync.WaitGroup
 
+	// doneInitialGet is closed when the very first
+	// config get has completed, regardless of whether
+	// it succeeded.
+	doneInitialGet chan struct{}
+	doneGetOnce    sync.Once
+
 	mu        sync.Mutex
 	config    atomic.Value // holds *config or nil.
 	fetchDone chan error
@@ -54,6 +60,7 @@ func newConfigFetcher(cfg Config, logger *leveledLogger) *configFetcher {
 			Timeout:   cfg.HTTPTimeout,
 			Transport: cfg.Transport,
 		},
+		doneInitialGet: make(chan struct{}),
 	}
 	f.ctx, f.ctxCancel = context.WithCancel(context.Background())
 	if cfg.BaseURL == "" {
@@ -66,15 +73,14 @@ func newConfigFetcher(cfg Config, logger *leveledLogger) *configFetcher {
 		f.urlIsCustom = true
 		f.baseURL = cfg.BaseURL
 	}
-	if !cfg.DisablePolling {
+	if cfg.RefreshMode == AutoPoll {
 		// Start a fetcher goroutine immediately
 		// to avoid a potential double fetch
 		// when someone calls Refresh immediately
 		// after creating the client.
-		f.fetchDone = make(chan error, 1)
-		f.wg.Add(2)
-		go f.fetcher(nil)
-		go f.runPoller(cfg.PollInterval)
+		f.refreshIfOlder(f.ctx, time.Time{}, false)
+		f.wg.Add(1)
+		go f.runPoller(cfg.MaxAge)
 	}
 	return f
 }
@@ -94,7 +100,7 @@ func (f *configFetcher) runPoller(pollInterval time.Duration) {
 		case <-f.ctx.Done():
 			return
 		}
-		if err := f.refreshIfOlder(f.ctx, time.Now().Add(-pollInterval/2)); err != nil {
+		if err := f.refreshIfOlder(f.ctx, time.Now().Add(-pollInterval/2), true); err != nil {
 			f.logger.Errorf("cannot refresh configcat configuration: %v", err)
 		}
 	}
@@ -106,11 +112,14 @@ func (f *configFetcher) current() *config {
 	return cfg
 }
 
-// refreshIfOlder refreshes the cached configuration if it was retrieved
-// before the given time. If the context is
+// refreshIfOlder refreshes the configuration if it was retrieved
+// before the given time or if there is no current configuration. If the context is
 // canceled while the refresh is in progress, Refresh will return but
 // the underlying HTTP request will not be stopped.
-func (f *configFetcher) refreshIfOlder(ctx context.Context, before time.Time) error {
+//
+// If wait is false, refreshIfOlder returns immediately without waiting
+// for the refresh to complete.
+func (f *configFetcher) refreshIfOlder(ctx context.Context, before time.Time, wait bool) error {
 	f.mu.Lock()
 	prevConfig := f.current()
 	if prevConfig != nil && !prevConfig.fetchTime.Before(before) {
@@ -122,9 +131,13 @@ func (f *configFetcher) refreshIfOlder(ctx context.Context, before time.Time) er
 		fetchDone = make(chan error, 1)
 		f.fetchDone = fetchDone
 		f.wg.Add(1)
-		go f.fetcher(prevConfig)
+		logError := !wait
+		go f.fetcher(prevConfig, logError)
 	}
 	f.mu.Unlock()
+	if !wait {
+		return nil
+	}
 	select {
 	case err := <-fetchDone:
 		// Put the error back in the channel so that other
@@ -142,13 +155,16 @@ func (f *configFetcher) refreshIfOlder(ctx context.Context, before time.Time) er
 // Note: although this is started asynchronously, the configFetcher
 // logic guarantees that there's never more than one goroutine
 // at a time running f.fetcher.
-func (f *configFetcher) fetcher(prevConfig *config) {
+func (f *configFetcher) fetcher(prevConfig *config, logError bool) {
 	defer f.wg.Done()
 	config, newURL, err := f.fetchConfig(f.ctx, f.baseURL, prevConfig)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err != nil {
 		err = fmt.Errorf("config fetch failed: %v", err)
+		if logError {
+			f.logger.Errorf("%v", err)
+		}
 	} else if config != nil && !config.equal(prevConfig) {
 		f.baseURL = newURL
 		f.config.Store(config)
@@ -161,6 +177,10 @@ func (f *configFetcher) fetcher(prevConfig *config) {
 			go f.changeNotify()
 		}
 	}
+	// Unblock any Client.getValue call that's waiting for the first configuration to be retrieved.
+	f.doneGetOnce.Do(func() {
+		close(f.doneInitialGet)
+	})
 	f.fetchDone <- err
 	f.fetchDone = nil
 }
@@ -220,7 +240,7 @@ func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfi
 		}
 		redirect := *preferences.Redirect
 		if redirect == forceRedirect {
-			f.logger.Infof("forced redirect to %v", preferences.URL)
+			f.logger.Infof("forced redirect to %v (count %d)", preferences.URL, i+1)
 			baseURL = preferences.URL
 			continue
 		}

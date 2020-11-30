@@ -29,7 +29,7 @@ func TestClient_Refresh(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
 	cfg := srv.config()
-	cfg.DisablePolling = true
+	cfg.RefreshMode = Manual
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
@@ -51,7 +51,7 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
 	cfg := srv.config()
-	cfg.DisablePolling = true
+	cfg.RefreshMode = Manual
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
@@ -470,7 +470,7 @@ func (cache failingCache) Set(ctx context.Context, key string, value []byte) err
 func getTestClients(t *testing.T) (*configServer, *Client) {
 	srv := newConfigServer(t)
 	cfg := srv.config()
-	cfg.DisablePolling = true
+	cfg.RefreshMode = Manual
 	client := NewCustomClient(cfg)
 	t.Cleanup(client.Close)
 	return srv, client

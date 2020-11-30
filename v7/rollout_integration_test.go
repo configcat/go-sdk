@@ -27,9 +27,9 @@ func BenchmarkGetValue(b *testing.B) {
 	b.ReportAllocs()
 	logger := DefaultLogger(LogLevelError)
 	client := NewCustomClient(Config{
-		SDKKey:         integrationTests[0].sdkKey,
-		Logger:         logger,
-		DisablePolling: true,
+		SDKKey:      integrationTests[0].sdkKey,
+		Logger:      logger,
+		RefreshMode: Manual,
 	})
 	client.Refresh(context.Background())
 	defer client.Close()
