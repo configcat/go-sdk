@@ -320,7 +320,7 @@ func (client *Client) getVariationIds(conf *config, user *User) ([]string, error
 func (client *Client) getKeyAndValueForVariation(conf *config, variationId string) (string, interface{}) {
 	key, value := conf.getKeyAndValueForVariation(variationId)
 	if key == "" {
-		client.logger.Errorf("Evaluating GetKeyAndValue(%s) failed. Returning nil. Variation ID not found.")
+		client.logger.Errorf("Evaluating GetKeyAndValue(%s) failed. Returning nil. Variation ID not found.", variationId)
 		return "", nil
 	}
 
