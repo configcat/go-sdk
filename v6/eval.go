@@ -117,7 +117,7 @@ func entryEvaluator(key string, node *entry) func(logger *leveledLogger, user *U
 				if logger.enabled(LogLevelInfo) {
 					logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => match, returning: %v",
 						rule.ComparisonAttribute,
-						user,
+						userValue,
 						rule.Comparator,
 						rule.ComparisonValue,
 						rule.Value,
@@ -128,7 +128,7 @@ func entryEvaluator(key string, node *entry) func(logger *leveledLogger, user *U
 				if logger.enabled(LogLevelInfo) {
 					logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => no match",
 						rule.ComparisonAttribute,
-						user,
+						userValue,
 						rule.Comparator,
 						rule.ComparisonValue,
 					)
@@ -138,7 +138,7 @@ func entryEvaluator(key string, node *entry) func(logger *leveledLogger, user *U
 				if logger.enabled(LogLevelInfo) {
 					logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => SKIP rule. Validation error: %v",
 						rule.ComparisonAttribute,
-						user,
+						userValue,
 						rule.Comparator,
 						rule.Value,
 						err,
