@@ -24,27 +24,6 @@ type integrationTest struct {
 	kind     int
 }
 
-func BenchmarkGetValue(b *testing.B) {
-	b.ReportAllocs()
-	logger := DefaultLogger(LogLevelError)
-	client := NewCustomClient(integrationTests[0].sdkKey, ClientConfig{
-		Logger:         logger,
-		Mode:           ManualPoll(),
-		StaticLogLevel: true,
-	})
-	client.Refresh()
-	defer client.Close()
-	user := NewUser("unknown-identifier")
-	val := client.GetValueForUser("bool30TrueAdvancedRules", "default", user)
-	if val != false {
-		b.Fatalf("unexpected result %#v", val)
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		client.GetValueForUser("bool30TrueAdvancedRules", "default", user)
-	}
-}
-
 var integrationTests = []integrationTest{{
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A",
 	fileName: "testmatrix.csv",

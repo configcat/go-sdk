@@ -16,7 +16,7 @@ import (
 type configServer struct {
 	srv *httptest.Server
 	key string
-	t   *testing.T
+	t   testing.TB
 
 	mu        sync.Mutex
 	resp      *configResponse
@@ -29,13 +29,13 @@ type configResponse struct {
 	sleep  time.Duration
 }
 
-func newConfigServer(t *testing.T) *configServer {
+func newConfigServer(t testing.TB) *configServer {
 	var buf [8]byte
 	rand.Read(buf[:])
 	return newConfigServerWithKey(t, fmt.Sprintf("fake-%x", buf[:]))
 }
 
-func newConfigServerWithKey(t *testing.T, sdkKey string) *configServer {
+func newConfigServerWithKey(t testing.TB, sdkKey string) *configServer {
 	srv := &configServer{
 		t: t,
 	}
