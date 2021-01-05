@@ -95,10 +95,10 @@ func TestLazyLoadingPolicy_NotModified(t *testing.T) {
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	c.Assert(client.current().body(), qt.Equals, `{"test":1}`)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
 	time.Sleep(20 * time.Millisecond)
 
-	c.Assert(client.current().body(), qt.Equals, `{"test":1}`)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
 
 	c.Assert(srv.allResponses(), deepEquals, []configResponse{{
 		status: http.StatusOK,

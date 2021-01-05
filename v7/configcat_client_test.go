@@ -104,15 +104,15 @@ func TestClient_Get_IsOneOf_Does_Not_Use_Contains_Semantics(t *testing.T) {
 	})
 	client.Refresh(context.Background())
 
-	matchingUser := &UserValue{Identifier: "mple"}
+	matchingUser := &UserData{Identifier: "mple"}
 	result := client.Bool("feature", false, matchingUser)
 	c.Assert(result, qt.IsFalse)
 
-	matchingUser = &UserValue{Identifier: "foobar"}
+	matchingUser = &UserData{Identifier: "foobar"}
 	result = client.Bool("feature", false, matchingUser)
 	c.Assert(result, qt.IsTrue)
 
-	matchingUser = &UserValue{Identifier: "nonexisting"}
+	matchingUser = &UserData{Identifier: "nonexisting"}
 	result = client.Bool("feature", false, matchingUser)
 	c.Assert(result, qt.IsFalse)
 }
@@ -185,7 +185,7 @@ func TestClient_Keys(t *testing.T) {
 	client := NewCustomClient(srv.config())
 	client.Refresh(context.Background())
 
-	keys := client.Keys()
+	keys := client.Snapshot(nil).Keys()
 	c.Assert(keys, qt.HasLen, 16)
 }
 
@@ -194,7 +194,7 @@ func TestClient_VariationID(t *testing.T) {
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(variationConfig)
 	client.Refresh(context.Background())
-	result := client.VariationID("first", nil)
+	result := client.Snapshot(nil).VariationID("first")
 	c.Assert(result, qt.Equals, "fakeIDFirst")
 }
 
@@ -203,7 +203,7 @@ func TestClient_VariationID_Default(t *testing.T) {
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(variationConfig)
 	client.Refresh(context.Background())
-	result := client.VariationID("nonexisting", nil)
+	result := client.Snapshot(nil).VariationID("nonexisting")
 	c.Assert(result, qt.Equals, "")
 }
 
@@ -212,7 +212,7 @@ func TestClient_GetAllVariationIDs(t *testing.T) {
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(variationConfig)
 	client.Refresh(context.Background())
-	result := client.VariationIDs(nil)
+	result := client.Snapshot(nil).VariationIDs()
 	c.Assert(result, qt.HasLen, 2)
 }
 
@@ -221,7 +221,7 @@ func TestClient_VariationIDs_Empty(t *testing.T) {
 	srv, client := getTestClients(t)
 	srv.setResponse(configResponse{body: `{ "f": {} }`})
 	client.Refresh(context.Background())
-	result := client.VariationIDs(nil)
+	result := client.Snapshot(nil).VariationIDs()
 	c.Assert(result, qt.HasLen, 0)
 }
 
@@ -230,7 +230,7 @@ func TestClient_GetKeyAndValue(t *testing.T) {
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(variationConfig)
 	client.Refresh(context.Background())
-	key, value := client.KeyValueForVariationID("fakeIDSecond")
+	key, value := client.Snapshot(nil).KeyValueForVariationID("fakeIDSecond")
 	c.Assert(key, qt.Equals, "second")
 	c.Assert(value, qt.Equals, true)
 }
@@ -240,7 +240,7 @@ func TestClient_GetKeyAndValue_Empty(t *testing.T) {
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(variationConfig)
 	client.Refresh(context.Background())
-	key, value := client.KeyValueForVariationID("nonexisting")
+	key, value := client.Snapshot(nil).KeyValueForVariationID("nonexisting")
 	c.Assert(key, qt.Equals, "")
 	c.Assert(value, qt.Equals, nil)
 }

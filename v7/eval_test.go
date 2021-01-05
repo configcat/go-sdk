@@ -298,7 +298,7 @@ func stringVariants(s string) []User {
 		us = append(us, newTestStruct(reflect.ValueOf(v)))
 	}
 	us = append(us,
-		&UserValue{
+		&UserData{
 			Custom: map[string]string{
 				"X": s,
 			},
