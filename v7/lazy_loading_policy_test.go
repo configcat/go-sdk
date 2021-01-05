@@ -12,23 +12,24 @@ import (
 func TestLazyLoadingPolicy_NoAsync(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponse(configResponse{body: `{"test":1}`})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1"))
 
 	cfg := srv.config()
-	cfg.Mode = LazyLoad(50*time.Millisecond, false)
-	client := NewCustomClient(srv.sdkKey(), cfg)
+	cfg.RefreshMode = Lazy
+	cfg.MaxAge = 50 * time.Millisecond
+	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
 
 	srv.setResponse(configResponse{
-		body:  `{"test":2}`,
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value2")),
 		sleep: 40 * time.Millisecond,
 	})
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
 
 	time.Sleep(100 * time.Millisecond)
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":2}`)
+	c.Assert(client.String("key", "", nil), qt.Equals, "value2")
 }
 
 func TestLazyLoadingPolicy_FetchFail(t *testing.T) {
@@ -40,69 +41,72 @@ func TestLazyLoadingPolicy_FetchFail(t *testing.T) {
 	})
 
 	cfg := srv.config()
-	cfg.Mode = LazyLoad(50*time.Millisecond, false)
-	client := NewCustomClient(srv.sdkKey(), cfg)
+	cfg.RefreshMode = Lazy
+	cfg.MaxAge = 50 * time.Millisecond
+	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	c.Assert(client.getConfig(), qt.IsNil)
-}
-
-func TestLazyLoadingPolicy_FetchFailWithCacheFallback(t *testing.T) {
-	testPolicy_FetchFailWithCacheFallback(t, LazyLoad(50*time.Millisecond, true),
-		func(client *Client) {},
-		func(client *Client) {
-			time.Sleep(60 * time.Millisecond)
-		},
-	)
+	c.Assert(client.fetcher.current(), qt.IsNil)
 }
 
 func TestLazyLoadingPolicy_Async(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponse(configResponse{body: `{"test":1}`})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1"))
 
 	cfg := srv.config()
-	cfg.Mode = LazyLoad(50*time.Millisecond, true)
-	client := NewCustomClient(srv.sdkKey(), cfg)
+	cfg.RefreshMode = Lazy
+	cfg.MaxAge = 50 * time.Millisecond
+	cfg.NoWaitForRefresh = true
+	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.String("key", "", nil), qt.Equals, "")
+	// Wait for the response to arrive.
+	time.Sleep(10 * time.Millisecond)
+	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
 
 	srv.setResponse(configResponse{
-		body:  `{"test":2}`,
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value2")),
 		sleep: 40 * time.Millisecond,
 	})
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
 
 	time.Sleep(100 * time.Millisecond)
 	// The config is fetched lazily and takes at least 40ms, so
 	// we'll still see the old value.
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
 
 	time.Sleep(50 * time.Millisecond)
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":2}`)
+	c.Assert(client.String("key", "", nil), qt.Equals, "value2")
 }
 
 func TestLazyLoadingPolicy_NotModified(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponse(configResponse{body: `{"test":1}`})
+	srv.setResponse(configResponse{
+		body:  `{"test":1}`,
+		sleep: time.Millisecond,
+	})
 
 	cfg := srv.config()
-	cfg.Mode = LazyLoad(10*time.Millisecond, false)
-	client := NewCustomClient(srv.sdkKey(), cfg)
+	cfg.RefreshMode = Lazy
+	cfg.MaxAge = 10 * time.Millisecond
+	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.current().body(), qt.Equals, `{"test":1}`)
 	time.Sleep(20 * time.Millisecond)
 
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.current().body(), qt.Equals, `{"test":1}`)
 
 	c.Assert(srv.allResponses(), deepEquals, []configResponse{{
 		status: http.StatusOK,
 		body:   `{"test":1}`,
+		sleep:  time.Millisecond,
 	}, {
 		status: http.StatusNotModified,
+		sleep:  time.Millisecond,
 	}})
 }
 

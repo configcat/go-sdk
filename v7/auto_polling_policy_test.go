@@ -1,6 +1,7 @@
 package configcat
 
 import (
+	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -14,17 +15,19 @@ func TestAutoPollingPolicy_PollChange(t *testing.T) {
 	srv.setResponse(configResponse{body: `{"test":1}`})
 
 	cfg := srv.config()
-	cfg.Mode = AutoPoll(10 * time.Millisecond)
-	client := NewCustomClient(srv.sdkKey(), cfg)
+	cfg.MaxAge = 10 * time.Millisecond
+	client := NewCustomClient(cfg)
 	defer client.Close()
+	err := client.Refresh(context.Background())
+	c.Assert(err, qt.Equals, nil)
 
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.current().body(), qt.Equals, `{"test":1}`)
 
 	srv.setResponse(configResponse{body: `{"test":2}`})
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.current().body(), qt.Equals, `{"test":1}`)
 
 	time.Sleep(40 * time.Millisecond)
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":2}`)
+	c.Assert(client.current().body(), qt.Equals, `{"test":2}`)
 }
 
 func TestAutoPollingPolicy_FetchFail(t *testing.T) {
@@ -35,29 +38,22 @@ func TestAutoPollingPolicy_FetchFail(t *testing.T) {
 		body:   `something wrong`,
 	})
 	cfg := srv.config()
-	cfg.Mode = AutoPoll(2 * time.Second)
-	client := NewCustomClient(srv.sdkKey(), cfg)
+	cfg.MaxAge = 2 * time.Second
+	client := NewCustomClient(cfg)
 	defer client.Close()
+	err := client.Refresh(context.Background())
+	c.Assert(err, qt.ErrorMatches, `config fetch failed: received unexpected response 500 Internal Server Error`)
 
-	conf := client.getConfig()
+	conf := client.current()
 	c.Assert(conf, qt.IsNil)
-}
-
-func TestAutoPollingPolicy_FetchFailWithCacheFallback(t *testing.T) {
-	testPolicy_FetchFailWithCacheFallback(t, AutoPoll(10*time.Millisecond),
-		func(client *Client) {},
-		func(client *Client) {
-			time.Sleep(20 * time.Millisecond)
-		},
-	)
 }
 
 func TestAutoPollingPolicy_DoubleClose(t *testing.T) {
 	srv := newConfigServer(t)
 	srv.setResponse(configResponse{body: `{"test":1}`})
 	cfg := srv.config()
-	cfg.Mode = AutoPoll(time.Millisecond)
-	client := NewCustomClient(srv.sdkKey(), cfg)
+	cfg.MaxAge = time.Millisecond
+	client := NewCustomClient(cfg)
 	client.Close()
 	client.Close()
 }
@@ -68,18 +64,16 @@ func TestAutoPollingPolicy_WithNotify(t *testing.T) {
 	srv.setResponse(configResponse{body: `{"test":1}`})
 	cfg := srv.config()
 	notifyc := make(chan struct{})
-	cfg.Mode = AutoPollWithChangeListener(
-		time.Millisecond,
-		func() { notifyc <- struct{}{} },
-	)
-	client := NewCustomClient(srv.sdkKey(), cfg)
+	cfg.MaxAge = time.Millisecond
+	cfg.ChangeNotify = func() { notifyc <- struct{}{} }
+	client := NewCustomClient(cfg)
 	defer client.Close()
 	select {
 	case <-notifyc:
 	case <-time.After(time.Second):
 		t.Fatalf("timed out waiting for notification")
 	}
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.current().body(), qt.Equals, `{"test":1}`)
 
 	// Change the content and we should see another notification.
 	srv.setResponse(configResponse{body: `{"test":2}`})
@@ -88,7 +82,7 @@ func TestAutoPollingPolicy_WithNotify(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatalf("timed out waiting for notification")
 	}
-	c.Assert(client.getConfig().body(), qt.Equals, `{"test":2}`)
+	c.Assert(client.current().body(), qt.Equals, `{"test":2}`)
 
 	// Check that we don't see any more notifications.
 	select {

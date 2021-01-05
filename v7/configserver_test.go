@@ -47,15 +47,12 @@ func newConfigServerWithKey(t *testing.T, sdkKey string) *configServer {
 
 // config returns a configuration suitable for creating
 // a client that talks to the p.
-func (srv *configServer) config() ClientConfig {
-	return ClientConfig{
-		BaseUrl: srv.srv.URL,
+func (srv *configServer) config() Config {
+	return Config{
+		SDKKey:  srv.key,
+		BaseURL: srv.srv.URL,
 		Logger:  newTestLogger(srv.t, LogLevelDebug),
 	}
-}
-
-func (srv *configServer) sdkKey() string {
-	return srv.key
 }
 
 // setResponse sets the response that will be returned from the server.
@@ -81,7 +78,7 @@ func (srv *configServer) allResponses() []configResponse {
 }
 
 func (srv *configServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if req.URL.Path != "/configuration-files/"+srv.key+"/"+ConfigJsonName+".json" {
+	if req.URL.Path != "/configuration-files/"+srv.key+"/"+configJSONName+".json" {
 		srv.t.Errorf("unexpected HTTP call: %s %s", req.Method, req.URL)
 		http.NotFound(w, req)
 		return

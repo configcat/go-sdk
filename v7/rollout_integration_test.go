@@ -2,6 +2,7 @@ package configcat
 
 import (
 	"bufio"
+	"context"
 	"encoding/csv"
 	"io"
 	"log"
@@ -9,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
-	"time"
 )
 
 const (
@@ -20,60 +20,53 @@ const (
 type integrationTest struct {
 	sdkKey   string
 	fileName string
-	mode     RefreshMode
 	kind     int
 }
 
 func BenchmarkGetValue(b *testing.B) {
 	b.ReportAllocs()
 	logger := DefaultLogger(LogLevelError)
-	client := NewCustomClient(integrationTests[0].sdkKey, ClientConfig{
-		Logger:         logger,
-		Mode:           ManualPoll(),
-		StaticLogLevel: true,
+	client := NewCustomClient(Config{
+		SDKKey:      integrationTests[0].sdkKey,
+		Logger:      logger,
+		RefreshMode: Manual,
 	})
-	client.Refresh()
+	client.Refresh(context.Background())
 	defer client.Close()
 	user := NewUser("unknown-identifier")
-	val := client.GetValueForUser("bool30TrueAdvancedRules", "default", user)
+	val := client.Bool("bool30TrueAdvancedRules", true, user)
 	if val != false {
 		b.Fatalf("unexpected result %#v", val)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		client.GetValueForUser("bool30TrueAdvancedRules", "default", user)
+		client.Bool("bool30TrueAdvancedRules", true, user)
 	}
 }
 
 var integrationTests = []integrationTest{{
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A",
 	fileName: "testmatrix.csv",
-	mode:     AutoPoll(120 * time.Second),
 	kind:     valueKind,
 }, {
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA",
 	fileName: "testmatrix_semantic.csv",
-	mode:     LazyLoad(120*time.Second, false),
 	kind:     valueKind,
 }, {
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw",
 	fileName: "testmatrix_number.csv",
-	mode:     ManualPoll(),
 	kind:     valueKind,
 }, {
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w",
 	fileName: "testmatrix_semantic_2.csv",
-	mode:     AutoPoll(120 * time.Second),
 	kind:     valueKind,
 }, {
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/qX3TP2dTj06ZpCCT1h_SPA",
 	fileName: "testmatrix_sensitive.csv",
-	mode:     AutoPoll(120 * time.Second),
 	kind:     valueKind,
 }, {
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/nQ5qkhRAUEa6beEyyrVLBA",
 	fileName: "testmatrix_variationId.csv",
-	mode:     AutoPoll(120 * time.Second),
 	kind:     variationKind,
 }}
 
@@ -84,17 +77,16 @@ func TestRolloutIntegration(t *testing.T) {
 }
 
 func (test integrationTest) runTest(t *testing.T) {
-	var cfg ClientConfig
+	var cfg Config
 	if os.Getenv("CONFIGCAT_DISABLE_INTEGRATION_TESTS") != "" {
 		srv := newConfigServerWithKey(t, test.sdkKey)
 		srv.setResponse(configResponse{body: contentForIntegrationTestKey(test.sdkKey)})
 		cfg = srv.config()
 	}
-	cfg.Mode = test.mode
-	cfg.StaticLogLevel = true
 	cfg.Logger = newTestLogger(t, LogLevelError)
-	client := NewCustomClient(test.sdkKey, cfg)
-	client.Refresh()
+	cfg.SDKKey = test.sdkKey
+	client := NewCustomClient(cfg)
+	client.Refresh(context.Background())
 	defer client.Close()
 
 	file, fileErr := os.Open(filepath.Join("../resources", test.fileName))
@@ -135,9 +127,9 @@ func (test integrationTest) runTest(t *testing.T) {
 			var val interface{}
 			switch test.kind {
 			case valueKind:
-				val = client.GetValueForUser(settingKey, nil, user)
+				val = client.getValue(settingKey, user)
 			case variationKind:
-				val = client.GetVariationIdForUser(settingKey, "", user)
+				val = client.VariationID(settingKey, user)
 			default:
 				t.Fatalf("unexpected kind %v", test.kind)
 			}
