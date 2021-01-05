@@ -112,7 +112,6 @@ func BenchmarkGet(b *testing.B) {
 	}}
 	for _, bench := range benchmarks {
 		b.Run(bench.benchName, func(b *testing.B) {
-			b.ReportAllocs()
 			srv := newConfigServer(b)
 			srv.setResponseJSON(bench.node)
 			cfg := srv.config()
@@ -122,14 +121,29 @@ func BenchmarkGet(b *testing.B) {
 			client := NewCustomClient(cfg)
 			client.Refresh(context.Background())
 			defer client.Close()
-			val := client.String(bench.rule, "", bench.makeUser())
-			if val != bench.want {
-				b.Fatalf("unexpected result %#v", val)
-			}
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				client.String(bench.rule, "", bench.makeUser())
-			}
+			b.Run("get-and-make", func(b *testing.B) {
+				val := client.String(bench.rule, "", bench.makeUser())
+				if val != bench.want {
+					b.Fatalf("unexpected result %#v", val)
+				}
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					client.String(bench.rule, "", bench.makeUser())
+				}
+			})
+			b.Run("get-only", func(b *testing.B) {
+				user := bench.makeUser()
+				val := client.String(bench.rule, "", user)
+				if val != bench.want {
+					b.Fatalf("unexpected result %#v", val)
+				}
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					client.String(bench.rule, "", user)
+				}
+			})
 		})
 	}
 }
