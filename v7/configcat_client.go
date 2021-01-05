@@ -181,7 +181,7 @@ func (client *Client) Close() {
 // In Lazy refresh mode, this can block indefinitely while the configuration
 // is fetched. Use RefreshIfOlder explicitly if explicit control of timeouts
 // is needed.
-func (client *Client) Bool(key string, defaultValue bool, user *User) bool {
+func (client *Client) Bool(key string, defaultValue bool, user User) bool {
 	if v, ok := client.getValue(key, user).(bool); ok {
 		return v
 	}
@@ -189,7 +189,7 @@ func (client *Client) Bool(key string, defaultValue bool, user *User) bool {
 }
 
 // Int is like Bool except for int-typed (whole number) feature flags.
-func (client *Client) Int(key string, defaultValue int, user *User) int {
+func (client *Client) Int(key string, defaultValue int, user User) int {
 	if v, ok := client.getValue(key, user).(float64); ok {
 		// TODO log error?
 		return int(v)
@@ -198,7 +198,7 @@ func (client *Client) Int(key string, defaultValue int, user *User) int {
 }
 
 // Int is like Bool except for float-typed (decimal number) feature flags.
-func (client *Client) Float(key string, defaultValue float64, user *User) float64 {
+func (client *Client) Float(key string, defaultValue float64, user User) float64 {
 	if v, ok := client.getValue(key, user).(float64); ok {
 		// TODO log error?
 		return v
@@ -207,7 +207,7 @@ func (client *Client) Float(key string, defaultValue float64, user *User) float6
 }
 
 // Int is like Bool except for string-typed (text) feature flags.
-func (client *Client) String(key string, defaultValue string, user *User) string {
+func (client *Client) String(key string, defaultValue string, user User) string {
 	if v, ok := client.getValue(key, user).(string); ok {
 		// TODO log error?
 		return v
@@ -215,23 +215,25 @@ func (client *Client) String(key string, defaultValue string, user *User) string
 	return defaultValue
 }
 
-// GetValue returns a value synchronously as interface{} from the configuration identified by the given key.
-func (client *Client) getValue(key string, user *User) interface{} {
-	value, _, _ := client.current().getValueAndVariationID(client.logger, key, user)
-	// TODO log error?
+// getValue returns a value synchronously as interface{} from the configuration identified by the given key.
+func (client *Client) getValue(key string, user User) interface{} {
+	value, _, err := client.current().getValueAndVariationID(client.logger, key, user)
+	if err != nil {
+		client.logger.Errorf("error getting value: %v", err)
+	}
 	return value
 }
 
 // VariationID returns the variation ID that will be used for the given key
 // with the given optional user. If none is found, the empty string is returned.
-func (client *Client) VariationID(key string, user *User) string {
+func (client *Client) VariationID(key string, user User) string {
 	_, variationID, _ := client.current().getValueAndVariationID(client.logger, key, user)
 	return variationID
 }
 
 // VariationIDs returns all  variation IDs in the current configuration
 // that apply to the given optional user.
-func (client *Client) VariationIDs(user *User) []string {
+func (client *Client) VariationIDs(user User) []string {
 	conf := client.current()
 	keys := conf.keys()
 	ids := make([]string, 0, len(keys))

@@ -3,7 +3,7 @@ package configcat
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"sync"
 	"time"
 )
 
@@ -16,13 +16,13 @@ func (p *parseError) Error() string {
 }
 
 type config struct {
-	jsonBody  []byte
-	etag      string
-	root      *rootNode
-	evaluate  func(logger *leveledLogger, key string, user *User) (interface{}, string, error)
-	allKeys   []string
-	keyValues map[string]keyValue
-	fetchTime time.Time
+	jsonBody   []byte
+	etag       string
+	root       *rootNode
+	evaluators sync.Map // reflect.Type -> map[string]entryEvalFunc
+	allKeys    []string
+	keyValues  map[string]keyValue
+	fetchTime  time.Time
 }
 
 func parseConfig(jsonBody []byte, etag string, fetchTime time.Time) (*config, error) {
@@ -33,7 +33,6 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time) (*config, er
 	return &config{
 		jsonBody:  jsonBody,
 		root:      &root,
-		evaluate:  evaluator(&root),
 		keyValues: keyValuesForRootNode(&root),
 		allKeys:   keysForRootNode(&root),
 		etag:      etag,
@@ -78,13 +77,6 @@ func (conf *config) keys() []string {
 		return nil
 	}
 	return conf.allKeys
-}
-
-func (conf *config) getValueAndVariationID(logger *leveledLogger, key string, user *User) (interface{}, string, error) {
-	if conf == nil {
-		return nil, "", fmt.Errorf("no configuration available")
-	}
-	return conf.evaluate(logger, key, user)
 }
 
 type rootNode struct {

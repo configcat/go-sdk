@@ -1,34 +1,47 @@
 package configcat
 
-// User is an object containing attributes to properly identify a given user for rollout evaluation.
-type User struct {
-	identifier string
-	attributes map[string]string
+// The User interface represents the user-specific data that can influence
+// configcat rule evaluation. All Users are expected to provide an Identifier
+// attribute.
+//
+// The configcat client uses reflection to determine
+// what attributes are available:
+//
+// If the User value implements UserAttributes, then that
+// method will be used to retrieve attributes.
+//
+// Otherwise the implementation is expected to be a pointer to a struct
+// type. Each public field in the struct is treated as a possible comparison
+// attribute.
+//
+// If a field's type implements a `String() string` method, the
+// field will be treated as a textual and the String method will
+// be called to determine the value.
+//
+// If a field's type is map[string] string, the map value is used to look
+// up any custom attribute not found directly in the struct.
+// There should be at most one of these fields.
+//
+// Otherwise, a field type must be a numeric type, a string type, a []byte type
+// or a github.com/blang/semver.Version.
+//
+// If a rule uses an attribute that isn't available, that rule will be treated
+// as non-matching.
+type User interface{}
+
+// UserAttributes can be implemented by a User value to implement
+// support for getting arbitrary attributes.
+type UserAttributes interface {
+	GetAttribute(attr string) string
 }
 
-// NewUser creates a new user object. The identifier argument is mandatory.
-func NewUser(identifier string) *User {
-	return NewUserWithAdditionalAttributes(identifier, "", "", map[string]string{})
-}
-
-// NewUserWithAdditionalAttributes creates a new user object with additional attributes. The identifier argument is mandatory.
-func NewUserWithAdditionalAttributes(identifier string, email string, country string, custom map[string]string) *User {
-	user := &User{identifier: identifier, attributes: map[string]string{}}
-	user.attributes["Identifier"] = identifier
-
-	if email != "" {
-		user.attributes["Email"] = email
-	}
-	if country != "" {
-		user.attributes["Country"] = country
-	}
-	for k, v := range custom {
-		user.attributes[k] = v
-	}
-	return user
-}
-
-// GetAttribute retrieves a user attribute identified by a key.
-func (user *User) GetAttribute(key string) string {
-	return user.attributes[key]
+// UserValue implements the User interface with the basic
+// set of attributes. For an efficient way to use your own
+// domain object as a User, see the documentation for the User
+// interface.
+type UserValue struct {
+	Identifier string
+	Email      string
+	Country    string
+	Custom     map[string]string
 }

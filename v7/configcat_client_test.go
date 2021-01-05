@@ -84,7 +84,7 @@ func TestClient_Get(t *testing.T) {
 	c.Assert(result, qt.Equals, 3213.0)
 }
 
-func TestClient_Get_IsOneOf_Uses_Contains_Semantics(t *testing.T) {
+func TestClient_Get_IsOneOf_Does_Not_Use_Contains_Semantics(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(&rootNode{
@@ -104,15 +104,15 @@ func TestClient_Get_IsOneOf_Uses_Contains_Semantics(t *testing.T) {
 	})
 	client.Refresh(context.Background())
 
-	matchingUser := NewUser("mple")
+	matchingUser := &UserValue{Identifier: "mple"}
 	result := client.Bool("feature", false, matchingUser)
-	c.Assert(result, qt.IsTrue)
+	c.Assert(result, qt.IsFalse)
 
-	matchingUser = NewUser("foobar")
+	matchingUser = &UserValue{Identifier: "foobar"}
 	result = client.Bool("feature", false, matchingUser)
 	c.Assert(result, qt.IsTrue)
 
-	matchingUser = NewUser("nonexisting")
+	matchingUser = &UserValue{Identifier: "nonexisting"}
 	result = client.Bool("feature", false, matchingUser)
 	c.Assert(result, qt.IsFalse)
 }
