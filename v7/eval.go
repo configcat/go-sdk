@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -59,98 +61,138 @@ func (op operator) String() string {
 	return opStrings[op]
 }
 
-// evaluator returns a function that returns the value and variation ID
-// with a key and user with respect to the given root node.
-func evaluator(root *rootNode) func(logger *leveledLogger, key string, user *User) (interface{}, string, error) {
-	entryFuncs := make(map[string]func(logger *leveledLogger, user *User) (interface{}, string))
-	for key, entry := range root.Entries {
-		entryFuncs[key] = entryEvaluator(key, entry)
+var (
+	getAttributeType = reflect.TypeOf((*UserAttributes)(nil)).Elem()
+	stringMapType    = reflect.TypeOf(map[string]string(nil))
+	stringerType     = reflect.TypeOf((*fmt.Stringer)(nil)).Elem()
+)
+
+// getValueAndVariationID returns the value and variation ID for the given key and user.
+func (cfg *config) getValueAndVariationID(logger *leveledLogger, key string, user User) (interface{}, string, error) {
+	if cfg == nil {
+		return nil, "", fmt.Errorf("no configuration available")
 	}
-	return func(logger *leveledLogger, key string, user *User) (interface{}, string, error) {
-		if len(key) == 0 {
-			return nil, "", fmt.Errorf("key cannot be empty")
-		}
-		f := entryFuncs[key]
-		if f == nil {
-			return nil, "", &parseError{
-				"Value not found for key " + key +
-					". Here are the available keys: " + strings.Join(keysForRootNode(root), ","),
-			}
-		}
-		val, variationID := f(logger, user)
-		return val, variationID, nil
+	userv := reflect.ValueOf(user)
+	var userType reflect.Type
+	if user != nil {
+		userType = userv.Type()
 	}
+	entries0, ok := cfg.evaluators.Load(userType)
+	if !ok {
+		// We haven't made an entry for this user type yet,
+		// so preprocess it and store the result in the evaluators map.
+		entries, err := entryEvaluators(cfg.root, userType)
+		if err != nil {
+			// TODO perhaps this should return the default
+			// value for the entry?
+			return nil, "", err
+		}
+		entries0, _ = cfg.evaluators.LoadOrStore(userType, entries)
+	}
+	entries := entries0.(map[string]entryEvalFunc)
+	evalEntry, ok := entries[key]
+	if !ok {
+		return nil, "", &parseError{
+			"Value not found for key " + key +
+				". Here are the available keys: " + strings.Join(keysForRootNode(cfg.root), ","),
+		}
+	}
+	val, variation := evalEntry(logger, user)
+	return val, variation, nil
 }
 
-func entryEvaluator(key string, node *entry) func(logger *leveledLogger, user *User) (interface{}, string) {
-	rules := node.RolloutRules
-	matchers := make([]func(string) (bool, error), len(rules))
-	for i, rule := range rules {
-		matchers[i] = rolloutMatcher(rule)
+type entryEvalFunc = func(logger *leveledLogger, userv User) (interface{}, string)
+
+func entryEvaluators(root *rootNode, userType reflect.Type) (map[string]entryEvalFunc, error) {
+	tinfo, err := newUserTypeInfo(userType)
+	if err != nil {
+		return nil, err
 	}
+	m := make(map[string]entryEvalFunc)
+	for key, entry := range root.Entries {
+		m[key] = entryEvaluator(key, entry, tinfo)
+	}
+	return m, nil
+}
 
-	return func(logger *leveledLogger, user *User) (interface{}, string) {
-		if user == nil {
-			if logger.enabled(LogLevelWarn) && (len(rules) > 0 || len(node.PercentageRules) > 0) {
-				logger.Warnf("Evaluating GetValue(%s). UserObject missing! You should pass a "+
-					"UserObject to GetValueForUser() in order to make targeting work properly. "+
-					"Read more: https://configcat.com/docs/advanced/user-object.", key)
-			}
-
-			if logger.enabled(LogLevelInfo) {
-				logger.Infof("Returning %v.", node.Value)
-			}
-			return node.Value, node.VariationID
+func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) func(logger *leveledLogger, user User) (interface{}, string) {
+	rules := node.RolloutRules
+	noUser := func(logger *leveledLogger, user User) (interface{}, string) {
+		if logger.enabled(LogLevelWarn) && (len(rules) > 0 || len(node.PercentageRules) > 0) {
+			logger.Warnf("Evaluating GetValue(%s). UserObject missing! You should pass a "+
+				"UserObject to GetValueForUser() in order to make targeting work properly. "+
+				"Read more: https://configcat.com/docs/advanced/user-object.", key)
 		}
 		if logger.enabled(LogLevelInfo) {
-			logger.Infof("Evaluating GetValue(%s).", key)
-			logger.Infof("User object: %v", user)
+			logger.Infof("Returning %v.", node.Value)
+		}
+		return node.Value, node.VariationID
+	}
+
+	if tinfo == nil {
+		// No user provided
+		return noUser
+	}
+	matchers := make([]func(userv reflect.Value) (bool, error), len(rules))
+	attrInfos := make([]attrInfo, len(rules))
+	for i, rule := range rules {
+		attrInfos[i] = tinfo.attrInfo(rule.ComparisonAttribute)
+		matchers[i] = rolloutMatcher(rule, &attrInfos[i])
+	}
+	identifierInfo := tinfo.attrInfo("Identifier")
+	keyBytes := []byte(key)
+
+	return func(logger *leveledLogger, user User) (interface{}, string) {
+		userv := reflect.ValueOf(user)
+		if tinfo.deref {
+			if userv.IsNil() {
+				return noUser(logger, user)
+			}
+			userv = userv.Elem()
 		}
 		for i, matcher := range matchers {
 			rule := rules[i]
-			userValue := user.GetAttribute(rule.ComparisonAttribute)
-			if userValue == "" {
-				continue
-			}
-			matched, err := matcher(userValue)
+			matched, err := matcher(userv)
 			if matched {
 				if logger.enabled(LogLevelInfo) {
 					logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => match, returning: %v",
 						rule.ComparisonAttribute,
-						user,
+						attrInfos[i].asString(userv),
 						rule.Comparator,
 						rule.ComparisonValue,
 						rule.Value,
 					)
 				}
 				return rule.Value, rule.VariationID
-			} else {
-				if logger.enabled(LogLevelInfo) {
-					logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => no match",
-						rule.ComparisonAttribute,
-						user,
-						rule.Comparator,
-						rule.ComparisonValue,
-					)
-				}
 			}
 			if err != nil {
 				if logger.enabled(LogLevelInfo) {
 					logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => SKIP rule. Validation error: %v",
 						rule.ComparisonAttribute,
-						user,
+						attrInfos[i].asString(userv),
 						rule.Comparator,
-						rule.Value,
+						rule.ComparisonValue,
 						err,
 					)
 				}
+			} else if logger.enabled(LogLevelDebug) {
+				logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => no match",
+					rule.ComparisonAttribute,
+					attrInfos[i].asString(userv),
+					rule.Comparator,
+					rule.ComparisonValue,
+				)
 			}
 		}
 		// evaluate percentage rules
 		if len(node.PercentageRules) > 0 {
-			sum := sha1.Sum([]byte(key + user.identifier))
+			idBytes := identifierInfo.asBytes(userv)
+			hashKey := make([]byte, len(keyBytes)+len(idBytes))
+			copy(hashKey, keyBytes)
+			copy(hashKey[len(keyBytes):], idBytes)
+			sum := sha1.Sum(hashKey)
 			// Treat the first 4 bytes as a number, then knock
-			// of the last 4 bits. This is equivalent to turning the
+			// off the last 4 bits. This is equivalent to turning the
 			// entire sum into hex, then decoding the first 7 digits.
 			num := int64(binary.BigEndian.Uint32(sum[:4]))
 			num >>= 4
@@ -176,46 +218,100 @@ func entryEvaluator(key string, node *entry) func(logger *leveledLogger, user *U
 	}
 }
 
-func rolloutMatcher(rule *rolloutRule) func(userValue string) (bool, error) {
-	if rule.VariationID == "" {
-		return func(userValue string) (bool, error) {
-			return false, nil
-		}
-	}
-	comparisonValue := rule.ComparisonValue
-	switch rule.Comparator {
-	case opOneOf, opNotOneOf:
-		// These comparators are using Contains to determine whether the user value is matching to the
-		// given rule. It's doing so just for compatibility reasons, in the next major version it'll use
-		// equality comparison for simple values and Contains only for collection user value types.
-		sep := strings.Split(rule.ComparisonValue, ",")
-		set := make([]string, len(sep))
-		for _, item := range sep {
-			set = append(set, strings.TrimSpace(item))
-		}
-		needTrue := rule.Comparator == opOneOf
-		return func(userValue string) (bool, error) {
-			matched := false
-			for _, item := range set {
-				if strings.Contains(item, userValue) {
-					matched = true
-					break
+func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Value) (bool, error) {
+	op, needTrue := uninvert(rule.Comparator)
+	switch op {
+	case opOneOf:
+		items := splitFields(rule.ComparisonValue)
+		switch info.kind {
+		case kindInt:
+			m := make(map[int64]bool)
+			var single int64
+			for _, item := range items {
+				cmpVal, _ := intMatch(item, info.ftype)
+				i, ok := cmpVal.(int64)
+				if !ok {
+					continue
+				}
+				single = i
+				m[i] = true
+			}
+			if len(m) == 1 {
+				return func(userVal reflect.Value) (bool, error) {
+					return (userVal.FieldByIndex(info.index).Int() == single) == needTrue, nil
+				}
+			} else {
+				return func(userVal reflect.Value) (bool, error) {
+					return m[userVal.FieldByIndex(info.index).Int()] == needTrue, nil
 				}
 			}
-			return matched == needTrue, nil
+		case kindUint:
+			m := make(map[uint64]bool)
+			var single uint64
+			for _, item := range items {
+				cmpVal, _ := uintMatch(item, info.ftype)
+				i, ok := cmpVal.(uint64)
+				if !ok {
+					continue
+				}
+				single = i
+				m[i] = true
+			}
+			if len(m) == 1 {
+				return func(userVal reflect.Value) (bool, error) {
+					return (userVal.FieldByIndex(info.index).Uint() == single) == needTrue, nil
+				}
+			} else {
+				return func(userVal reflect.Value) (bool, error) {
+					return m[userVal.FieldByIndex(info.index).Uint()] == needTrue, nil
+				}
+			}
+		case kindFloat:
+			m := make(map[float64]bool)
+			var single float64
+			for _, item := range items {
+				f, err := strconv.ParseFloat(item, 64)
+				if err != nil || math.IsNaN(f) {
+					continue
+				}
+				single = f
+				m[f] = true
+			}
+			if len(m) == 1 {
+				return func(userVal reflect.Value) (bool, error) {
+					return (userVal.FieldByIndex(info.index).Float() == single) == needTrue, nil
+				}
+			} else {
+				return func(userVal reflect.Value) (bool, error) {
+					return m[userVal.FieldByIndex(info.index).Float()] == needTrue, nil
+				}
+			}
+		default:
+			set := make(map[string]bool)
+			for _, item := range items {
+				set[item] = true
+			}
+			return func(user reflect.Value) (bool, error) {
+				if s := info.asString(user); s != "" {
+					return set[s] == needTrue, nil
+				}
+				return false, nil
+			}
 		}
 	case opContains:
-		return func(userValue string) (bool, error) {
-			return strings.Contains(userValue, comparisonValue), nil
+		return func(user reflect.Value) (bool, error) {
+			if s := info.asString(user); s != "" {
+				return strings.Contains(s, rule.ComparisonValue) == needTrue, nil
+			}
+			return false, nil
 		}
-	case opNotContains:
-		return func(userValue string) (bool, error) {
-			return !strings.Contains(userValue, comparisonValue), nil
+	case opOneOfSemver:
+		if info.asSemver == nil {
+			return errorMatcher(fmt.Errorf("%v can never match a semver", info.ftype))
 		}
-	case opOneOfSemver, opNotOneOfSemver:
-		separated := strings.Split(rule.ComparisonValue, ",")
-		versions := make([]semver.Version, 0, len(separated))
-		for _, item := range separated {
+		items := splitFields(rule.ComparisonValue)
+		versions := make([]semver.Version, 0, len(items))
+		for _, item := range items {
 			item := strings.TrimSpace(item)
 			if len(item) == 0 {
 				continue
@@ -226,89 +322,233 @@ func rolloutMatcher(rule *rolloutRule) func(userValue string) (bool, error) {
 			}
 			versions = append(versions, semVer)
 		}
-		needTrue := rule.Comparator == opOneOfSemver
-		return func(userValue string) (bool, error) {
-			userVersion, err := semver.Make(userValue)
-			if err != nil {
+		return func(user reflect.Value) (bool, error) {
+			userVersion, err := info.asSemver(user)
+			if err != nil || userVersion == nil {
 				return false, err
 			}
-			matched := false
 			for _, vers := range versions {
-				if vers.EQ(userVersion) {
-					matched = true
-					break
+				if vers.EQ(*userVersion) {
+					return needTrue, nil
 				}
 			}
-			return matched == needTrue, nil
+			return !needTrue, nil
 		}
-	case opLessSemver, opLessEqSemver, opGreaterSemver, opGreaterEqSemver:
+	case opLessSemver, opLessEqSemver:
+		if info.asSemver == nil {
+			return errorMatcher(fmt.Errorf("%v can never match a semver", info.ftype))
+		}
+		cmpval := 0
+		if op == opLessSemver {
+			cmpval = -1
+		}
 		cmpVersion, err := semver.Make(strings.TrimSpace(rule.ComparisonValue))
 		if err != nil {
 			return errorMatcher(err)
 		}
-		var cmp func(vers semver.Version) bool
-		switch rule.Comparator {
-		case opLessSemver:
-			cmp = cmpVersion.GT
-		case opLessEqSemver:
-			cmp = cmpVersion.GTE
-		case opGreaterSemver:
-			cmp = cmpVersion.LT
-		case opGreaterEqSemver:
-			cmp = cmpVersion.LTE
-		default:
-			panic("unreachable")
-		}
-		return func(userValue string) (bool, error) {
-			userVersion, err := semver.Make(userValue)
-			if err != nil {
+		return func(userValue reflect.Value) (bool, error) {
+			userVer, err := info.asSemver(userValue)
+			if err != nil || userVer == nil {
 				return false, err
 			}
-			return cmp(userVersion), nil
+			return (userVer.Compare(cmpVersion) <= cmpval) == needTrue, nil
 		}
-	case opEqNum, opNotEqNum, opLessNum, opLessEqNum, opGreaterNum, opGreaterEqNum:
-		cmpNum, err := strconv.ParseFloat(strings.Replace(rule.ComparisonValue, ",", ".", -1), 64)
-		if err != nil {
-			return errorMatcher(err)
-		}
-		var cmp func(float64) bool
-		switch rule.Comparator {
-		case opEqNum:
-			cmp = func(f float64) bool {
-				return f == cmpNum
+	case opEqNum:
+		switch info.kind {
+		case kindInt:
+			cmpVal, err := intMatch(rule.ComparisonValue, info.ftype)
+			if err != nil {
+				return errorMatcher(err)
 			}
-		case opNotEqNum:
-			cmp = func(f float64) bool {
-				return f != cmpNum
+			i, ok := cmpVal.(int64)
+			if !ok {
+				return falseMatcher(needTrue)
 			}
-		case opLessNum:
-			cmp = func(f float64) bool {
-				return f < cmpNum
+			return func(user reflect.Value) (bool, error) {
+				return (user.FieldByIndex(info.index).Int() == i) == needTrue, nil
 			}
-		case opLessEqNum:
-			cmp = func(f float64) bool {
-				return f <= cmpNum
+		case kindUint:
+			cmpVal, err := uintMatch(rule.ComparisonValue, info.ftype)
+			if err != nil {
+				return errorMatcher(err)
 			}
-		case opGreaterNum:
-			cmp = func(f float64) bool {
-				return f > cmpNum
+			i, ok := cmpVal.(uint64)
+			if !ok {
+				return falseMatcher(needTrue)
 			}
-		case opGreaterEqNum:
-			cmp = func(f float64) bool {
-				return f >= cmpNum
+			return func(user reflect.Value) (bool, error) {
+				return (user.FieldByIndex(info.index).Uint() == i) == needTrue, nil
+			}
+		case kindFloat:
+			f, err := parseFloat(rule.ComparisonValue)
+			if err != nil {
+				return errorMatcher(err)
+			}
+			if math.IsNaN(f) {
+				return alwaysFalseMatcher
+			}
+			return func(user reflect.Value) (bool, error) {
+				f1 := user.FieldByIndex(info.index).Float()
+				if math.IsNaN(f1) {
+					return false, nil
+				}
+				return (f1 == f) == needTrue, nil
 			}
 		default:
-			panic("unreachable")
-		}
-		return func(userValue string) (bool, error) {
-			userNum, err := strconv.ParseFloat(strings.Replace(userValue, ",", ".", -1), 64)
+			f, err := parseFloat(rule.ComparisonValue)
 			if err != nil {
-				return false, err
+				return errorMatcher(err)
 			}
-			return cmp(userNum), nil
+			if math.IsNaN(f) {
+				return alwaysFalseMatcher
+			}
+			return func(user reflect.Value) (bool, error) {
+				s := info.asString(user)
+				if s == "" {
+					return false, nil
+				}
+				f1, err := parseFloat(s)
+				if err != nil || math.IsNaN(f1) {
+					return false, err
+				}
+				return (f == f1) == needTrue, nil
+			}
 		}
-	case opOneOfSensitive, opNotOneOfSensitive:
-		separated := strings.Split(rule.ComparisonValue, ",")
+	case opLessNum, opLessEqNum:
+		switch info.kind {
+		case kindInt:
+			cmpVal, err := intMatch(rule.ComparisonValue, info.ftype)
+			if err != nil {
+				return errorMatcher(err)
+			}
+			switch v := cmpVal.(type) {
+			case int64:
+				switch op {
+				case opLessNum:
+					return func(user reflect.Value) (bool, error) {
+						return (user.FieldByIndex(info.index).Int() < v) == needTrue, nil
+					}
+				case opLessEqNum:
+					return func(user reflect.Value) (bool, error) {
+						return (user.FieldByIndex(info.index).Int() <= v) == needTrue, nil
+					}
+				default:
+					panic("unreachable")
+				}
+			case float64:
+				switch op {
+				case opLessNum:
+					return func(user reflect.Value) (bool, error) {
+						return (float64(user.FieldByIndex(info.index).Int()) < v) == needTrue, nil
+					}
+				case opLessEqNum:
+					return func(user reflect.Value) (bool, error) {
+						return (float64(user.FieldByIndex(info.index).Int()) <= v) == needTrue, nil
+					}
+				default:
+					panic("unreachable")
+				}
+			default:
+				panic("unreachable")
+			}
+		case kindUint:
+			cmpVal, err := uintMatch(rule.ComparisonValue, info.ftype)
+			if err != nil {
+				return errorMatcher(err)
+			}
+			switch v := cmpVal.(type) {
+			case uint64:
+				switch op {
+				case opLessNum:
+					return func(user reflect.Value) (bool, error) {
+						return (user.FieldByIndex(info.index).Uint() < v) == needTrue, nil
+					}
+				case opLessEqNum:
+					return func(user reflect.Value) (bool, error) {
+						return (user.FieldByIndex(info.index).Uint() <= v) == needTrue, nil
+					}
+				default:
+					panic("unreachable")
+				}
+			case float64:
+				switch op {
+				case opLessNum:
+					return func(user reflect.Value) (bool, error) {
+						return (float64(user.FieldByIndex(info.index).Uint()) < v) == needTrue, nil
+					}
+				case opLessEqNum:
+					return func(user reflect.Value) (bool, error) {
+						return (float64(user.FieldByIndex(info.index).Uint()) <= v) == needTrue, nil
+					}
+				default:
+					panic("unreachable")
+				}
+			default:
+				panic("unreachable")
+			}
+		case kindFloat:
+			f, err := parseFloat(rule.ComparisonValue)
+			if err != nil {
+				return errorMatcher(err)
+			}
+			if math.IsNaN(f) {
+				return alwaysFalseMatcher
+			}
+			switch op {
+			case opLessNum:
+				return func(user reflect.Value) (bool, error) {
+					f1 := user.FieldByIndex(info.index).Float()
+					if math.IsNaN(f1) {
+						return false, nil
+					}
+					return (f1 < f) == needTrue, nil
+				}
+			case opLessEqNum:
+				return func(user reflect.Value) (bool, error) {
+					f1 := user.FieldByIndex(info.index).Float()
+					if math.IsNaN(f1) {
+						return false, nil
+					}
+					return (f1 <= f) == needTrue, nil
+				}
+			default:
+				panic("unreachable")
+			}
+		default:
+			f, err := parseFloat(rule.ComparisonValue)
+			if err != nil {
+				return errorMatcher(err)
+			}
+			if math.IsNaN(f) {
+				return alwaysFalseMatcher
+			}
+			var cmp func(f1, f2 float64) bool
+			switch op {
+			case opLessNum:
+				cmp = func(f1, f2 float64) bool {
+					return f1 < f2
+				}
+			case opLessEqNum:
+				cmp = func(f1, f2 float64) bool {
+					return f1 <= f2
+				}
+			default:
+				panic("unreachable")
+			}
+			return func(user reflect.Value) (bool, error) {
+				s := info.asString(user)
+				if s == "" {
+					return false, nil
+				}
+				f1, err := parseFloat(s)
+				if err != nil || math.IsNaN(f1) {
+					return false, err
+				}
+				return cmp(f1, f) == needTrue, nil
+			}
+		}
+	case opOneOfSensitive:
+		separated := splitFields(rule.ComparisonValue)
 		set := make(map[[sha1.Size]byte]bool)
 		for _, item := range separated {
 			var hash [sha1.Size]byte
@@ -320,22 +560,343 @@ func rolloutMatcher(rule *rolloutRule) func(userValue string) (bool, error) {
 			copy(hash[:], h)
 			set[hash] = true
 		}
-		needTrue := rule.Comparator == opOneOfSensitive
-		return func(userValue string) (bool, error) {
-			hash := sha1.Sum([]byte(userValue))
+		return func(user reflect.Value) (bool, error) {
+			b := info.asBytes(user)
+			if len(b) == 0 {
+				return false, nil
+			}
+			hash := sha1.Sum(b)
 			return set[hash] == needTrue, nil
 		}
 	default:
-		return func(userValue string) (bool, error) {
-			return false, nil
-		}
+		// TODO log if this happens?
+		return alwaysFalseMatcher
 	}
 }
 
-func errorMatcher(err error) func(string) (bool, error) {
-	return func(string) (bool, error) {
+// intMatch parses s as a signed integer and
+// returns a value (either float64 or int64)
+// to compare it against. It only returns float64
+// when the match cannot be exact for the given type.
+func intMatch(s string, t reflect.Type) (val interface{}, _ error) {
+	// Try for exact parsing, but fall back to float parsing.
+	i, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		f, err := parseFloat(s)
+		if err != nil {
+			return nil, err
+		}
+		i = int64(f)
+		if float64(i) != f {
+			// Doesn't fit exactly into an int64.
+			return f, nil
+		}
+	}
+	if reflect.Zero(t).OverflowInt(i) {
+		return float64(i), nil
+	}
+	return i, nil
+}
+
+// uintMatch parses s as an unsigned integer and
+// returns a value (either float64 or int64)
+// to compare it against. It only returns float64
+// when the match cannot be exact for the given type.
+func uintMatch(s string, t reflect.Type) (val interface{}, _ error) {
+	// Try for exact parsing, but fall back to float parsing.
+	i, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		f, err := parseFloat(s)
+		if err != nil {
+			return nil, err
+		}
+		i = uint64(f)
+		if float64(i) != f {
+			// Doesn't fit exactly into a uint64.
+			return f, nil
+		}
+	}
+	if reflect.Zero(t).OverflowUint(i) {
+		return float64(i), nil
+	}
+	return i, nil
+}
+
+// parseFloat parses a float allowing comma as a decimal point.
+func parseFloat(s string) (float64, error) {
+	return strconv.ParseFloat(strings.Replace(s, ",", ".", -1), 64)
+}
+
+type userTypeInfo struct {
+	fields       map[string]attrInfo
+	getAttribute func(v reflect.Value, attr string) string
+	deref        bool
+}
+
+type attrInfo struct {
+	kind     fieldKind
+	ftype    reflect.Type
+	index    []int
+	asString func(v reflect.Value) string
+	asBytes  func(v reflect.Value) []byte
+	asSemver func(v reflect.Value) (*semver.Version, error)
+}
+
+type fieldKind int
+
+const (
+	kindText fieldKind = iota
+	kindInt
+	kindUint
+	kindFloat
+)
+
+func newUserTypeInfo(userType reflect.Type) (*userTypeInfo, error) {
+	if userType == nil {
+		return nil, nil
+	}
+	if userType.Implements(getAttributeType) {
+		return &userTypeInfo{
+			getAttribute: func(v reflect.Value, attr string) string {
+				return v.Interface().(UserAttributes).GetAttribute(attr)
+			},
+		}, nil
+	}
+	if userType.Kind() != reflect.Ptr || userType.Elem().Kind() != reflect.Struct {
+		return nil, fmt.Errorf("user type that does not implement UserAttributes must be pointer to struct, not %v", userType)
+	}
+	userType = userType.Elem()
+	tinfo := &userTypeInfo{
+		deref:  true,
+		fields: make(map[string]attrInfo),
+	}
+	for _, f := range visibleFields(userType) {
+		f := f
+		if f.PkgPath != "" || f.Anonymous {
+			continue
+		}
+		if f.Type == stringMapType {
+			// Should we return an error if there are two map fields?
+			if tinfo.getAttribute != nil {
+				return nil, fmt.Errorf("two map-typed fields")
+			}
+			tinfo.getAttribute = func(v reflect.Value, attr string) string {
+				return v.FieldByIndex(f.Index).Interface().(map[string]string)[attr]
+			}
+			continue
+		}
+		fieldName := f.Name
+		tag := f.Tag.Get("configcat")
+		if tag == "-" {
+			continue
+		}
+		if tag != "" {
+			fieldName = tag
+		}
+		if _, ok := tinfo.fields[fieldName]; ok {
+			return nil, fmt.Errorf("ambiguous attribute %q in user value of type %T", fieldName, userType)
+		}
+		info, err := attrInfoForStructField(f)
+		if err != nil {
+			return nil, err
+		}
+		tinfo.fields[fieldName] = info
+	}
+	return tinfo, nil
+}
+
+func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
+	if field.Type.Implements(stringerType) {
+		return attrInfo{
+			ftype: field.Type,
+			asString: func(v reflect.Value) string {
+				return v.FieldByIndex(field.Index).Interface().(fmt.Stringer).String()
+			},
+			asBytes: func(v reflect.Value) []byte {
+				return []byte(v.FieldByIndex(field.Index).Interface().(fmt.Stringer).String())
+			},
+			asSemver: func(v reflect.Value) (*semver.Version, error) {
+				return parseSemver(v.FieldByIndex(field.Index).Interface().(fmt.Stringer).String())
+			},
+		}, nil
+	}
+	if reflect.PtrTo(field.Type).Implements(stringerType) {
+		return attrInfo{
+			ftype: field.Type,
+			asString: func(v reflect.Value) string {
+				return v.FieldByIndex(field.Index).Addr().Interface().(fmt.Stringer).String()
+			},
+			asBytes: func(v reflect.Value) []byte {
+				return []byte(v.FieldByIndex(field.Index).Addr().Interface().(fmt.Stringer).String())
+			},
+			asSemver: func(v reflect.Value) (*semver.Version, error) {
+				return parseSemver(v.FieldByIndex(field.Index).Addr().Interface().(fmt.Stringer).String())
+			},
+		}, nil
+	}
+	switch field.Type.Kind() {
+	case reflect.String:
+		return attrInfo{
+			ftype: field.Type,
+			asString: func(v reflect.Value) string {
+				return v.FieldByIndex(field.Index).String()
+			},
+			asBytes: func(v reflect.Value) []byte {
+				return []byte(v.FieldByIndex(field.Index).String())
+			},
+			asSemver: func(v reflect.Value) (*semver.Version, error) {
+				return parseSemver(v.FieldByIndex(field.Index).String())
+			},
+		}, nil
+	case reflect.Slice:
+		if field.Type.Elem().Kind() == reflect.Uint8 {
+			return attrInfo{
+				ftype: field.Type,
+				asString: func(v reflect.Value) string {
+					return string(v.FieldByIndex(field.Index).Bytes())
+				},
+				asBytes: func(v reflect.Value) []byte {
+					return v.FieldByIndex(field.Index).Bytes()
+				},
+				asSemver: func(v reflect.Value) (*semver.Version, error) {
+					return parseSemver(string(v.FieldByIndex(field.Index).Bytes()))
+				},
+			}, nil
+		}
+		return attrInfo{}, fmt.Errorf("user value field %s has unsupported slice type %s", field.Name, field.Type)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return attrInfo{
+			kind:  kindInt,
+			ftype: field.Type,
+			index: field.Index,
+			asString: func(v reflect.Value) string {
+				return strconv.FormatInt(v.FieldByIndex(field.Index).Int(), 10)
+			},
+			asBytes: func(v reflect.Value) []byte {
+				return strconv.AppendInt(nil, v.FieldByIndex(field.Index).Int(), 10)
+			},
+		}, nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return attrInfo{
+			kind:  kindUint,
+			ftype: field.Type,
+			index: field.Index,
+			asString: func(v reflect.Value) string {
+				return strconv.FormatUint(v.FieldByIndex(field.Index).Uint(), 10)
+			},
+			asBytes: func(v reflect.Value) []byte {
+				return strconv.AppendUint(nil, v.FieldByIndex(field.Index).Uint(), 10)
+			},
+		}, nil
+	case reflect.Float32, reflect.Float64:
+		return attrInfo{
+			kind:  kindFloat,
+			ftype: field.Type,
+			index: field.Index,
+			asString: func(v reflect.Value) string {
+				return strconv.FormatFloat(v.FieldByIndex(field.Index).Float(), 'g', -1, 64)
+			},
+			asBytes: func(v reflect.Value) []byte {
+				return strconv.AppendFloat(nil, v.FieldByIndex(field.Index).Float(), 'g', -1, 64)
+			},
+		}, nil
+	default:
+		return attrInfo{}, fmt.Errorf("user value field %s has unsupported type %s", field.Name, field.Type)
+	}
+}
+
+// attrInfo returns information on the attribute with the given name.
+func (tinfo *userTypeInfo) attrInfo(name string) attrInfo {
+	info, ok := tinfo.fields[name]
+	if ok {
+		return info
+	}
+	if tinfo.getAttribute == nil {
+		return attrInfo{
+			asString: func(v reflect.Value) string {
+				return ""
+			},
+			asBytes: func(v reflect.Value) []byte {
+				return nil
+			},
+		}
+	}
+	return attrInfo{
+		asString: func(v reflect.Value) string {
+			return tinfo.getAttribute(v, name)
+		},
+		asBytes: func(v reflect.Value) []byte {
+			return []byte(tinfo.getAttribute(v, name))
+		},
+		asSemver: func(v reflect.Value) (*semver.Version, error) {
+			return parseSemver(tinfo.getAttribute(v, name))
+		},
+	}
+}
+
+func parseSemver(s string) (*semver.Version, error) {
+	if s == "" {
+		return nil, nil
+	}
+	vers, err := semver.Parse(s)
+	if err != nil {
+		return nil, err
+	}
+	return &vers, nil
+}
+
+// uninvert reduces the set of operations we need to consider
+// by returning only non-negative operations and less-than comparisons.
+//
+// For a negative or greater-than comparison, it returns
+// the equivalent non-inverted operation and false.
+func uninvert(op operator) (_ operator, needTrue bool) {
+	switch op {
+	case opNotOneOf:
+		return opOneOf, false
+	case opNotContains:
+		return opContains, false
+	case opGreaterSemver:
+		return opLessEqSemver, false
+	case opGreaterEqSemver:
+		return opLessSemver, false
+	case opNotOneOfSemver:
+		return opOneOfSemver, false
+	case opNotEqNum:
+		return opEqNum, false
+	case opGreaterNum:
+		return opLessEqNum, false
+	case opGreaterEqNum:
+		return opLessNum, false
+	case opNotOneOfSensitive:
+		return opOneOfSensitive, false
+	}
+	return op, true
+}
+
+func errorMatcher(err error) func(reflect.Value) (bool, error) {
+	return func(reflect.Value) (bool, error) {
 		return false, err
 	}
+}
+
+func alwaysFalseMatcher(reflect.Value) (bool, error) {
+	return false, nil
+}
+
+func alwaysTrueMatcher(reflect.Value) (bool, error) {
+	return false, nil
+}
+
+func falseMatcher(needTrue bool) func(reflect.Value) (bool, error) {
+	return trueMatcher(!needTrue)
+}
+
+func trueMatcher(needTrue bool) func(reflect.Value) (bool, error) {
+	if needTrue {
+		return alwaysTrueMatcher
+	}
+	return alwaysFalseMatcher
 }
 
 type keyValue struct {
@@ -371,4 +932,12 @@ func keysForRootNode(root *rootNode) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+func splitFields(s string) []string {
+	fields := strings.Split(s, ",")
+	for i, field := range fields {
+		fields[i] = strings.TrimSpace(field)
+	}
+	return fields
 }
