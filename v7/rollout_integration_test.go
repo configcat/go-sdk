@@ -100,7 +100,7 @@ func (test integrationTest) runTest(t *testing.T) {
 		t.Run(fmt.Sprintf("line-%d", lineNumber), func(t *testing.T) {
 			var user User
 			if line[0] != "##null##" {
-				userVal := &UserValue{
+				userVal := &UserData{
 					Identifier: nullStr(line[0]),
 					Email:      nullStr(line[1]),
 					Country:    nullStr(line[2]),
@@ -121,9 +121,9 @@ func (test integrationTest) runTest(t *testing.T) {
 					var val interface{}
 					switch test.kind {
 					case valueKind:
-						val = client.getValue(settingKey, user)
+						val = client.Snapshot(user).value(idForKey(settingKey, false), settingKey)
 					case variationKind:
-						val = client.VariationID(settingKey, user)
+						val = client.Snapshot(user).VariationID(settingKey)
 					default:
 						t.Fatalf("unexpected kind %v", test.kind)
 					}

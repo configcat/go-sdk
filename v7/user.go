@@ -35,11 +35,11 @@ type UserAttributes interface {
 	GetAttribute(attr string) string
 }
 
-// UserValue implements the User interface with the basic
+// UserData implements the User interface with the basic
 // set of attributes. For an efficient way to use your own
 // domain object as a User, see the documentation for the User
 // interface.
-type UserValue struct {
+type UserData struct {
 	Identifier string
 	Email      string
 	Country    string

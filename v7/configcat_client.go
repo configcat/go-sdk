@@ -182,88 +182,25 @@ func (client *Client) Close() {
 // is fetched. Use RefreshIfOlder explicitly if explicit control of timeouts
 // is needed.
 func (client *Client) Bool(key string, defaultValue bool, user User) bool {
-	if v, ok := client.getValue(key, user).(bool); ok {
-		return v
-	}
-	return defaultValue
+	return Bool(key, defaultValue).Get(client.Snapshot(user))
 }
 
 // Int is like Bool except for int-typed (whole number) feature flags.
 func (client *Client) Int(key string, defaultValue int, user User) int {
-	if v, ok := client.getValue(key, user).(float64); ok {
-		// TODO log error?
-		return int(v)
-	}
-	return defaultValue
+	return Int(key, defaultValue).Get(client.Snapshot(user))
 }
 
 // Int is like Bool except for float-typed (decimal number) feature flags.
 func (client *Client) Float(key string, defaultValue float64, user User) float64 {
-	if v, ok := client.getValue(key, user).(float64); ok {
-		// TODO log error?
-		return v
-	}
-	return defaultValue
+	return Float(key, defaultValue).Get(client.Snapshot(user))
 }
 
 // Int is like Bool except for string-typed (text) feature flags.
 func (client *Client) String(key string, defaultValue string, user User) string {
-	if v, ok := client.getValue(key, user).(string); ok {
-		// TODO log error?
-		return v
-	}
-	return defaultValue
+	return String(key, defaultValue).Get(client.Snapshot(user))
 }
 
-// getValue returns a value synchronously as interface{} from the configuration identified by the given key.
-func (client *Client) getValue(key string, user User) interface{} {
-	value, _, err := client.current().getValueAndVariationID(client.logger, key, user)
-	if err != nil {
-		client.logger.Errorf("error getting value: %v", err)
-	}
-	return value
-}
-
-// VariationID returns the variation ID that will be used for the given key
-// with the given optional user. If none is found, the empty string is returned.
-func (client *Client) VariationID(key string, user User) string {
-	_, variationID, _ := client.current().getValueAndVariationID(client.logger, key, user)
-	return variationID
-}
-
-// VariationIDs returns all  variation IDs in the current configuration
-// that apply to the given optional user.
-func (client *Client) VariationIDs(user User) []string {
-	conf := client.current()
-	keys := conf.keys()
-	ids := make([]string, 0, len(keys))
-	for _, key := range keys {
-		_, id, err := conf.getValueAndVariationID(client.logger, key, user)
-		if err == nil {
-			ids = append(ids, id)
-		}
-	}
-	return ids
-}
-
-// KeyValueForVariationID returns the key and value that
-// are associated with the given variation ID. If the
-// variation ID isn't found, it returns "", nil.
-func (client *Client) KeyValueForVariationID(id string) (string, interface{}) {
-	key, value := client.current().getKeyAndValueForVariation(id)
-	if key == "" {
-		client.logger.Errorf("Evaluating GetKeyAndValue(%s) failed. Returning nil. Variation ID not found.")
-		return "", nil
-	}
-	return key, value
-}
-
-// Keys returns all the known keys.
-func (client *Client) Keys() []string {
-	return client.current().keys()
-}
-
-func (client *Client) current() *config {
+func (client *Client) Snapshot(user User) *Snapshot {
 	if client.needGetCheck {
 		switch client.cfg.RefreshMode {
 		case Lazy:
@@ -279,5 +216,5 @@ func (client *Client) current() *config {
 			})
 		}
 	}
-	return client.fetcher.current()
+	return newSnapshot(client.fetcher.current(), user, client.logger)
 }

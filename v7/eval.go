@@ -67,57 +67,45 @@ var (
 	stringerType     = reflect.TypeOf((*fmt.Stringer)(nil)).Elem()
 )
 
-// getValueAndVariationID returns the value and variation ID for the given key and user.
-func (cfg *config) getValueAndVariationID(logger *leveledLogger, key string, user User) (interface{}, string, error) {
-	if cfg == nil {
-		return nil, "", fmt.Errorf("no configuration available")
+func (cfg *config) evaluatorsForUserType(userType reflect.Type) ([]entryEvalFunc, error) {
+	if entries, ok := cfg.evaluators.Load(userType); ok {
+		return entries.([]entryEvalFunc), nil
 	}
-	userv := reflect.ValueOf(user)
-	var userType reflect.Type
-	if user != nil {
-		userType = userv.Type()
+	// We haven't made an entry for this user type yet,
+	// so preprocess it and store the result in the evaluators
+	// map.
+	entries, err := entryEvaluators(cfg.root, userType)
+	if err != nil {
+		return nil, err
 	}
-	entries0, ok := cfg.evaluators.Load(userType)
-	if !ok {
-		// We haven't made an entry for this user type yet,
-		// so preprocess it and store the result in the evaluators map.
-		entries, err := entryEvaluators(cfg.root, userType)
-		if err != nil {
-			// TODO perhaps this should return the default
-			// value for the entry?
-			return nil, "", err
-		}
-		entries0, _ = cfg.evaluators.LoadOrStore(userType, entries)
-	}
-	entries := entries0.(map[string]entryEvalFunc)
-	evalEntry, ok := entries[key]
-	if !ok {
-		return nil, "", &parseError{
-			"Value not found for key " + key +
-				". Here are the available keys: " + strings.Join(keysForRootNode(cfg.root), ","),
-		}
-	}
-	val, variation := evalEntry(logger, user)
-	return val, variation, nil
+	entries1, _ := cfg.evaluators.LoadOrStore(userType, entries)
+	return entries1.([]entryEvalFunc), nil
 }
 
-type entryEvalFunc = func(logger *leveledLogger, userv User) (interface{}, string)
+type entryEvalFunc = func(logger *leveledLogger, userv reflect.Value) (interface{}, string)
 
-func entryEvaluators(root *rootNode, userType reflect.Type) (map[string]entryEvalFunc, error) {
+func entryEvaluators(root *rootNode, userType reflect.Type) ([]entryEvalFunc, error) {
 	tinfo, err := newUserTypeInfo(userType)
 	if err != nil {
 		return nil, err
 	}
-	m := make(map[string]entryEvalFunc)
-	for key, entry := range root.Entries {
-		m[key] = entryEvaluator(key, entry, tinfo)
+	// Allocate all key IDs.
+	// TODO we might want to add a configuration option to ignore
+	// all keys in the configuration that don't have associated
+	// key IDs already.
+	for key := range root.Entries {
+		idForKey(key, true)
 	}
-	return m, nil
+	entries := make([]entryEvalFunc, numKeys())
+	for key, entry := range root.Entries {
+		entries[idForKey(key, true)] = entryEvaluator(key, entry, tinfo)
+	}
+	return entries, nil
 }
 
-func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) func(logger *leveledLogger, user User) (interface{}, string) {
+func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) entryEvalFunc {
 	rules := node.RolloutRules
-	noUser := func(logger *leveledLogger, user User) (interface{}, string) {
+	noUser := func(logger *leveledLogger, user reflect.Value) (interface{}, string) {
 		if logger.enabled(LogLevelWarn) && (len(rules) > 0 || len(node.PercentageRules) > 0) {
 			logger.Warnf("Evaluating GetValue(%s). UserObject missing! You should pass a "+
 				"UserObject to GetValueForUser() in order to make targeting work properly. "+
@@ -142,11 +130,10 @@ func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) func(logger *l
 	identifierInfo := tinfo.attrInfo("Identifier")
 	keyBytes := []byte(key)
 
-	return func(logger *leveledLogger, user User) (interface{}, string) {
-		userv := reflect.ValueOf(user)
+	return func(logger *leveledLogger, userv reflect.Value) (interface{}, string) {
 		if tinfo.deref {
 			if userv.IsNil() {
-				return noUser(logger, user)
+				return noUser(logger, userv)
 			}
 			userv = userv.Elem()
 		}

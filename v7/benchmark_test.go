@@ -37,7 +37,7 @@ func BenchmarkGet(b *testing.B) {
 		},
 		rule: "rule",
 		makeUser: func() User {
-			return &UserValue{
+			return &UserData{
 				Identifier: "unknown-identifier",
 				Email:      "x@configcat.com",
 				Country:    "United",
@@ -102,7 +102,7 @@ func BenchmarkGet(b *testing.B) {
 		},
 		rule: "bool30TrueAdvancedRules",
 		makeUser: func() User {
-			return &UserValue{
+			return &UserData{
 				Identifier: "unknown-identifier",
 				Email:      "x@configcat.com",
 				Country:    "United",
@@ -133,15 +133,16 @@ func BenchmarkGet(b *testing.B) {
 				}
 			})
 			b.Run("get-only", func(b *testing.B) {
-				user := bench.makeUser()
-				val := client.String(bench.rule, "", user)
+				rule := String(bench.rule, "")
+				snap := client.Snapshot(bench.makeUser())
+				val := rule.Get(client.Snapshot(bench.makeUser()))
 				if val != bench.want {
 					b.Fatalf("unexpected result %#v", val)
 				}
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					client.String(bench.rule, "", user)
+					rule.Get(snap)
 				}
 			})
 		})

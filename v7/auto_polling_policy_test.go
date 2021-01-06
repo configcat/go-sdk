@@ -21,13 +21,13 @@ func TestAutoPollingPolicy_PollChange(t *testing.T) {
 	err := client.Refresh(context.Background())
 	c.Assert(err, qt.Equals, nil)
 
-	c.Assert(client.current().body(), qt.Equals, `{"test":1}`)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
 
 	srv.setResponse(configResponse{body: `{"test":2}`})
-	c.Assert(client.current().body(), qt.Equals, `{"test":1}`)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
 
 	time.Sleep(40 * time.Millisecond)
-	c.Assert(client.current().body(), qt.Equals, `{"test":2}`)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":2}`)
 }
 
 func TestAutoPollingPolicy_FetchFail(t *testing.T) {
@@ -44,7 +44,7 @@ func TestAutoPollingPolicy_FetchFail(t *testing.T) {
 	err := client.Refresh(context.Background())
 	c.Assert(err, qt.ErrorMatches, `config fetch failed: received unexpected response 500 Internal Server Error`)
 
-	conf := client.current()
+	conf := client.Snapshot(nil).config
 	c.Assert(conf, qt.IsNil)
 }
 
@@ -73,7 +73,7 @@ func TestAutoPollingPolicy_WithNotify(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatalf("timed out waiting for notification")
 	}
-	c.Assert(client.current().body(), qt.Equals, `{"test":1}`)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
 
 	// Change the content and we should see another notification.
 	srv.setResponse(configResponse{body: `{"test":2}`})
@@ -82,7 +82,7 @@ func TestAutoPollingPolicy_WithNotify(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatalf("timed out waiting for notification")
 	}
-	c.Assert(client.current().body(), qt.Equals, `{"test":2}`)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":2}`)
 
 	// Check that we don't see any more notifications.
 	select {
