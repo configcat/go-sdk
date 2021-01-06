@@ -30,6 +30,8 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time) (*config, er
 	if err := json.Unmarshal([]byte(jsonBody), &root); err != nil {
 		return nil, err
 	}
+	fixupRootNodeValues(&root)
+
 	return &config{
 		jsonBody:  jsonBody,
 		root:      &root,
@@ -79,6 +81,32 @@ func (conf *config) keys() []string {
 	return conf.allKeys
 }
 
+func fixupRootNodeValues(n *rootNode) {
+	for _, entry := range n.Entries {
+		entry.Value = fixValue(entry.Value, entry.Type)
+		for _, rule := range entry.RolloutRules {
+			rule.Value = fixValue(rule.Value, entry.Type)
+		}
+		for _, rule := range entry.PercentageRules {
+			rule.Value = fixValue(rule.Value, entry.Type)
+		}
+	}
+}
+
+// fixValue fixes up int-valued entries, which will have the wrong type of value, so
+// change them from float64 to int.
+func fixValue(v interface{}, typ entryType) interface{} {
+	if typ != intEntry {
+		return v
+	}
+	f, ok := v.(float64)
+	if !ok {
+		// Shouldn't happen, but avoid a panic.
+		return v
+	}
+	return int(f)
+}
+
 type rootNode struct {
 	Entries     map[string]*entry `json:"f"`
 	Preferences *preferences      `json:"p"`
@@ -87,6 +115,7 @@ type rootNode struct {
 type entry struct {
 	VariationID     string           `json:"i"`
 	Value           interface{}      `json:"v"`
+	Type            entryType        `json:"t"`
 	RolloutRules    []*rolloutRule   `json:"r"`
 	PercentageRules []percentageRule `json:"p"`
 }
@@ -128,4 +157,13 @@ const (
 	// available at this address, and that the client should redirect
 	// immediately even when talking to a custom URL.
 	forceRedirect redirectionKind = 2
+)
+
+type entryType int
+
+const (
+	boolEntry   entryType = 0
+	stringEntry entryType = 1
+	intEntry    entryType = 2
+	floatEntry  entryType = 3
 )

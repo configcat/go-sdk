@@ -12,7 +12,7 @@ import (
 func TestLazyLoadingPolicy_NoAsync(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1"))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1", stringEntry))
 
 	cfg := srv.config()
 	cfg.RefreshMode = Lazy
@@ -23,7 +23,7 @@ func TestLazyLoadingPolicy_NoAsync(t *testing.T) {
 	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
 
 	srv.setResponse(configResponse{
-		body:  marshalJSON(rootNodeWithKeyValue("key", "value2")),
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value2", stringEntry)),
 		sleep: 40 * time.Millisecond,
 	})
 	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
@@ -52,7 +52,7 @@ func TestLazyLoadingPolicy_FetchFail(t *testing.T) {
 func TestLazyLoadingPolicy_Async(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1"))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1", stringEntry))
 
 	cfg := srv.config()
 	cfg.RefreshMode = Lazy
@@ -67,7 +67,7 @@ func TestLazyLoadingPolicy_Async(t *testing.T) {
 	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
 
 	srv.setResponse(configResponse{
-		body:  marshalJSON(rootNodeWithKeyValue("key", "value2")),
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value2", stringEntry)),
 		sleep: 40 * time.Millisecond,
 	})
 	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
