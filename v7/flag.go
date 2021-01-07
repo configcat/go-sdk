@@ -51,8 +51,8 @@ type IntFlag struct {
 }
 
 func (f IntFlag) Get(snap *Snapshot) int {
-	if v, ok := snap.value(f.id, f.key).(float64); ok {
-		return int(v)
+	if v, ok := snap.value(f.id, f.key).(int); ok {
+		return v
 	}
 	return f.defaultValue
 }

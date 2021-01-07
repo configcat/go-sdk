@@ -68,6 +68,19 @@ func (snap *Snapshot) valueAndVariationID(id keyID, key string) (interface{}, st
 	return eval(snap.logger, snap.user)
 }
 
+// Get returns a feature flag value regardless of type. If there is no
+// value found, it returns nil; otherwise the returned value
+// has one of the dynamic types bool, int, float64, or string.
+//
+// To use obtain the value of a typed feature flag, use
+// one of the typed feature flag functions. For example:
+//
+//	someFlag := configcat.Bool("someFlag", false)
+// 	value := someFlag.Get(snap)
+func (snap *Snapshot) Get(key string) interface{} {
+	return snap.value(idForKey(key, true), key)
+}
+
 // KeyValueForVariationID returns the key and value that
 // are associated with the given variation ID. If the
 // variation ID isn't found, it returns "", nil.

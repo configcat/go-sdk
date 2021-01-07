@@ -200,6 +200,13 @@ func (client *Client) String(key string, defaultValue string, user User) string 
 	return String(key, defaultValue).Get(client.Snapshot(user))
 }
 
+// Get returns a feature flag value regardless of type. If there is no
+// value found, it returns nil; otherwise the returned value
+// has one of the dynamic types bool, int, float64, or string.
+func (client *Client) Get(key string, user User) interface{} {
+	return client.Snapshot(user).Get(key)
+}
+
 func (client *Client) Snapshot(user User) *Snapshot {
 	if client.needGetCheck {
 		switch client.cfg.RefreshMode {

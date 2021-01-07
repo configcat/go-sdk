@@ -33,13 +33,13 @@ func TestClient_Refresh(t *testing.T) {
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value"))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value", stringEntry))
 	client.Refresh(context.Background())
 	result := client.String("key", "default", nil)
 
 	c.Assert(result, qt.Equals, "value")
 
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value2", stringEntry))
 	client.Refresh(context.Background())
 	result = client.String("key", "default", nil)
 	if result != "value2" {
@@ -55,13 +55,13 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value"))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value", stringEntry))
 	client.Refresh(context.Background())
 	result := client.String("key", "default", nil)
 	c.Assert(result, qt.Equals, "value")
 
 	srv.setResponse(configResponse{
-		body:  marshalJSON(rootNodeWithKeyValue("key", "value")),
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value", stringEntry)),
 		sleep: time.Second,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
@@ -75,10 +75,10 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 	c.Assert(result, qt.Equals, "value")
 }
 
-func TestClient_Get(t *testing.T) {
+func TestClient_Float(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213, floatEntry))
 	client.Refresh(context.Background())
 	result := client.Float("key", 0, nil)
 	c.Assert(result, qt.Equals, 3213.0)
@@ -131,7 +131,7 @@ func TestClient_Get_Default(t *testing.T) {
 func TestClient_Get_Latest(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213, floatEntry))
 	client.Refresh(context.Background())
 
 	result := client.Float("key", 0, nil)
@@ -154,7 +154,7 @@ func TestClient_Get_WithFailingCacheSet(t *testing.T) {
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213, floatEntry))
 	client.Refresh(context.Background())
 	result := client.Float("key", 0, nil)
 	c.Assert(result, qt.Equals, 3213.0)
@@ -257,7 +257,7 @@ func TestClient_GetWithRedirectSuccess(t *testing.T) {
 			Redirect: &redirect,
 		},
 	})
-	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value"))
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value", stringEntry))
 	client.Refresh(context.Background())
 	result := client.String("key", "default", nil)
 	c.Assert(result, qt.Equals, "value")
@@ -287,7 +287,7 @@ func TestClient_GetWithDifferentURLAndNoRedirect(t *testing.T) {
 			},
 		},
 	})
-	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2", stringEntry))
 	client.Refresh(context.Background())
 
 	// Check that the value still comes from the same server and
@@ -315,7 +315,7 @@ func TestClient_GetWithRedirectToSameURL(t *testing.T) {
 			},
 		},
 	})
-	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2", stringEntry))
 	client.Refresh(context.Background())
 	result := client.String("key", "default", nil)
 	c.Assert(result, qt.Equals, "value1")
@@ -336,7 +336,7 @@ func TestClient_GetWithCustomURLAndShouldRedirect(t *testing.T) {
 			Redirect: &redirect,
 		},
 	})
-	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2", stringEntry))
 	err := client.Refresh(context.Background())
 	c.Assert(err, qt.ErrorMatches, "config fetch failed: refusing to redirect from custom URL without forced redirection")
 
@@ -360,7 +360,7 @@ func TestClient_GetWithStandardURLAndShouldRedirect(t *testing.T) {
 			Redirect: &redirect,
 		},
 	}))
-	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value")))
+	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value", stringEntry)))
 	client := NewCustomClient(Config{
 		SDKKey:    "fakeKey",
 		Logger:    newTestLogger(t, LogLevelDebug),
@@ -400,7 +400,7 @@ func TestClient_GetWithStandardURLAndNoRedirect(t *testing.T) {
 	result := client.String("key", "default", nil)
 	c.Assert(result, qt.Equals, "value1")
 
-	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value2")))
+	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value2", stringEntry)))
 	// The next request should go to the redirected server.
 	client.Refresh(context.Background())
 
@@ -450,9 +450,25 @@ func TestClient_GetWithInvalidConfig(t *testing.T) {
 func TestClient_GetInt(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 99))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 99, intEntry))
 	client.Refresh(context.Background())
 	c.Check(client.Int("key", 0, nil), qt.Equals, 99)
+}
+
+func TestClient_Get(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 99, intEntry))
+	client.Refresh(context.Background())
+	c.Check(client.Get("key", nil), qt.Equals, 99)
+}
+
+func TestSnapshot_Get(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 99, intEntry))
+	client.Refresh(context.Background())
+	c.Check(client.Snapshot(nil).Get("key"), qt.Equals, 99)
 }
 
 type failingCache struct{}
@@ -476,11 +492,12 @@ func getTestClients(t *testing.T) (*configServer, *Client) {
 	return srv, client
 }
 
-func rootNodeWithKeyValue(key string, value interface{}) *rootNode {
+func rootNodeWithKeyValue(key string, value interface{}, typ entryType) *rootNode {
 	return &rootNode{
 		Entries: map[string]*entry{
 			key: &entry{
 				Value: value,
+				Type:  typ,
 			},
 		},
 	}
