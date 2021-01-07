@@ -7,6 +7,9 @@ import (
 
 // Snapshot holds a snapshot of the Configcat configuration.
 // A snapshot is immutable once taken.
+//
+// A nil snapshot is OK to use and acts like a configuration
+// with no keys.
 type Snapshot struct {
 	logger *leveledLogger
 	config *config
@@ -38,8 +41,11 @@ func newSnapshot(cfg *config, user User, logger *leveledLogger) *Snapshot {
 }
 
 // WithUser returns a copy of s associated with the
-// given user.
+// given user. If snap is nil, it returns nil.
 func (snap *Snapshot) WithUser(user User) *Snapshot {
+	if snap == nil {
+		return nil
+	}
 	return newSnapshot(snap.config, user, snap.logger)
 }
 
@@ -56,6 +62,9 @@ func (snap *Snapshot) VariationID(key string) string {
 }
 
 func (snap *Snapshot) valueAndVariationID(id keyID, key string) (interface{}, string) {
+	if snap == nil {
+		return nil, ""
+	}
 	var eval entryEvalFunc
 	if int(id) < len(snap.evaluators) {
 		eval = snap.evaluators[id]
@@ -85,6 +94,9 @@ func (snap *Snapshot) Get(key string) interface{} {
 // are associated with the given variation ID. If the
 // variation ID isn't found, it returns "", nil.
 func (snap *Snapshot) KeyValueForVariationID(id string) (string, interface{}) {
+	if snap == nil {
+		return "", nil
+	}
 	key, value := snap.config.getKeyAndValueForVariation(id)
 	if key == "" {
 		snap.logger.Errorf("Evaluating GetKeyAndValue(%s) failed. Returning nil. Variation ID not found.")
@@ -96,6 +108,9 @@ func (snap *Snapshot) KeyValueForVariationID(id string) (string, interface{}) {
 // VariationIDs returns all variation IDs in the current configuration
 // that apply to the current user.
 func (snap *Snapshot) VariationIDs() []string {
+	if snap == nil {
+		return nil
+	}
 	keys := snap.config.keys()
 	ids := make([]string, 0, len(keys))
 	for _, key := range keys {
@@ -107,5 +122,8 @@ func (snap *Snapshot) VariationIDs() []string {
 
 // Keys returns all the known keys.
 func (snap *Snapshot) Keys() []string {
+	if snap == nil {
+		return nil
+	}
 	return snap.config.keys()
 }
