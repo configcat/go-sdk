@@ -159,7 +159,10 @@ func NewCustomClient(cfg Config) *Client {
 // canceled while the refresh is in progress, Refresh will return but
 // the underlying HTTP request will not be canceled.
 func (client *Client) Refresh(ctx context.Context) error {
-	return client.fetcher.refreshIfOlder(ctx, time.Now(), true)
+	// Note: add a tiny bit to the current time so that we refresh
+	// even if the current time hasn't changed since the last
+	// time we refreshed.
+	return client.fetcher.refreshIfOlder(ctx, time.Now().Add(1), true)
 }
 
 // RefreshIfOlder is like Refresh but refreshes the configuration only
