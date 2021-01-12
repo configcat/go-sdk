@@ -7,14 +7,6 @@ import (
 	"time"
 )
 
-type parseError struct {
-	msg string
-}
-
-func (p *parseError) Error() string {
-	return p.msg
-}
-
 type config struct {
 	jsonBody []byte
 	etag     string
@@ -45,31 +37,31 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time) (*config, er
 	}, nil
 }
 
-func (c *config) equal(c1 *config) bool {
-	if c == c1 || c == nil || c1 == nil {
-		return c == c1
+func (conf *config) equal(c1 *config) bool {
+	if conf == c1 || conf == nil || c1 == nil {
+		return conf == c1
 	}
-	return c.fetchTime.Equal(c1.fetchTime) && c.etag == c1.etag && bytes.Equal(c.jsonBody, c1.jsonBody)
+	return conf.fetchTime.Equal(c1.fetchTime) && conf.etag == c1.etag && bytes.Equal(conf.jsonBody, c1.jsonBody)
 }
 
-func (c *config) equalContent(c1 *config) bool {
-	if c == c1 || c == nil || c1 == nil {
-		return c == c1
+func (conf *config) equalContent(c1 *config) bool {
+	if conf == c1 || conf == nil || c1 == nil {
+		return conf == c1
 	}
-	return bytes.Equal(c.jsonBody, c1.jsonBody)
+	return bytes.Equal(conf.jsonBody, c1.jsonBody)
 }
 
-func (c *config) withFetchTime(t time.Time) *config {
-	c1 := *c
+func (conf *config) withFetchTime(t time.Time) *config {
+	c1 := *conf
 	c1.fetchTime = t
 	return &c1
 }
 
-func (c *config) body() string {
-	if c == nil {
+func (conf *config) body() string {
+	if conf == nil {
 		return ""
 	}
-	return string(c.jsonBody)
+	return string(conf.jsonBody)
 }
 
 func (conf *config) getKeyAndValueForVariation(variationID string) (string, interface{}) {

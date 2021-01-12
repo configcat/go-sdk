@@ -158,15 +158,15 @@ func NewCustomClient(cfg Config) *Client {
 // Refresh refreshes the cached configuration. If the context is
 // canceled while the refresh is in progress, Refresh will return but
 // the underlying HTTP request will not be canceled.
-func (c *Client) Refresh(ctx context.Context) error {
-	return c.fetcher.refreshIfOlder(ctx, time.Now(), true)
+func (client *Client) Refresh(ctx context.Context) error {
+	return client.fetcher.refreshIfOlder(ctx, time.Now(), true)
 }
 
 // RefreshIfOlder is like Refresh but refreshes the configuration only
 // if the most recently fetched configuration is older than the given
 // age.
-func (c *Client) RefreshIfOlder(ctx context.Context, age time.Duration) error {
-	return c.fetcher.refreshIfOlder(ctx, time.Now().Add(-age), true)
+func (client *Client) RefreshIfOlder(ctx context.Context, age time.Duration) error {
+	return client.fetcher.refreshIfOlder(ctx, time.Now().Add(-age), true)
 }
 
 // Close shuts down the client. After closing, it shouldn't be used.

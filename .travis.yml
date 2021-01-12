@@ -10,6 +10,7 @@ before_script:
 - go vet ./...
 
 script:
+- go test -json > report.json
 - go test -v -coverprofile=coverage.txt -covermode=atomic
 
 after_success:

@@ -67,18 +67,18 @@ var (
 	stringerType     = reflect.TypeOf((*fmt.Stringer)(nil)).Elem()
 )
 
-func (cfg *config) evaluatorsForUserType(userType reflect.Type) ([]entryEvalFunc, error) {
-	if entries, ok := cfg.evaluators.Load(userType); ok {
+func (conf *config) evaluatorsForUserType(userType reflect.Type) ([]entryEvalFunc, error) {
+	if entries, ok := conf.evaluators.Load(userType); ok {
 		return entries.([]entryEvalFunc), nil
 	}
 	// We haven't made an entry for this user type yet,
 	// so preprocess it and store the result in the evaluators
 	// map.
-	entries, err := entryEvaluators(cfg.root, userType)
+	entries, err := entryEvaluators(conf.root, userType)
 	if err != nil {
 		return nil, err
 	}
-	entries1, _ := cfg.evaluators.LoadOrStore(userType, entries)
+	entries1, _ := conf.evaluators.LoadOrStore(userType, entries)
 	return entries1.([]entryEvalFunc), nil
 }
 

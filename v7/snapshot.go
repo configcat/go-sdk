@@ -99,7 +99,7 @@ func (snap *Snapshot) KeyValueForVariationID(id string) (string, interface{}) {
 	}
 	key, value := snap.config.getKeyAndValueForVariation(id)
 	if key == "" {
-		snap.logger.Errorf("Evaluating GetKeyAndValue(%s) failed. Returning nil. Variation ID not found.")
+		snap.logger.Errorf("Evaluating GetKeyAndValue(%s) failed. Returning nil. Variation ID not found.", id)
 		return "", nil
 	}
 	return key, value
