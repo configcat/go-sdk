@@ -5,6 +5,12 @@ go:
 - 1.x
 - master
 
+addons:
+  sonarcloud:
+    organization: "configcat"
+    token:
+      secure: "hESQXKoq68uYD5MiwOWtgIYOtuAR6dJ3ICVTECcWkgk3QbkjrI5VkYgz0RzPadyi5BnNo9/jLPPYl8Cc7KgjMbYPXzjHi6aal5SHdMSkFq3XrwS9Hn85JHu8anwTjmTSGzU5k6f4d0t8K09osp89bvjThxPwX0bkwCo1eqrBkzIZVvz/On2olLTGAp+7xGjtJAo2+K4wm9jBxJkCxwrshl7VqfSizef0qcL70wk1tPmYk5tRNKGxdWgyM6ku6vMPRNLEze3+I0WSCItnNdBhPOqO/+JZE27WteaEevNWznNSj/GH0LOf7x9437fGYC69lAmsSwo9pvoYZHCI8piXaaw3ZtMgWMmyZ9UNHRrfs7vmIR5GIxZJegafF/hFbCgq9GTZW0iXeLicNPr84bf4J/WKGr/PGuN68FshRpDMOFq6cIeHIY4Kv6ZyU2sxzv1og0lrXONOC6sh1xZhLT3FAbZJidNUNCBRTI/NsfXtmRzO89F4lVn7NTcXuUMiYjq23DYn22N27plkozbCl1OrLdpArB4sYXbj/GU7CoL1GKW2O+hO4tmyK1yyHf6P104WtyabWAEAMkDjpePeh6lXqFT1VG6cYfX3R7M0F3rGcMDA4OvS9bHwpvbiNwum2sVfVEYkgtKD6j/xLqWiVnDAReuIihUniEG6i29XaafwCG4="
+
 before_script:
 - cd v7
 - go vet ./...
@@ -12,6 +18,7 @@ before_script:
 script:
 - go test -json > report.json
 - go test -coverprofile=coverage.txt -covermode=atomic
+- sonar-scanner
 
 after_success:
 - bash <(curl -s https://codecov.io/bash)
