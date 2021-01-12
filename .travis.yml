@@ -8,9 +8,7 @@ go:
 addons:
   sonarcloud:
     organization: "configcat"
-    token:
-      secure: "awiGpMMVCUe7gUkwvgYspgjRxi9GkKfLdt5jSJjZW3MdF0SkGXb0x6x/mlReoKRSa6JZZUPLj+3OwCJKNpM2NyhpFBw4zPZucYjym0tJ2mXQL61ZAThEIoCXqO8Cw9WizXCCJBxTqXEpqpobAgKxpymuQEscUW4oP1AUIupViDrcEdQ8V57zXIhArJufx+7PtofbtiuLzLCTL0jnWWEX4H+i+0cKq5qm2WEQF8OmduAmT7nOmOOoo04PSAJm86YjaKsfPH3nRvPQEsDRUZvauYDFy9dU4WTzDLMwFIEOmTTaTM10S7cm6UJYOzo0FOPq5QDHYT80mQWp7T2st3Yy4iZ9w7Bf7q6Zg5EHojOVH850KXyb66Nf4Z4NMG7wBL0LJyBHC/g6UUMZtwDsm4hm4gqOGb3AquoKlnjXTRxKTtm/4d/UlOH1+k9L1cKEdoBYtuFq+Elf5M3bZSMAy0NTCFyM1+bVIr5Cu7HIwy0W2vOiMotrkWhpNE7Xq0Yf90UvsyjQObNF8w7ox1r7xQq/7+B/vRIYA0ovRB4qswMMBmKXgJD0SzlT0XhA6csDQLc9XcAGAmib9ysZFVODpqc+RK8EHkgck2geKaoHgY3pJoZI09aRkkx2zVTW545i80/lJJR0jhPR3ZVlj08lLHjRANnZ6ZePb3k8lCvznnZ7p1Y="
-
+    
 before_script:
 - cd v7
 - go vet ./...
