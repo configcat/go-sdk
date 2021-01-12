@@ -6,7 +6,7 @@ go:
 - master
 
 before_script:
-- cd v6
+- cd v7
 - go vet ./...
 
 script:

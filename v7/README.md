@@ -10,14 +10,14 @@ ConfigCat is a <a target="_blank" href="https://configcat.com">hosted feature fl
 [![Build Status](https://travis-ci.com/configcat/go-sdk.svg?branch=master)](https://travis-ci.com/configcat/go-sdk)
 [![Go Report Card](https://goreportcard.com/badge/github.com/configcat/go-sdk)](https://goreportcard.com/report/github.com/configcat/go-sdk)
 [![codecov](https://codecov.io/gh/configcat/go-sdk/branch/master/graph/badge.svg)](https://codecov.io/gh/configcat/go-sdk)
-[![GoDoc](https://godoc.org/github.com/configcat/go-sdk?status.svg)](https://pkg.go.dev/github.com/configcat/go-sdk/v5)
+[![GoDoc](https://godoc.org/github.com/configcat/go-sdk?status.svg)](https://pkg.go.dev/github.com/configcat/go-sdk/v7)
 ![License](https://img.shields.io/github/license/configcat/go-sdk.svg)
 
 ## Getting started
 
 ### 1. Install the package with `go`
 ```bash
-go get github.com/configcat/go-sdk/v6
+go get github.com/configcat/go-sdk/v7
 ```
 
 ### 2. Go to <a href="https://app.configcat.com/sdkkey" target="_blank">Connect your application</a> tab to get your *SDK Key*:
@@ -52,13 +52,11 @@ client.Close()
 
 ## Getting user specific setting values with Targeting
 
-Using this feature, you will be able to get different setting values for different users in your application by passing a `User` value to the `ValueForUser()` method.
-
-You can use the `UserValue` struct for this, or implement your own struct type. The client will inspect values in struct fields; see the documentation for more details.
+Using this feature, you will be able to get different setting values for different users in your application by passing a `UserData` struct to the specific setting evaluation method (`Bool()`, `String()`, `Int()`, `Float()`).
 
 Read more about [Targeting here](https://configcat.com/docs/advanced/targeting/).
 ```go
-user := configcat.NewUser("#USER-IDENTIFIER#")
+user := &configcat.UserData{Identifier: "#USER-IDENTIFIER#"}
 
 isMyAwesomeFeatureEnabled, ok := client.Bool("isMyAwesomeFeatureEnabled", false, user)
 if isMyAwesomeFeatureEnabled {
@@ -68,8 +66,8 @@ if isMyAwesomeFeatureEnabled {
 }
 ```
 
-## Polling
-By default, the ConfigCat client will poll to find out when the values have changed. The polling interval can be configured in the `Config` that's passed to `NewCustomClient`. It's also possible to manually poll using the `Client.Refresh` method.
+## Polling Modes
+The ConfigCat SDK supports 3 different polling mechanisms to acquire the setting values from ConfigCat. After latest setting values are downloaded, they are stored in the internal cache then all requests are served from there. Read more about Polling Modes and how to use them at [ConfigCat Docs](https://configcat.com/docs/sdk-reference/go/).
 
 ## Need help?
 https://configcat.com/support
