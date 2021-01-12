@@ -18,7 +18,7 @@ before_script:
 script:
 - go test -json > report.json
 - go test -coverprofile=coverage.txt -covermode=atomic
-- sonar-scanner
+- sonar-scanner -Dsonar.projectKey=configcat_go-sdk -Dsonar.projectVersion=$TRAVIS_BUILD_NUMBER -Dsonar.sources=v7 -Dsonar.go.tests.reportPaths=report.json -Dsonar.go.coverage.reportPaths=coverage.txt
 
 after_success:
 - bash <(curl -s https://codecov.io/bash)
