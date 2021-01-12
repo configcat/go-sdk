@@ -16,10 +16,12 @@ func (p *parseError) Error() string {
 }
 
 type config struct {
-	jsonBody   []byte
-	etag       string
-	root       *rootNode
-	evaluators sync.Map // reflect.Type -> map[string]entryEvalFunc
+	jsonBody []byte
+	etag     string
+	root     *rootNode
+	// Note: this is a pointer because the configuration
+	// can be copied (with the withFetchTime method).
+	evaluators *sync.Map // reflect.Type -> map[string]entryEvalFunc
 	allKeys    []string
 	keyValues  map[string]keyValue
 	fetchTime  time.Time
@@ -33,12 +35,13 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time) (*config, er
 	fixupRootNodeValues(&root)
 
 	return &config{
-		jsonBody:  jsonBody,
-		root:      &root,
-		keyValues: keyValuesForRootNode(&root),
-		allKeys:   keysForRootNode(&root),
-		etag:      etag,
-		fetchTime: fetchTime,
+		jsonBody:   jsonBody,
+		root:       &root,
+		evaluators: new(sync.Map),
+		keyValues:  keyValuesForRootNode(&root),
+		allKeys:    keysForRootNode(&root),
+		etag:       etag,
+		fetchTime:  fetchTime,
 	}, nil
 }
 
