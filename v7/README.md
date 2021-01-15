@@ -58,7 +58,7 @@ Read more about [Targeting here](https://configcat.com/docs/advanced/targeting/)
 ```go
 user := &configcat.UserData{Identifier: "#USER-IDENTIFIER#"}
 
-isMyAwesomeFeatureEnabled, ok := client.GetBoolValue("isMyAwesomeFeatureEnabled", false, user)
+isMyAwesomeFeatureEnabled := client.GetBoolValue("isMyAwesomeFeatureEnabled", false, user)
 if isMyAwesomeFeatureEnabled {
     DoTheNewThing()
 } else {
