@@ -115,21 +115,21 @@ func BenchmarkGet(b *testing.B) {
 			srv := newConfigServer(b)
 			srv.setResponseJSON(bench.node)
 			cfg := srv.config()
-			cfg.RefreshMode = Manual
+			cfg.PollingMode = Manual
 			cfg.Logger = DefaultLogger(LogLevelError)
 
 			client := NewCustomClient(cfg)
 			client.Refresh(context.Background())
 			defer client.Close()
 			b.Run("get-and-make", func(b *testing.B) {
-				val := client.String(bench.rule, "", bench.makeUser())
+				val := client.GetStringValue(bench.rule, "", bench.makeUser())
 				if val != bench.want {
 					b.Fatalf("unexpected result %#v", val)
 				}
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					client.String(bench.rule, "", bench.makeUser())
+					client.GetStringValue(bench.rule, "", bench.makeUser())
 				}
 			})
 			b.Run("get-only", func(b *testing.B) {

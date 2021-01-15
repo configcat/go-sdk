@@ -10,13 +10,13 @@ func TestNilSnapshot(t *testing.T) {
 	c := qt.New(t)
 	var snap *Snapshot
 	c.Assert(snap.WithUser(nil), qt.IsNil)
-	c.Assert(snap.VariationID("xxx"), qt.Equals, "")
-	c.Assert(snap.Get("xxx"), qt.Equals, nil)
-	key, val := snap.KeyValueForVariationID("xxx")
+	c.Assert(snap.GetVariationID("xxx"), qt.Equals, "")
+	c.Assert(snap.GetValue("xxx"), qt.Equals, nil)
+	key, val := snap.GetKeyValueForVariationID("xxx")
 	c.Assert(key, qt.Equals, "")
 	c.Assert(val, qt.Equals, nil)
-	c.Assert(snap.VariationIDs(), qt.IsNil)
-	c.Assert(snap.Keys(), qt.IsNil)
+	c.Assert(snap.GetVariationIDs(), qt.IsNil)
+	c.Assert(snap.GetAllKeys(), qt.IsNil)
 
 	// Test one flag type as proxy for the others, as they all use
 	// the same underlying mechanism.

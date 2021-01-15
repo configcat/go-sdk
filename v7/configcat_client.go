@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const DefaultMaxAge = 120 * time.Second
+const DefaultPollInterval = 60 * time.Second
 
 // Config describes configuration options for the Client.
 type Config struct {
@@ -42,27 +42,27 @@ type Config struct {
 	// used.
 	HTTPTimeout time.Duration
 
-	// RefreshMode specifies how the configuration is refreshed.
+	// PollingMode specifies how the configuration is refreshed.
 	// The zero value (default) is AutoPoll.
-	RefreshMode RefreshMode
+	PollingMode PollingMode
 
-	// NoWaitForRefresh specifies that a Client get method (Bool,
-	// Int, Float, String) should never wait for a configuration refresh
-	// to complete before returning.
+	// NoWaitForRefresh specifies that a Client get method (GetBoolValue,
+	// GetIntValue, GetFloatValue, GetStringValue) should never wait for a
+	// configuration refresh to complete before returning.
 	//
-	// By default, when this is false, if RefreshMode is AutoPoll,
-	// the first request may block, and if RefreshMode is Lazy, any
+	// By default, when this is false, if PollingMode is AutoPoll,
+	// the first request may block, and if PollingMode is Lazy, any
 	// request may block.
 	NoWaitForRefresh bool
 
-	// MaxAge specifies how old a configuration can
-	// be before it's considered stale. If this is
-	// zero, DefaultMaxAge is used.
+	// PollInterval specifies how old a configuration can
+	// be before it's considered stale. If this is less
+	// than 1, DefaultPollInterval is used.
 	//
-	// This parameter is ignored when RefreshMode is Manual.
-	MaxAge time.Duration
+	// This parameter is ignored when PollingMode is Manual.
+	PollInterval time.Duration
 
-	// ChangeNotify is called, if not nill, when the settings configuration
+	// ChangeNotify is called, if not nil, when the settings configuration
 	// has changed.
 	ChangeNotify func()
 
@@ -102,14 +102,14 @@ type Client struct {
 	firstFetchWait sync.Once
 }
 
-// RefreshMode specifies a strategy for refreshing the configuration.
-type RefreshMode int
+// PollingMode specifies a strategy for refreshing the configuration.
+type PollingMode int
 
 const (
 	// AutoPoll causes the client to refresh the configuration
-	// automatically at least as often as the Config.MaxAge
+	// automatically at least as often as the Config.PollInterval
 	// parameter.
-	AutoPoll RefreshMode = iota
+	AutoPoll PollingMode = iota
 
 	// Manual will only refresh the configuration when Refresh
 	// is called explicitly, falling back to the cache for the initial
@@ -118,14 +118,14 @@ const (
 
 	// Lazy will refresh the configuration whenever a value
 	// is retrieved and the configuration is older than
-	// Config.MaxAge.
+	// Config.PollInterval.
 	Lazy
 )
 
 // NewClient returns a new Client value that access the default
 // configcat servers using the given SDK key.
 //
-// The Bool, Int, Float and String methods can be used to find out current
+// The GetBoolValue, GetIntValue, GetFloatValue and GetStringValue methods can be used to find out current
 // feature flag values. These methods will always return immediately without
 // waiting - if there is no configuration available, they'll return a default
 // value.
@@ -137,8 +137,8 @@ func NewClient(sdkKey string) *Client {
 
 // NewCustomClient initializes a new ConfigCat Client with advanced configuration.
 func NewCustomClient(cfg Config) *Client {
-	if cfg.MaxAge == 0 {
-		cfg.MaxAge = DefaultMaxAge
+	if cfg.PollInterval < 1 {
+		cfg.PollInterval = DefaultPollInterval
 	}
 	if cfg.Logger == nil {
 		cfg.Logger = DefaultLogger(LogLevelWarn)
@@ -151,7 +151,7 @@ func NewCustomClient(cfg Config) *Client {
 		cfg:          cfg,
 		logger:       logger,
 		fetcher:      newConfigFetcher(cfg, logger),
-		needGetCheck: cfg.RefreshMode == Lazy || cfg.RefreshMode == AutoPoll && !cfg.NoWaitForRefresh,
+		needGetCheck: cfg.PollingMode == Lazy || cfg.PollingMode == AutoPoll && !cfg.NoWaitForRefresh,
 	}
 }
 
@@ -177,44 +177,64 @@ func (client *Client) Close() {
 	client.fetcher.close()
 }
 
-// Bool returns the value of a boolean-typed feature flag, or defaultValue if no
+// GetBoolValue returns the value of a boolean-typed feature flag, or defaultValue if no
 // value can be found. If user is non-nil, it will be used to
 // choose the value (see the User documentation for details).
 //
 // In Lazy refresh mode, this can block indefinitely while the configuration
 // is fetched. Use RefreshIfOlder explicitly if explicit control of timeouts
 // is needed.
-func (client *Client) Bool(key string, defaultValue bool, user User) bool {
+func (client *Client) GetBoolValue(key string, defaultValue bool, user User) bool {
 	return Bool(key, defaultValue).Get(client.Snapshot(user))
 }
 
-// Int is like Bool except for int-typed (whole number) feature flags.
-func (client *Client) Int(key string, defaultValue int, user User) int {
+// GetIntValue is like GetBoolValue except for int-typed (whole number) feature flags.
+func (client *Client) GetIntValue(key string, defaultValue int, user User) int {
 	return Int(key, defaultValue).Get(client.Snapshot(user))
 }
 
-// Int is like Bool except for float-typed (decimal number) feature flags.
-func (client *Client) Float(key string, defaultValue float64, user User) float64 {
+// GetFloatValue is like GetBoolValue except for float-typed (decimal number) feature flags.
+func (client *Client) GetFloatValue(key string, defaultValue float64, user User) float64 {
 	return Float(key, defaultValue).Get(client.Snapshot(user))
 }
 
-// Int is like Bool except for string-typed (text) feature flags.
-func (client *Client) String(key string, defaultValue string, user User) string {
+// GetStringValue is like GetBoolValue except for string-typed (text) feature flags.
+func (client *Client) GetStringValue(key string, defaultValue string, user User) string {
 	return String(key, defaultValue).Get(client.Snapshot(user))
 }
 
-// Get returns a feature flag value regardless of type. If there is no
-// value found, it returns nil; otherwise the returned value
-// has one of the dynamic types bool, int, float64, or string.
-func (client *Client) Get(key string, user User) interface{} {
-	return client.Snapshot(user).Get(key)
+// GetVariationID returns the variation ID (analytics) that will be used for the given key
+// with respect to the current user, or the default value if none is found.
+func (client *Client) GetVariationID(key string, defaultVariationId string, user User) string {
+	if result := client.Snapshot(user).GetVariationID(key); result != "" {
+		return result
+	}
+	return defaultVariationId
+}
+
+// GetVariationIDs returns all variation IDs (analytics) in the current configuration
+// that apply to the given user.
+func (client *Client) GetVariationIDs(user User) []string {
+	return client.Snapshot(user).GetVariationIDs()
+}
+
+// GetKeyValueForVariationID returns the key and value that
+// are associated with the given variation ID. If the
+// variation ID isn't found, it returns "", nil.
+func (client *Client) GetKeyValueForVariationID(id string) (string, interface{}) {
+	return client.Snapshot(nil).GetKeyValueForVariationID(id)
+}
+
+// GetAllKeys returns all the known keys.
+func (client *Client) GetAllKeys() []string {
+	return client.Snapshot(nil).GetAllKeys()
 }
 
 func (client *Client) Snapshot(user User) *Snapshot {
 	if client.needGetCheck {
-		switch client.cfg.RefreshMode {
+		switch client.cfg.PollingMode {
 		case Lazy:
-			if err := client.fetcher.refreshIfOlder(client.fetcher.ctx, time.Now().Add(-client.cfg.MaxAge), !client.cfg.NoWaitForRefresh); err != nil {
+			if err := client.fetcher.refreshIfOlder(client.fetcher.ctx, time.Now().Add(-client.cfg.PollInterval), !client.cfg.NoWaitForRefresh); err != nil {
 				client.logger.Errorf("lazy refresh failed: %v", err)
 			}
 		case AutoPoll:

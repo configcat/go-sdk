@@ -123,7 +123,7 @@ func (test integrationTest) runTest(t *testing.T) {
 					case valueKind:
 						val = client.Snapshot(user).value(idForKey(settingKey, false), settingKey)
 					case variationKind:
-						val = client.Snapshot(user).VariationID(settingKey)
+						val = client.Snapshot(user).GetVariationID(settingKey)
 					default:
 						t.Fatalf("unexpected kind %v", test.kind)
 					}

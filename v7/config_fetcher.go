@@ -73,14 +73,14 @@ func newConfigFetcher(cfg Config, logger *leveledLogger) *configFetcher {
 		f.urlIsCustom = true
 		f.baseURL = cfg.BaseURL
 	}
-	if cfg.RefreshMode == AutoPoll {
+	if cfg.PollingMode == AutoPoll {
 		// Start a fetcher goroutine immediately
 		// to avoid a potential double fetch
 		// when someone calls Refresh immediately
 		// after creating the client.
 		f.refreshIfOlder(f.ctx, time.Time{}, false)
 		f.wg.Add(1)
-		go f.runPoller(cfg.MaxAge)
+		go f.runPoller(cfg.PollInterval)
 	}
 	return f
 }

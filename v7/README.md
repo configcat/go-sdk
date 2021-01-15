@@ -36,7 +36,7 @@ client := configcat.NewClient("#YOUR-SDK-KEY#")
 
 ### 5. Get your setting value:
 ```go
-isMyAwesomeFeatureEnabled := client.Bool("isMyAwesomeFeatureEnabled", false, nil)
+isMyAwesomeFeatureEnabled := client.GetBoolValue("isMyAwesomeFeatureEnabled", false, nil)
 if isMyAwesomeFeatureEnabled {
     DoTheNewThing()
 } else {
@@ -52,13 +52,13 @@ client.Close()
 
 ## Getting user specific setting values with Targeting
 
-Using this feature, you will be able to get different setting values for different users in your application by passing a `UserData` struct to the specific setting evaluation method (`Bool()`, `String()`, `Int()`, `Float()`).
+Using this feature, you will be able to get different setting values for different users in your application by passing a `UserData` struct to the specific setting evaluation method (`GetBoolValue()`, `GetStringValue()`, `GetIntValue()`, `GetFloatValue()`).
 
 Read more about [Targeting here](https://configcat.com/docs/advanced/targeting/).
 ```go
 user := &configcat.UserData{Identifier: "#USER-IDENTIFIER#"}
 
-isMyAwesomeFeatureEnabled, ok := client.Bool("isMyAwesomeFeatureEnabled", false, user)
+isMyAwesomeFeatureEnabled, ok := client.GetBoolValue("isMyAwesomeFeatureEnabled", false, user)
 if isMyAwesomeFeatureEnabled {
     DoTheNewThing()
 } else {

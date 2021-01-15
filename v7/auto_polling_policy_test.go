@@ -15,7 +15,7 @@ func TestAutoPollingPolicy_PollChange(t *testing.T) {
 	srv.setResponse(configResponse{body: `{"test":1}`})
 
 	cfg := srv.config()
-	cfg.MaxAge = 10 * time.Millisecond
+	cfg.PollInterval = 10 * time.Millisecond
 	client := NewCustomClient(cfg)
 	defer client.Close()
 	err := client.Refresh(context.Background())
@@ -38,7 +38,7 @@ func TestAutoPollingPolicy_FetchFail(t *testing.T) {
 		body:   `something wrong`,
 	})
 	cfg := srv.config()
-	cfg.MaxAge = 2 * time.Second
+	cfg.PollInterval = 2 * time.Second
 	client := NewCustomClient(cfg)
 	defer client.Close()
 	err := client.Refresh(context.Background())
@@ -52,7 +52,7 @@ func TestAutoPollingPolicy_DoubleClose(t *testing.T) {
 	srv := newConfigServer(t)
 	srv.setResponse(configResponse{body: `{"test":1}`})
 	cfg := srv.config()
-	cfg.MaxAge = time.Millisecond
+	cfg.PollInterval = time.Millisecond
 	client := NewCustomClient(cfg)
 	client.Close()
 	client.Close()
@@ -64,7 +64,7 @@ func TestAutoPollingPolicy_WithNotify(t *testing.T) {
 	srv.setResponse(configResponse{body: `{"test":1}`})
 	cfg := srv.config()
 	notifyc := make(chan struct{})
-	cfg.MaxAge = time.Millisecond
+	cfg.PollInterval = time.Millisecond
 	cfg.ChangeNotify = func() { notifyc <- struct{}{} }
 	client := NewCustomClient(cfg)
 	defer client.Close()

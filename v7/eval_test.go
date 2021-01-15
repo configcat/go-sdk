@@ -356,7 +356,7 @@ func (test *opTest) run(c *qt.C, ectx *evalTestContext, user User) {
 		if test.want {
 			want = "true"
 		}
-		c.Check(ectx.client.String("key", "", user), qt.Equals, want, qt.Commentf("user: %#v", user))
+		c.Check(ectx.client.GetStringValue("key", "", user), qt.Equals, want, qt.Commentf("user: %#v", user))
 	})
 }
 
@@ -561,7 +561,7 @@ func newEvalTestContext(c *qt.C) *evalTestContext {
 	var ectx evalTestContext
 	ectx.srv = newConfigServer(c)
 	cfg := ectx.srv.config()
-	cfg.RefreshMode = Manual
+	cfg.PollingMode = Manual
 	ectx.logger = newTestLogger(c, LogLevelDebug).(*testLogger)
 	cfg.Logger = ectx.logger
 	ectx.client = NewCustomClient(cfg)

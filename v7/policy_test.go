@@ -20,7 +20,7 @@ func TestFetchFailWithCacheFallback(t *testing.T) {
 
 	// First use a client to populate the cache.
 	cfg := srv.config()
-	cfg.MaxAge = 10 * time.Millisecond
+	cfg.PollInterval = 10 * time.Millisecond
 
 	cache := &customCache{
 		items: map[string]string{},

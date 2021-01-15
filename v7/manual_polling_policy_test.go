@@ -15,7 +15,7 @@ func TestManualPollingPolicy_Refresh(t *testing.T) {
 	// fail if we get a request.
 
 	cfg := srv.config()
-	cfg.RefreshMode = Manual
+	cfg.PollingMode = Manual
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
@@ -36,7 +36,7 @@ func TestManualPollingPolicy_FetchFail(t *testing.T) {
 	srv := newConfigServer(t)
 
 	cfg := srv.config()
-	cfg.RefreshMode = Manual
+	cfg.PollingMode = Manual
 	client := NewCustomClient(cfg)
 	defer client.Close()
 

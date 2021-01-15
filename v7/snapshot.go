@@ -54,9 +54,9 @@ func (snap *Snapshot) value(id keyID, key string) interface{} {
 	return val
 }
 
-// VariationID returns the variation ID that will be used for the given key
+// GetVariationID returns the variation ID that will be used for the given key
 // with respect to the current user, or the empty string if none is found.
-func (snap *Snapshot) VariationID(key string) string {
+func (snap *Snapshot) GetVariationID(key string) string {
 	_, variationID := snap.valueAndVariationID(idForKey(key, false), key)
 	return variationID
 }
@@ -71,13 +71,13 @@ func (snap *Snapshot) valueAndVariationID(id keyID, key string) (interface{}, st
 	}
 	if eval == nil {
 		snap.logger.Errorf("error getting value: value not found for key %s."+
-			" Here are the available keys: %s", key, strings.Join(snap.Keys(), ","))
+			" Here are the available keys: %s", key, strings.Join(snap.GetAllKeys(), ","))
 		return nil, ""
 	}
 	return eval(snap.logger, snap.user)
 }
 
-// Get returns a feature flag value regardless of type. If there is no
+// GetValue returns a feature flag value regardless of type. If there is no
 // value found, it returns nil; otherwise the returned value
 // has one of the dynamic types bool, int, float64, or string.
 //
@@ -86,14 +86,14 @@ func (snap *Snapshot) valueAndVariationID(id keyID, key string) (interface{}, st
 //
 //	someFlag := configcat.Bool("someFlag", false)
 // 	value := someFlag.Get(snap)
-func (snap *Snapshot) Get(key string) interface{} {
+func (snap *Snapshot) GetValue(key string) interface{} {
 	return snap.value(idForKey(key, true), key)
 }
 
-// KeyValueForVariationID returns the key and value that
+// GetKeyValueForVariationID returns the key and value that
 // are associated with the given variation ID. If the
 // variation ID isn't found, it returns "", nil.
-func (snap *Snapshot) KeyValueForVariationID(id string) (string, interface{}) {
+func (snap *Snapshot) GetKeyValueForVariationID(id string) (string, interface{}) {
 	if snap == nil {
 		return "", nil
 	}
@@ -105,9 +105,9 @@ func (snap *Snapshot) KeyValueForVariationID(id string) (string, interface{}) {
 	return key, value
 }
 
-// VariationIDs returns all variation IDs in the current configuration
+// GetVariationIDs returns all variation IDs in the current configuration
 // that apply to the current user.
-func (snap *Snapshot) VariationIDs() []string {
+func (snap *Snapshot) GetVariationIDs() []string {
 	if snap == nil {
 		return nil
 	}
@@ -120,8 +120,8 @@ func (snap *Snapshot) VariationIDs() []string {
 	return ids
 }
 
-// Keys returns all the known keys.
-func (snap *Snapshot) Keys() []string {
+// GetAllKeys returns all the known keys.
+func (snap *Snapshot) GetAllKeys() []string {
 	if snap == nil {
 		return nil
 	}

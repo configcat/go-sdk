@@ -15,21 +15,21 @@ func TestLazyLoadingPolicy_NoAsync(t *testing.T) {
 	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1", stringEntry))
 
 	cfg := srv.config()
-	cfg.RefreshMode = Lazy
-	cfg.MaxAge = 50 * time.Millisecond
+	cfg.PollingMode = Lazy
+	cfg.PollInterval = 50 * time.Millisecond
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
 
 	srv.setResponse(configResponse{
 		body:  marshalJSON(rootNodeWithKeyValue("key", "value2", stringEntry)),
 		sleep: 40 * time.Millisecond,
 	})
-	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
 
 	time.Sleep(100 * time.Millisecond)
-	c.Assert(client.String("key", "", nil), qt.Equals, "value2")
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value2")
 }
 
 func TestLazyLoadingPolicy_FetchFail(t *testing.T) {
@@ -41,8 +41,8 @@ func TestLazyLoadingPolicy_FetchFail(t *testing.T) {
 	})
 
 	cfg := srv.config()
-	cfg.RefreshMode = Lazy
-	cfg.MaxAge = 50 * time.Millisecond
+	cfg.PollingMode = Lazy
+	cfg.PollInterval = 50 * time.Millisecond
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
@@ -55,30 +55,30 @@ func TestLazyLoadingPolicy_Async(t *testing.T) {
 	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1", stringEntry))
 
 	cfg := srv.config()
-	cfg.RefreshMode = Lazy
-	cfg.MaxAge = 50 * time.Millisecond
+	cfg.PollingMode = Lazy
+	cfg.PollInterval = 50 * time.Millisecond
 	cfg.NoWaitForRefresh = true
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	c.Assert(client.String("key", "", nil), qt.Equals, "")
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "")
 	// Wait for the response to arrive.
 	time.Sleep(10 * time.Millisecond)
-	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
 
 	srv.setResponse(configResponse{
 		body:  marshalJSON(rootNodeWithKeyValue("key", "value2", stringEntry)),
 		sleep: 40 * time.Millisecond,
 	})
-	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
 
 	time.Sleep(100 * time.Millisecond)
 	// The config is fetched lazily and takes at least 40ms, so
 	// we'll still see the old value.
-	c.Assert(client.String("key", "", nil), qt.Equals, "value1")
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
 
 	time.Sleep(50 * time.Millisecond)
-	c.Assert(client.String("key", "", nil), qt.Equals, "value2")
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value2")
 }
 
 func TestLazyLoadingPolicy_NotModified(t *testing.T) {
@@ -90,8 +90,8 @@ func TestLazyLoadingPolicy_NotModified(t *testing.T) {
 	})
 
 	cfg := srv.config()
-	cfg.RefreshMode = Lazy
-	cfg.MaxAge = 10 * time.Millisecond
+	cfg.PollingMode = Lazy
+	cfg.PollInterval = 10 * time.Millisecond
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
