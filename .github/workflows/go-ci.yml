@@ -1,0 +1,50 @@
+name: Go CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v7
+    strategy:
+      matrix:
+        go: [1.12.x, 1.13.x, 1.14.x, 1.15.x, 1.16.x]
+    
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go }}
+          
+    - name: Vet
+      run: go vet ./...
+
+    - name: Test
+      run: go test -race -json > report.json
+  
+  coverage:
+    runs-on: ubuntu-latest
+    needs: test
+    defaults:
+      run:
+        working-directory: v7
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.x
+        
+    - name: Run Coverage
+      run: go test -coverprofile=coverage.txt -covermode=atomic
+    
+    - name: Upload Report
+      run: bash <(curl -s https://codecov.io/bash)
