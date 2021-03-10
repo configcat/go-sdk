@@ -28,7 +28,7 @@ jobs:
       run: go vet ./...
 
     - name: Test
-      run: go test -race -json > report.json
+      run: go test -race
   
   coverage:
     runs-on: ubuntu-latest
