@@ -36,23 +36,12 @@ client := configcat.NewClient("#YOUR-SDK-KEY#")
 
 ### 5. Get your setting value:
 ```go
-isMyAwesomeFeatureEnabled, ok := client.GetValue("isMyAwesomeFeatureEnabled", false).(bool)
-if ok && isMyAwesomeFeatureEnabled {
+isMyAwesomeFeatureEnabled := client.GetBoolValue("isMyAwesomeFeatureEnabled", false, nil)
+if isMyAwesomeFeatureEnabled {
     DoTheNewThing()
 } else {
     DoTheOldThing()
 }
-```
-Or use the async SDKs:
-```go
-client.GetValueAsync("isMyAwesomeFeatureEnabled", false, func(result interface{}) {
-    isMyAwesomeFeatureEnabled, ok := result.(bool)
-    if ok && isMyAwesomeFeatureEnabled {
-        DoTheNewThing()
-    } else {
-        DoTheOldThing()
-    }
-})
 ```
 
 ### 6. Close *ConfigCat* client on application exit:
@@ -62,14 +51,15 @@ client.Close()
 
 
 ## Getting user specific setting values with Targeting
-Using this feature, you will be able to get different setting values for different users in your application by passing a `User Object` to the `getValue()` function.
+
+Using this feature, you will be able to get different setting values for different users in your application by passing a `UserData` struct to the specific setting evaluation method (`GetBoolValue()`, `GetStringValue()`, `GetIntValue()`, `GetFloatValue()`).
 
 Read more about [Targeting here](https://configcat.com/docs/advanced/targeting/).
 ```go
-user := configcat.NewUser("#USER-IDENTIFIER#")
+user := &configcat.UserData{Identifier: "#USER-IDENTIFIER#"}
 
-isMyAwesomeFeatureEnabled, ok := client.GetValueForUser("isMyAwesomeFeatureEnabled", user, false).(bool)
-if ok && isMyAwesomeFeatureEnabled {
+isMyAwesomeFeatureEnabled := client.GetBoolValue("isMyAwesomeFeatureEnabled", false, user)
+if isMyAwesomeFeatureEnabled {
     DoTheNewThing()
 } else {
     DoTheOldThing()
