@@ -112,7 +112,7 @@ func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) entryEvalFunc 
 				"Read more: https://configcat.com/docs/advanced/user-object.", key)
 		}
 		if logger.enabled(LogLevelInfo) {
-			logger.Infof("Returning %v.", node.Value)
+			logger.Infof("Returning %v=%v.", key, node.Value)
 		}
 		return node.Value, node.VariationID
 	}

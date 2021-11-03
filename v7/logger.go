@@ -35,6 +35,16 @@ func DefaultLogger(level LogLevel) Logger {
 	return logger
 }
 
+func newLeveledLogger(logger Logger) *leveledLogger {
+	if logger == nil {
+		logger = DefaultLogger(LogLevelWarn)
+	}
+	return &leveledLogger{
+		level:  logger.GetLevel(),
+		Logger: logger,
+	}
+}
+
 // leveledLogger wraps a Logger for efficiency reasons: it's a static type
 // rather than an interface so the compiler can inline the level check
 // and thus avoid the allocation for the arguments.
