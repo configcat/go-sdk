@@ -140,13 +140,7 @@ func NewCustomClient(cfg Config) *Client {
 	if cfg.PollInterval < 1 {
 		cfg.PollInterval = DefaultPollInterval
 	}
-	if cfg.Logger == nil {
-		cfg.Logger = DefaultLogger(LogLevelWarn)
-	}
-	logger := &leveledLogger{
-		level:  cfg.Logger.GetLevel(),
-		Logger: cfg.Logger,
-	}
+	logger := newLeveledLogger(cfg.Logger)
 	return &Client{
 		cfg:          cfg,
 		logger:       logger,

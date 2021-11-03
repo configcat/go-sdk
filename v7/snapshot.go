@@ -1,9 +1,45 @@
 package configcat
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
+	"time"
 )
+
+// NewSnapshot returns a snapshot that always returns the given values.
+//
+// Each entry in the values map is keyed by a flag
+// name and holds the value that the snapshot will return
+// for that flag. Each value must be one of the types
+// bool, int, float64, or string.
+func NewSnapshot(logger Logger, values map[string]interface{}) (*Snapshot, error) {
+	entries := make(map[string]*entry, len(values))
+	for name, val := range values {
+		var et entryType
+		switch val.(type) {
+		case bool:
+			et = boolEntry
+		case int:
+			et = intEntry
+		case float64:
+			et = floatEntry
+		case string:
+			et = stringEntry
+		default:
+			return nil, fmt.Errorf("value for flag %q has unexpected type %T (%v); must be bool, int, float64 or string", name, val, val)
+		}
+		entries[name] = &entry{
+			Value: val,
+			Type:  et,
+		}
+	}
+	cfg := newConfig(&rootNode{
+		Entries: entries,
+		// Note: Preferences aren't used by the snapshot code.
+	}, nil, "", time.Now())
+	return newSnapshot(cfg, nil, newLeveledLogger(logger)), nil
+}
 
 // Snapshot holds a snapshot of the Configcat configuration.
 // A snapshot is immutable once taken.
