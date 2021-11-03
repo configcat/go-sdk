@@ -121,6 +121,30 @@ func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) entryEvalFunc 
 		// No user provided
 		return noUser
 	}
+
+	// Optimization: we can omit evaluation for all the last rules
+	// that return node.Value, because there's no way to tell the
+	// difference between that and the rules not existing. This
+	// covers the common case where someone keeps a rule around
+	// because it's got some useful targetting info in it, but
+	// doesn't wish it to do anything different from the default.
+	i := len(rules) - 1
+	for ; i >= 0; i-- {
+		if rules[i].Value != node.Value {
+			break
+		}
+	}
+	rules = rules[:i+1]
+
+	percentageRules := node.PercentageRules
+	i = len(percentageRules) - 1
+	for ; i >= 0; i-- {
+		if percentageRules[i].Value != node.Value {
+			break
+		}
+	}
+	percentageRules = percentageRules[:i+1]
+
 	matchers := make([]func(userv reflect.Value) (bool, error), len(rules))
 	attrInfos := make([]attrInfo, len(rules))
 	for i, rule := range rules {
@@ -172,7 +196,7 @@ func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) entryEvalFunc 
 			}
 		}
 		// evaluate percentage rules
-		if len(node.PercentageRules) > 0 {
+		if len(percentageRules) > 0 {
 			idBytes := identifierInfo.asBytes(userv)
 			hashKey := make([]byte, len(keyBytes)+len(idBytes))
 			copy(hashKey, keyBytes)
@@ -186,7 +210,7 @@ func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) entryEvalFunc 
 
 			scaled := num % 100
 			bucket := int64(0)
-			for _, rule := range node.PercentageRules {
+			for _, rule := range percentageRules {
 				bucket += rule.Percentage
 				if scaled < bucket {
 					result := rule.Value

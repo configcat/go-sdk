@@ -45,6 +45,38 @@ func BenchmarkGet(b *testing.B) {
 		},
 		want: "no-match",
 	}, {
+		benchName: "one-of-all-rules-same-value",
+		node: &rootNode{
+			Entries: map[string]*entry{
+				"rule": {
+					VariationID: "607147d5",
+					Value:       "match",
+					RolloutRules: []*rolloutRule{{
+						ComparisonAttribute: "Email",
+						ComparisonValue:     "a@configcat.com, b@configcat.com",
+						Comparator:          opOneOf,
+						VariationID:         "385d9803",
+						Value:               "match",
+					}, {
+						ComparisonAttribute: "Country",
+						ComparisonValue:     "United",
+						Comparator:          opNotOneOf,
+						VariationID:         "385d9803",
+						Value:               "match",
+					}},
+				},
+			},
+		},
+		rule: "rule",
+		makeUser: func() User {
+			return &UserData{
+				Identifier: "unknown-identifier",
+				Email:      "x@configcat.com",
+				Country:    "United",
+			}
+		},
+		want: "match",
+	}, {
 		benchName: "less-than-with-int",
 		node: &rootNode{
 			Entries: map[string]*entry{
@@ -109,6 +141,47 @@ func BenchmarkGet(b *testing.B) {
 			}
 		},
 		want: "high-percent",
+	}, {
+		benchName: "with-percentage-all-same-value",
+		node: &rootNode{
+			Entries: map[string]*entry{
+				"bool30TrueAdvancedRules": {
+					VariationID: "607147d5",
+					Value:       "all-percent",
+					RolloutRules: []*rolloutRule{{
+						ComparisonAttribute: "Email",
+						ComparisonValue:     "a@configcat.com, b@configcat.com",
+						Comparator:          opOneOf,
+						VariationID:         "385d9803",
+						Value:               "email-match",
+					}, {
+						ComparisonAttribute: "Country",
+						ComparisonValue:     "United",
+						Comparator:          opNotOneOf,
+						VariationID:         "385d9803",
+						Value:               "country-match",
+					}},
+					PercentageRules: []percentageRule{{
+						VariationID: "607147d5",
+						Value:       "all-percent",
+						Percentage:  30,
+					}, {
+						VariationID: "385d9803",
+						Value:       "all-percent",
+						Percentage:  70,
+					}},
+				},
+			},
+		},
+		rule: "bool30TrueAdvancedRules",
+		makeUser: func() User {
+			return &UserData{
+				Identifier: "unknown-identifier",
+				Email:      "x@configcat.com",
+				Country:    "United",
+			}
+		},
+		want: "all-percent",
 	}}
 	for _, bench := range benchmarks {
 		b.Run(bench.benchName, func(b *testing.B) {
