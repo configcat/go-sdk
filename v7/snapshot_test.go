@@ -236,6 +236,10 @@ func TestLogging(t *testing.T) {
 
 func TestNewSnapshot(t *testing.T) {
 	c := qt.New(t)
+	// Make sure there's another flag in there so even when we run
+	// the test on its own, we're still testing the case where the
+	// flag ids don't start from zero.
+	Bool("something", false)
 	values := map[string]interface{}{
 		"intFlag":    1,
 		"floatFlag":  2.0,
@@ -249,6 +253,19 @@ func TestNewSnapshot(t *testing.T) {
 	}
 	// Sanity check that it works OK with Flag values.
 	c.Assert(Int("intFlag", 0).Get(snap), qt.Equals, 1)
+	c.Assert(snap.GetAllKeys(), qt.ContentEquals, []string{
+		"intFlag",
+		"floatFlag",
+		"stringFlag",
+		"boolFlag",
+	})
+	c.Assert(snap.GetVariationID("intFlag"), qt.Equals, "")
+	c.Assert(snap.GetVariationIDs(), qt.IsNil)
+	id, val := snap.GetKeyValueForVariationID("")
+	c.Assert(id, qt.Equals, "")
+	c.Assert(val, qt.Equals, nil)
+
+	c.Assert(snap.WithUser(&UserData{}), qt.Equals, snap)
 }
 
 func TestNewSnapshotWithUnknownType(t *testing.T) {

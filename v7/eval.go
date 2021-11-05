@@ -82,7 +82,7 @@ func (conf *config) evaluatorsForUserType(userType reflect.Type) ([]entryEvalFun
 	return entries1.([]entryEvalFunc), nil
 }
 
-type entryEvalFunc = func(logger *leveledLogger, userv reflect.Value) (interface{}, string)
+type entryEvalFunc = func(id keyID, logger *leveledLogger, userv reflect.Value) (interface{}, string)
 
 func entryEvaluators(root *rootNode, userType reflect.Type) ([]entryEvalFunc, error) {
 	tinfo, err := newUserTypeInfo(userType)
@@ -105,14 +105,11 @@ func entryEvaluators(root *rootNode, userType reflect.Type) ([]entryEvalFunc, er
 
 func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) entryEvalFunc {
 	rules := node.RolloutRules
-	noUser := func(logger *leveledLogger, user reflect.Value) (interface{}, string) {
+	noUser := func(_ keyID, logger *leveledLogger, user reflect.Value) (interface{}, string) {
 		if logger.enabled(LogLevelWarn) && (len(rules) > 0 || len(node.PercentageRules) > 0) {
 			logger.Warnf("Evaluating GetValue(%s). UserObject missing! You should pass a "+
 				"UserObject to GetValueForUser() in order to make targeting work properly. "+
 				"Read more: https://configcat.com/docs/advanced/user-object.", key)
-		}
-		if logger.enabled(LogLevelInfo) {
-			logger.Infof("Returning %v=%v.", key, node.Value)
 		}
 		return node.Value, node.VariationID
 	}
@@ -130,10 +127,10 @@ func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) entryEvalFunc 
 	identifierInfo := tinfo.attrInfo("Identifier")
 	keyBytes := []byte(key)
 
-	return func(logger *leveledLogger, userv reflect.Value) (interface{}, string) {
+	return func(id keyID, logger *leveledLogger, userv reflect.Value) (interface{}, string) {
 		if tinfo.deref {
 			if userv.IsNil() {
-				return noUser(logger, userv)
+				return noUser(id, logger, userv)
 			}
 			userv = userv.Elem()
 		}
@@ -189,19 +186,11 @@ func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) entryEvalFunc 
 			for _, rule := range node.PercentageRules {
 				bucket += rule.Percentage
 				if scaled < bucket {
-					result := rule.Value
-					if logger.enabled(LogLevelInfo) {
-						logger.Infof("Evaluating %% options. Returning %v", result)
-					}
-					return result, rule.VariationID
+					return rule.Value, rule.VariationID
 				}
 			}
 		}
-		result := node.Value
-		if logger.enabled(LogLevelInfo) {
-			logger.Infof("Returning %v.", result)
-		}
-		return result, node.VariationID
+		return node.Value, node.VariationID
 	}
 }
 

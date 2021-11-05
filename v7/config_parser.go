@@ -68,6 +68,9 @@ func (conf *config) body() string {
 }
 
 func (conf *config) getKeyAndValueForVariation(variationID string) (string, interface{}) {
+	if conf == nil {
+		return "", nil
+	}
 	kv := conf.keyValues[variationID]
 	return kv.key, kv.value
 }
