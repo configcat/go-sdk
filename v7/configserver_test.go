@@ -157,14 +157,14 @@ func testLeveledLogger(t testing.TB) *leveledLogger {
 // testLogger implements the Logger interface by logging to the test.T
 // instance.
 type testLogger struct {
-	t     testing.TB
-	level LogLevel
+	logFunc func(string, ...interface{})
+	level   LogLevel
 }
 
 func newTestLogger(t testing.TB, level LogLevel) Logger {
 	return &testLogger{
-		t:     t,
-		level: level,
+		logFunc: t.Logf,
+		level:   level,
 	}
 }
 
@@ -221,13 +221,13 @@ func (log testLogger) Errorln(args ...interface{}) {
 }
 
 func (log testLogger) logf(level string, format string, args ...interface{}) {
-	log.t.Logf("%s: %s", level, fmt.Sprintf(format, args...))
+	log.logFunc("%s: %s", level, fmt.Sprintf(format, args...))
 }
 
 func (log testLogger) log(level string, args ...interface{}) {
-	log.t.Logf("%s: %s", level, fmt.Sprint(args...))
+	log.logFunc("%s: %s", level, fmt.Sprint(args...))
 }
 
 func (log testLogger) logln(level string, args ...interface{}) {
-	log.t.Logf("%s: %s", level, fmt.Sprintln(args...))
+	log.logFunc("%s: %s", level, fmt.Sprintln(args...))
 }

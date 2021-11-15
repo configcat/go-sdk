@@ -334,7 +334,7 @@ type opTest struct {
 
 func (test *opTest) run(c *qt.C, ectx *evalTestContext, user User) {
 	c.Run(test.testName, func(c *qt.C) {
-		ectx.logger.t = c
+		ectx.logger.logFunc = c.Logf
 		c.Logf("operator %v; cmpVal %v; want %v", test.op, test.cmpVal, test.want)
 		ectx.srv.setResponseJSON(&rootNode{
 			Entries: map[string]*entry{
