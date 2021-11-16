@@ -117,7 +117,7 @@ func (test integrationTest) runTest(t *testing.T) {
 			for i, settingKey := range settingKeys {
 				t.Run(fmt.Sprintf("key-%s", settingKey), func(t *testing.T) {
 					t.Logf("rule:\n%s", describeRules(client.fetcher.current(), settingKey))
-					tlogger.t = t
+					tlogger.logFunc = t.Logf
 					var val interface{}
 					switch test.kind {
 					case valueKind:

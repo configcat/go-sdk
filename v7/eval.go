@@ -162,7 +162,7 @@ func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) entryEvalFunc 
 						err,
 					)
 				}
-			} else if logger.enabled(LogLevelDebug) {
+			} else if logger.enabled(LogLevelInfo) {
 				logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => no match",
 					rule.ComparisonAttribute,
 					attrInfos[i].asString(userv),
