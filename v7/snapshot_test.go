@@ -40,7 +40,7 @@ var loggingTests = []struct {
 	expectValue: "value",
 	expectLogs: []string{
 		"INFO: fetching from $HOST_URL",
-		"INFO: Returning value.",
+		"INFO: Returning key=value.",
 	},
 }, {
 	testName: "RolloutRulesButNoUser",
@@ -63,7 +63,7 @@ var loggingTests = []struct {
 	expectLogs: []string{
 		"INFO: fetching from $HOST_URL",
 		"WARN: Evaluating GetValue(key). UserObject missing! You should pass a UserObject to GetValueForUser() in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object.",
-		"INFO: Returning defaultValue.",
+		"INFO: Returning key=defaultValue.",
 	},
 }, {
 	testName: "RolloutRulesWithUser",
@@ -95,6 +95,7 @@ var loggingTests = []struct {
 		"INFO: fetching from $HOST_URL",
 		"INFO: Evaluating rule: [Identifier:y] [CONTAINS] [x] => no match",
 		"INFO: Evaluating rule: [Identifier:y] [CONTAINS] [y] => match, returning: v2",
+		"INFO: Returning key=v2.",
 	},
 }, {
 	testName: "PercentageRulesButNoUser",
@@ -118,7 +119,7 @@ var loggingTests = []struct {
 	expectLogs: []string{
 		"INFO: fetching from $HOST_URL",
 		"WARN: Evaluating GetValue(key). UserObject missing! You should pass a UserObject to GetValueForUser() in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object.",
-		"INFO: Returning defaultValue.",
+		"INFO: Returning key=defaultValue.",
 	},
 }, {
 	testName: "PercentageRulesWithUser",
@@ -144,7 +145,7 @@ var loggingTests = []struct {
 	expectValue: "high-percent",
 	expectLogs: []string{
 		"INFO: fetching from $HOST_URL",
-		"INFO: Evaluating % options. Returning high-percent",
+		"INFO: Returning key=high-percent.",
 	},
 }, {
 	testName: "MatchErrorInUser",
@@ -170,7 +171,7 @@ var loggingTests = []struct {
 	expectLogs: []string{
 		"INFO: fetching from $HOST_URL",
 		"INFO: Evaluating rule: [Identifier:bogus] [< (SemVer)] [1.2.3] => SKIP rule. Validation error: No Major.Minor.Patch elements found",
-		"INFO: Returning defaultValue.",
+		"INFO: Returning key=defaultValue.",
 	},
 }, {
 	testName: "MatchErrorRules",
@@ -196,7 +197,7 @@ var loggingTests = []struct {
 	expectLogs: []string{
 		"INFO: fetching from $HOST_URL",
 		"INFO: Evaluating rule: [Identifier:1.2.3] [< (SemVer)] [bogus] => SKIP rule. Validation error: No Major.Minor.Patch elements found",
-		"INFO: Returning defaultValue.",
+		"INFO: Returning key=defaultValue.",
 	},
 }}
 
