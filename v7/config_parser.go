@@ -25,16 +25,19 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time) (*config, er
 		return nil, err
 	}
 	fixupRootNodeValues(&root)
+	return newConfig(&root, jsonBody, etag, fetchTime), nil
+}
 
+func newConfig(root *rootNode, jsonBody []byte, etag string, fetchTime time.Time) *config {
 	return &config{
 		jsonBody:   jsonBody,
-		root:       &root,
+		root:       root,
 		evaluators: new(sync.Map),
-		keyValues:  keyValuesForRootNode(&root),
-		allKeys:    keysForRootNode(&root),
+		keyValues:  keyValuesForRootNode(root),
+		allKeys:    keysForRootNode(root),
 		etag:       etag,
 		fetchTime:  fetchTime,
-	}, nil
+	}
 }
 
 func (conf *config) equal(c1 *config) bool {
@@ -65,6 +68,9 @@ func (conf *config) body() string {
 }
 
 func (conf *config) getKeyAndValueForVariation(variationID string) (string, interface{}) {
+	if conf == nil {
+		return "", nil
+	}
 	kv := conf.keyValues[variationID]
 	return kv.key, kv.value
 }

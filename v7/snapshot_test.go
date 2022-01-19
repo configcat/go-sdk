@@ -40,7 +40,7 @@ var loggingTests = []struct {
 	expectValue: "value",
 	expectLogs: []string{
 		"INFO: fetching from $HOST_URL",
-		"INFO: Returning value.",
+		"INFO: Returning key=value.",
 	},
 }, {
 	testName: "RolloutRulesButNoUser",
@@ -63,7 +63,7 @@ var loggingTests = []struct {
 	expectLogs: []string{
 		"INFO: fetching from $HOST_URL",
 		"WARN: Evaluating GetValue(key). UserObject missing! You should pass a UserObject to GetValueForUser() in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object.",
-		"INFO: Returning defaultValue.",
+		"INFO: Returning key=defaultValue.",
 	},
 }, {
 	testName: "RolloutRulesWithUser",
@@ -95,6 +95,7 @@ var loggingTests = []struct {
 		"INFO: fetching from $HOST_URL",
 		"INFO: Evaluating rule: [Identifier:y] [CONTAINS] [x] => no match",
 		"INFO: Evaluating rule: [Identifier:y] [CONTAINS] [y] => match, returning: v2",
+		"INFO: Returning key=v2.",
 	},
 }, {
 	testName: "PercentageRulesButNoUser",
@@ -118,7 +119,7 @@ var loggingTests = []struct {
 	expectLogs: []string{
 		"INFO: fetching from $HOST_URL",
 		"WARN: Evaluating GetValue(key). UserObject missing! You should pass a UserObject to GetValueForUser() in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object.",
-		"INFO: Returning defaultValue.",
+		"INFO: Returning key=defaultValue.",
 	},
 }, {
 	testName: "PercentageRulesWithUser",
@@ -144,7 +145,7 @@ var loggingTests = []struct {
 	expectValue: "high-percent",
 	expectLogs: []string{
 		"INFO: fetching from $HOST_URL",
-		"INFO: Evaluating % options. Returning high-percent",
+		"INFO: Returning key=high-percent.",
 	},
 }, {
 	testName: "MatchErrorInUser",
@@ -170,7 +171,7 @@ var loggingTests = []struct {
 	expectLogs: []string{
 		"INFO: fetching from $HOST_URL",
 		"INFO: Evaluating rule: [Identifier:bogus] [< (SemVer)] [1.2.3] => SKIP rule. Validation error: No Major.Minor.Patch elements found",
-		"INFO: Returning defaultValue.",
+		"INFO: Returning key=defaultValue.",
 	},
 }, {
 	testName: "MatchErrorRules",
@@ -196,7 +197,7 @@ var loggingTests = []struct {
 	expectLogs: []string{
 		"INFO: fetching from $HOST_URL",
 		"INFO: Evaluating rule: [Identifier:1.2.3] [< (SemVer)] [bogus] => SKIP rule. Validation error: No Major.Minor.Patch elements found",
-		"INFO: Returning defaultValue.",
+		"INFO: Returning key=defaultValue.",
 	},
 }}
 
@@ -232,4 +233,47 @@ func TestLogging(t *testing.T) {
 			c.Check(logs, qt.DeepEquals, expectLogs)
 		})
 	}
+}
+
+func TestNewSnapshot(t *testing.T) {
+	c := qt.New(t)
+	// Make sure there's another flag in there so even when we run
+	// the test on its own, we're still testing the case where the
+	// flag ids don't start from zero.
+	Bool("something", false)
+	values := map[string]interface{}{
+		"intFlag":    1,
+		"floatFlag":  2.0,
+		"stringFlag": "three",
+		"boolFlag":   true,
+	}
+	snap, err := NewSnapshot(newTestLogger(t, LogLevelDebug), values)
+	c.Assert(err, qt.IsNil)
+	for key, want := range values {
+		c.Assert(snap.GetValue(key), qt.Equals, want)
+	}
+	// Sanity check that it works OK with Flag values.
+	c.Assert(Int("intFlag", 0).Get(snap), qt.Equals, 1)
+	c.Assert(snap.GetAllKeys(), qt.ContentEquals, []string{
+		"intFlag",
+		"floatFlag",
+		"stringFlag",
+		"boolFlag",
+	})
+	c.Assert(snap.GetVariationID("intFlag"), qt.Equals, "")
+	c.Assert(snap.GetVariationIDs(), qt.IsNil)
+	id, val := snap.GetKeyValueForVariationID("")
+	c.Assert(id, qt.Equals, "")
+	c.Assert(val, qt.Equals, nil)
+
+	c.Assert(snap.WithUser(&UserData{}), qt.Equals, snap)
+}
+
+func TestNewSnapshotWithUnknownType(t *testing.T) {
+	c := qt.New(t)
+	snap, err := NewSnapshot(newTestLogger(t, LogLevelDebug), map[string]interface{}{
+		"badVal": int64(1),
+	})
+	c.Check(err, qt.ErrorMatches, `value for flag "badVal" has unexpected type int64 \(1\); must be bool, int, float64 or string`)
+	c.Check(snap, qt.IsNil)
 }

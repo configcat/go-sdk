@@ -147,13 +147,6 @@ func marshalJSON(x interface{}) string {
 	return string(data)
 }
 
-func testLeveledLogger(t testing.TB) *leveledLogger {
-	return &leveledLogger{
-		level:  LogLevelDebug,
-		Logger: newTestLogger(t, LogLevelDebug),
-	}
-}
-
 // testLogger implements the Logger interface by logging to the test.T
 // instance.
 type testLogger struct {

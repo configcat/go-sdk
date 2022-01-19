@@ -2,7 +2,10 @@ package configcat
 
 import (
 	"context"
+	"fmt"
 	"testing"
+
+	qt "github.com/frankban/quicktest"
 )
 
 func BenchmarkGet(b *testing.B) {
@@ -146,5 +149,19 @@ func BenchmarkGet(b *testing.B) {
 				}
 			})
 		})
+	}
+}
+
+func BenchmarkNewSnapshot(b *testing.B) {
+	c := qt.New(b)
+	b.ReportAllocs()
+	const nkeys = 100
+	m := make(map[string]interface{})
+	for i := 0; i < nkeys; i++ {
+		m[fmt.Sprint("key", i)] = false
+	}
+	logger := newTestLogger(c, LogLevelError)
+	for i := 0; i < b.N; i++ {
+		NewSnapshot(logger, m)
 	}
 }
