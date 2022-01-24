@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -907,6 +908,7 @@ func keysForRootNode(root *rootNode) []string {
 	for k := range root.Entries {
 		keys = append(keys, k)
 	}
+	sort.Strings(keys)
 	return keys
 }
 

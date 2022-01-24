@@ -199,6 +199,26 @@ var loggingTests = []struct {
 		"INFO: Evaluating rule: [Identifier:1.2.3] [< (SemVer)] [bogus] => SKIP rule. Validation error: No Major.Minor.Patch elements found",
 		"INFO: Returning key=defaultValue.",
 	},
+}, {
+	testName: "UnknownKey",
+	config: &rootNode{
+		Entries: map[string]*entry{
+			"key1": {
+				Value: "v1",
+				Type:  stringEntry,
+			},
+			"key2": {
+				Value: "v2",
+				Type:  stringEntry,
+			},
+		},
+	},
+	key:         "unknownKey",
+	expectValue: nil,
+	expectLogs: []string{
+		"INFO: fetching from $HOST_URL",
+		"ERROR: error getting value: value not found for key unknownKey. Here are the available keys: key1,key2",
+	},
 }}
 
 func TestLogging(t *testing.T) {
@@ -228,7 +248,7 @@ func TestLogging(t *testing.T) {
 				expectLogs[i] = strings.ReplaceAll(expectLogs[i], "$HOST_URL", cfg.BaseURL)
 			}
 
-			value := client.GetStringValue(test.key, "", test.user)
+			value := client.Snapshot(test.user).GetValue(test.key)
 			c.Check(value, qt.Equals, test.expectValue)
 			c.Check(logs, qt.DeepEquals, expectLogs)
 		})
@@ -254,6 +274,9 @@ func TestNewSnapshot(t *testing.T) {
 	}
 	// Sanity check that it works OK with Flag values.
 	c.Assert(Int("intFlag", 0).Get(snap), qt.Equals, 1)
+	c.Assert(Float("floatFlag", 0).Get(snap), qt.Equals, 2.0)
+	c.Assert(String("stringFlag", "").Get(snap), qt.Equals, "three")
+	c.Assert(Bool("boolFlag", false).Get(snap), qt.Equals, true)
 	c.Assert(snap.GetAllKeys(), qt.ContentEquals, []string{
 		"intFlag",
 		"floatFlag",
@@ -276,4 +299,23 @@ func TestNewSnapshotWithUnknownType(t *testing.T) {
 	})
 	c.Check(err, qt.ErrorMatches, `value for flag "badVal" has unexpected type int64 \(1\); must be bool, int, float64 or string`)
 	c.Check(snap, qt.IsNil)
+}
+
+func TestFlagKey(t *testing.T) {
+	c := qt.New(t)
+	intFlag := Int("intFlag", 99)
+	c.Assert(intFlag.Get(nil), qt.Equals, 99)
+	c.Assert(intFlag.Key(), qt.Equals, "intFlag")
+
+	floatFlag := Float("floatFlag", 2.5)
+	c.Assert(floatFlag.Get(nil), qt.Equals, 2.5)
+	c.Assert(floatFlag.Key(), qt.Equals, "floatFlag")
+
+	stringFlag := String("stringFlag", "default")
+	c.Assert(stringFlag.Get(nil), qt.Equals, "default")
+	c.Assert(stringFlag.Key(), qt.Equals, "stringFlag")
+
+	boolFlag := Bool("boolFlag", true)
+	c.Assert(boolFlag.Get(nil), qt.Equals, true)
+	c.Assert(boolFlag.Key(), qt.Equals, "boolFlag")
 }

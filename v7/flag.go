@@ -18,6 +18,7 @@ import (
 func Bool(key string, defaultValue bool) BoolFlag {
 	return BoolFlag{
 		id:           idForKey(key, true),
+		key:          key,
 		defaultValue: defaultValue,
 	}
 }
@@ -28,6 +29,14 @@ type BoolFlag struct {
 	defaultValue bool
 }
 
+// Key returns the name of the flag as passed to Bool.
+func (f BoolFlag) Key() string {
+	return f.key
+}
+
+// Get reports whether the flag is enabled with respect to the
+// given snapshot. It returns the flag's default value if snap is nil
+// or the key isn't in the configuration.
 func (f BoolFlag) Get(snap *Snapshot) bool {
 	if v, ok := snap.value(f.id, f.key).(bool); ok {
 		return v
@@ -50,6 +59,14 @@ type IntFlag struct {
 	defaultValue int
 }
 
+// Key returns the name of the flag as passed to Int.
+func (f IntFlag) Key() string {
+	return f.key
+}
+
+// Get reports the value of the flag with respect to the
+// given snapshot. It returns the flag's default value if snap is nil
+// or the key isn't in the configuration.
 func (f IntFlag) Get(snap *Snapshot) int {
 	if v, ok := snap.value(f.id, f.key).(int); ok {
 		return v
@@ -72,6 +89,14 @@ type StringFlag struct {
 	defaultValue string
 }
 
+// Key returns the name of the flag as passed to String.
+func (f StringFlag) Key() string {
+	return f.key
+}
+
+// Get reports the value of the flag with respect to the
+// given snapshot. It returns the flag's default value if snap is nil
+// or the key isn't in the configuration.
 func (f StringFlag) Get(snap *Snapshot) string {
 	if v, ok := snap.value(f.id, f.key).(string); ok {
 		return v
@@ -94,6 +119,14 @@ type FloatFlag struct {
 	defaultValue float64
 }
 
+// Key returns the name of the flag as passed to Float.
+func (f FloatFlag) Key() string {
+	return f.key
+}
+
+// Get reports the value of the flag with respect to the
+// given snapshot. It returns the flag's default value if snap is nil
+// or the key isn't in the configuration.
 func (f FloatFlag) Get(snap *Snapshot) float64 {
 	if v, ok := snap.value(f.id, f.key).(float64); ok {
 		return v
