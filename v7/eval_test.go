@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 	qt "github.com/frankban/quicktest"
 )
 
@@ -80,12 +81,12 @@ func TestOpCmpNumWithNumericValue(t *testing.T) {
 	c := qt.New(t)
 	ectx := newEvalTestContext(c)
 
-	for _, op := range []operator{
-		opEqNum,
-		opLessNum,
-		opLessEqNum,
-		opGreaterNum,
-		opGreaterEqNum,
+	for _, op := range []wireconfig.Operator{
+		wireconfig.OpEqNum,
+		wireconfig.OpLessNum,
+		wireconfig.OpLessEqNum,
+		wireconfig.OpGreaterNum,
+		wireconfig.OpGreaterEqNum,
 	} {
 		for _, tv := range []interface{}{int8(0), int16(0), int32(0), int64(0), uint8(0), uint16(0), uint32(0), uint64(0), float32(0), float64(0)} {
 			t := reflect.TypeOf(tv)
@@ -120,12 +121,12 @@ func TestOpCmpNumWithInvalidCmpVal(t *testing.T) {
 	c := qt.New(t)
 	ectx := newEvalTestContext(c)
 
-	for _, op := range []operator{
-		opEqNum,
-		opLessNum,
-		opLessEqNum,
-		opGreaterNum,
-		opGreaterEqNum,
+	for _, op := range []wireconfig.Operator{
+		wireconfig.OpEqNum,
+		wireconfig.OpLessNum,
+		wireconfig.OpLessEqNum,
+		wireconfig.OpGreaterNum,
+		wireconfig.OpGreaterEqNum,
 	} {
 		for _, tv := range []interface{}{int8(0), int16(0), int32(0), int64(0), uint8(0), uint16(0), uint32(0), uint64(0), float32(0), float64(0)} {
 			(&opTest{
@@ -144,34 +145,34 @@ func TestOpCmpNumWithStringValue(t *testing.T) {
 
 	tests := []struct {
 		s      string
-		op     operator
+		op     wireconfig.Operator
 		cmpVal string
 		want   bool
 	}{
-		{"1.5", opEqNum, "1.5", true},
-		{"1.5", opEqNum, "1.6", false},
-		{"", opEqNum, "0", false},
-		{"1.5", opNotEqNum, "1.5", false},
-		{"1.5", opLessNum, "1.6", true},
-		{"1.6", opLessNum, "1.5", false},
-		{"1.5", opLessNum, "1.5", false},
-		{"1.5", opLessEqNum, "1.5", true},
-		{"1.5", opLessEqNum, "1.6", true},
-		{"1.6", opLessEqNum, "1.5", false},
+		{"1.5", wireconfig.OpEqNum, "1.5", true},
+		{"1.5", wireconfig.OpEqNum, "1.6", false},
+		{"", wireconfig.OpEqNum, "0", false},
+		{"1.5", wireconfig.OpNotEqNum, "1.5", false},
+		{"1.5", wireconfig.OpLessNum, "1.6", true},
+		{"1.6", wireconfig.OpLessNum, "1.5", false},
+		{"1.5", wireconfig.OpLessNum, "1.5", false},
+		{"1.5", wireconfig.OpLessEqNum, "1.5", true},
+		{"1.5", wireconfig.OpLessEqNum, "1.6", true},
+		{"1.6", wireconfig.OpLessEqNum, "1.5", false},
 		// Invalid numbers always compare false.
-		{"bad", opEqNum, "1.5", false},
-		{"bad", opNotEqNum, "1.5", false},
-		{"bad", opLessNum, "1.5", false},
-		{"bad", opLessEqNum, "1.5", false},
-		{"bad", opGreaterNum, "1.5", false},
-		{"bad", opGreaterEqNum, "1.5", false},
+		{"bad", wireconfig.OpEqNum, "1.5", false},
+		{"bad", wireconfig.OpNotEqNum, "1.5", false},
+		{"bad", wireconfig.OpLessNum, "1.5", false},
+		{"bad", wireconfig.OpLessEqNum, "1.5", false},
+		{"bad", wireconfig.OpGreaterNum, "1.5", false},
+		{"bad", wireconfig.OpGreaterEqNum, "1.5", false},
 		// NaN always compares false.
-		{"NaN", opEqNum, "1.5", false},
-		{"NaN", opNotEqNum, "1.5", false},
-		{"NaN", opLessNum, "1.5", false},
-		{"NaN", opLessEqNum, "1.5", false},
-		{"NaN", opGreaterNum, "1.5", false},
-		{"NaN", opGreaterEqNum, "1.5", false},
+		{"NaN", wireconfig.OpEqNum, "1.5", false},
+		{"NaN", wireconfig.OpNotEqNum, "1.5", false},
+		{"NaN", wireconfig.OpLessNum, "1.5", false},
+		{"NaN", wireconfig.OpLessEqNum, "1.5", false},
+		{"NaN", wireconfig.OpGreaterNum, "1.5", false},
+		{"NaN", wireconfig.OpGreaterEqNum, "1.5", false},
 	}
 	for _, test := range tests {
 		s := test.s
@@ -193,13 +194,13 @@ func TestOpSemverWithNonStringDoesNotMatch(t *testing.T) {
 	user := &struct {
 		X int
 	}{1}
-	for _, op := range []operator{
-		opOneOfSemver,
-		opNotOneOfSemver,
-		opLessSemver,
-		opLessEqSemver,
-		opGreaterSemver,
-		opGreaterEqSemver,
+	for _, op := range []wireconfig.Operator{
+		wireconfig.OpOneOfSemver,
+		wireconfig.OpNotOneOfSemver,
+		wireconfig.OpLessSemver,
+		wireconfig.OpLessEqSemver,
+		wireconfig.OpGreaterSemver,
+		wireconfig.OpGreaterEqSemver,
 	} {
 		(&opTest{
 			testName: op.String(),
@@ -216,31 +217,31 @@ func TestOpSemverWithString(t *testing.T) {
 
 	tests := []struct {
 		s      string
-		op     operator
+		op     wireconfig.Operator
 		cmpVal string
 		want   bool
 	}{
-		{"1.5.0", opOneOfSemver, "1.5.0", true},
-		{"1.5.0", opOneOfSemver, "1.5.0,1.5.1", true},
-		{"1.5.0", opOneOfSemver, "1.5.1,1.5.2", false},
-		{"1.5.0", opOneOfSemver, "   1.5.0  ,1.5.2   ", true},
-		{"1.5.0", opNotOneOfSemver, "1.5.0", false},
-		{"1.5.0", opNotOneOfSemver, "1.5.0,1.5.1", false},
-		{"1.5.0", opNotOneOfSemver, "1.5.1,1.5.2", true},
-		{"1.5.0", opNotOneOfSemver, "   1.5.0  ,1.5.2   ", false},
-		{"1.4.0", opLessSemver, "1.5.0", true},
-		{"1.4.0", opLessSemver, " 1.5.0 ", true},
-		{"1.4.0", opLessSemver, "1.4.0", false},
-		{"1.4.0", opLessSemver, "1.3.0", false},
-		{"1.4.0", opGreaterSemver, "1.5.0", false},
-		{"1.4.0", opGreaterSemver, "1.4.0", false},
-		{"1.4.0", opGreaterSemver, "1.3.0", true},
-		{"1.4.0", opLessEqSemver, "1.5.0", true},
-		{"1.4.0", opLessEqSemver, "1.4.0", true},
-		{"1.4.0", opLessEqSemver, "1.3.0", false},
-		{"1.4.0", opGreaterEqSemver, "1.5.0", false},
-		{"1.4.0", opGreaterEqSemver, "1.4.0", true},
-		{"1.4.0", opGreaterEqSemver, "1.3.0", true},
+		{"1.5.0", wireconfig.OpOneOfSemver, "1.5.0", true},
+		{"1.5.0", wireconfig.OpOneOfSemver, "1.5.0,1.5.1", true},
+		{"1.5.0", wireconfig.OpOneOfSemver, "1.5.1,1.5.2", false},
+		{"1.5.0", wireconfig.OpOneOfSemver, "   1.5.0  ,1.5.2   ", true},
+		{"1.5.0", wireconfig.OpNotOneOfSemver, "1.5.0", false},
+		{"1.5.0", wireconfig.OpNotOneOfSemver, "1.5.0,1.5.1", false},
+		{"1.5.0", wireconfig.OpNotOneOfSemver, "1.5.1,1.5.2", true},
+		{"1.5.0", wireconfig.OpNotOneOfSemver, "   1.5.0  ,1.5.2   ", false},
+		{"1.4.0", wireconfig.OpLessSemver, "1.5.0", true},
+		{"1.4.0", wireconfig.OpLessSemver, " 1.5.0 ", true},
+		{"1.4.0", wireconfig.OpLessSemver, "1.4.0", false},
+		{"1.4.0", wireconfig.OpLessSemver, "1.3.0", false},
+		{"1.4.0", wireconfig.OpGreaterSemver, "1.5.0", false},
+		{"1.4.0", wireconfig.OpGreaterSemver, "1.4.0", false},
+		{"1.4.0", wireconfig.OpGreaterSemver, "1.3.0", true},
+		{"1.4.0", wireconfig.OpLessEqSemver, "1.5.0", true},
+		{"1.4.0", wireconfig.OpLessEqSemver, "1.4.0", true},
+		{"1.4.0", wireconfig.OpLessEqSemver, "1.3.0", false},
+		{"1.4.0", wireconfig.OpGreaterEqSemver, "1.5.0", false},
+		{"1.4.0", wireconfig.OpGreaterEqSemver, "1.4.0", true},
+		{"1.4.0", wireconfig.OpGreaterEqSemver, "1.3.0", true},
 	}
 	for _, test := range tests {
 		s := test.s
@@ -260,13 +261,13 @@ func TestNoUser(t *testing.T) {
 	ectx := newEvalTestContext(c)
 	(&opTest{
 		testName: "nil-interface",
-		op:       opOneOf,
+		op:       wireconfig.OpOneOf,
 		cmpVal:   "foo",
 		want:     false,
 	}).run(c, ectx, nil)
 	(&opTest{
 		testName: "nil-struct",
-		op:       opOneOf,
+		op:       wireconfig.OpOneOf,
 		cmpVal:   "foo",
 		want:     false,
 	}).run(c, ectx, (*struct{ X string })(nil))
@@ -278,7 +279,7 @@ func TestNonPointerUserStruct(t *testing.T) {
 	ectx := newEvalTestContext(c)
 	(&opTest{
 		testName: "nil-struct",
-		op:       opOneOf,
+		op:       wireconfig.OpOneOf,
 		cmpVal:   "foo",
 		want:     false,
 	}).run(c, ectx, struct{ X string }{})
@@ -325,7 +326,7 @@ func (g *attributeGetter) GetAttribute(attr string) string {
 type opTest struct {
 	testName string
 	// op is the operator to test.
-	op operator
+	op wireconfig.Operator
 	// cmpVal is the argument to the operator.
 	cmpVal string
 	// want holds the expected result of the test.
@@ -336,12 +337,12 @@ func (test *opTest) run(c *qt.C, ectx *evalTestContext, user User) {
 	c.Run(test.testName, func(c *qt.C) {
 		ectx.logger.logFunc = c.Logf
 		c.Logf("operator %v; cmpVal %v; want %v", test.op, test.cmpVal, test.want)
-		ectx.srv.setResponseJSON(&rootNode{
-			Entries: map[string]*entry{
+		ectx.srv.setResponseJSON(&wireconfig.RootNode{
+			Entries: map[string]*wireconfig.Entry{
 				"key": {
 					VariationID: "testFallback",
 					Value:       "false",
-					RolloutRules: []*rolloutRule{{
+					RolloutRules: []*wireconfig.RolloutRule{{
 						ComparisonAttribute: "X",
 						ComparisonValue:     test.cmpVal,
 						Comparator:          test.op,
@@ -369,22 +370,22 @@ func stringOneOfTests(s string) []opTest {
 	}
 	tests := []opTest{{
 		testName: "exact-value",
-		op:       opOneOf,
+		op:       wireconfig.OpOneOf,
 		cmpVal:   s,
 		want:     true,
 	}, {
 		testName: "with-extra-value",
-		op:       opOneOf,
+		op:       wireconfig.OpOneOf,
 		cmpVal:   s + "," + other,
 		want:     true,
 	}, {
 		testName: "with-appended-value",
-		op:       opOneOf,
+		op:       wireconfig.OpOneOf,
 		cmpVal:   s + "x",
 		want:     false,
 	}, {
 		testName: "empty-string",
-		op:       opOneOf,
+		op:       wireconfig.OpOneOf,
 		cmpVal:   "",
 		want:     false,
 	}}
@@ -392,7 +393,7 @@ func stringOneOfTests(s string) []opTest {
 	for _, test := range tests {
 		tests = append(tests, opTest{
 			testName: "not(" + test.testName + ")",
-			op:       opNotOneOf,
+			op:       wireconfig.OpNotOneOf,
 			cmpVal:   test.cmpVal,
 			want:     !test.want,
 		})
@@ -409,7 +410,7 @@ func stringOneOfTests(s string) []opTest {
 // numericCmpNumTests returns a set of tests for the
 // comparison operator op given a User field with value x.
 // cmp reports the result of the comparison operator.
-func numericCmpNumTests(x float64, op operator, cmp func(a, b float64) bool) []opTest {
+func numericCmpNumTests(x float64, op wireconfig.Operator, cmp func(a, b float64) bool) []opTest {
 	if math.IsNaN(x) {
 		return []opTest{{
 			testName: "is-nan",
@@ -482,21 +483,21 @@ func numericOneOfTests(x float64) []opTest {
 	if math.IsNaN(x) {
 		tests = []opTest{{
 			testName: "exact-value-as-float",
-			op:       opOneOf,
+			op:       wireconfig.OpOneOf,
 			cmpVal:   fmt.Sprint(x),
 			want:     false,
 		}}
 	} else {
 		tests = []opTest{{
 			testName: "exact-value-as-float",
-			op:       opOneOf,
+			op:       wireconfig.OpOneOf,
 			cmpVal:   fmt.Sprint(x),
 			want:     true,
 		}}
 		if !math.IsInf(x, 0) {
 			tests = append(tests, opTest{
 				testName: "small-increment",
-				op:       opOneOf,
+				op:       wireconfig.OpOneOf,
 				cmpVal:   fmt.Sprint(addSomethingSmall(x)),
 				want:     false,
 			})
@@ -509,12 +510,12 @@ func numericOneOfTests(x float64) []opTest {
 	for _, test := range tests {
 		tests = append(tests, opTest{
 			testName: test.testName + "-with-extra-elem",
-			op:       opOneOf,
+			op:       wireconfig.OpOneOf,
 			cmpVal:   fmt.Sprint(other) + "," + test.cmpVal,
 			want:     test.want,
 		}, opTest{
 			testName: test.testName + "-with-space",
-			op:       opOneOf,
+			op:       wireconfig.OpOneOf,
 			cmpVal:   " " + test.cmpVal + " ",
 			want:     test.want,
 		})
@@ -523,7 +524,7 @@ func numericOneOfTests(x float64) []opTest {
 	for _, test := range tests {
 		tests = append(tests, opTest{
 			testName: "not(" + test.testName + ")",
-			op:       opNotOneOf,
+			op:       wireconfig.OpNotOneOf,
 			cmpVal:   test.cmpVal,
 			want:     !test.want,
 		})
@@ -620,18 +621,18 @@ func setValueFromFloat(v reflect.Value, f float64) {
 	}
 }
 
-func cmpFunc(op operator) func(a, b float64) bool {
+func cmpFunc(op wireconfig.Operator) func(a, b float64) bool {
 	return func(a, b float64) bool {
 		switch op {
-		case opEqNum:
+		case wireconfig.OpEqNum:
 			return a == b
-		case opLessNum:
+		case wireconfig.OpLessNum:
 			return a < b
-		case opLessEqNum:
+		case wireconfig.OpLessEqNum:
 			return a <= b
-		case opGreaterNum:
+		case wireconfig.OpGreaterNum:
 			return a > b
-		case opGreaterEqNum:
+		case wireconfig.OpGreaterEqNum:
 			return a >= b
 		default:
 			panic(fmt.Errorf("unknown comparison operator %v", op))

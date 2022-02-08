@@ -12,55 +12,8 @@ import (
 	"strings"
 
 	"github.com/blang/semver"
+	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 )
-
-type operator int
-
-const (
-	opOneOf             operator = 0
-	opNotOneOf          operator = 1
-	opContains          operator = 2
-	opNotContains       operator = 3
-	opOneOfSemver       operator = 4
-	opNotOneOfSemver    operator = 5
-	opLessSemver        operator = 6
-	opLessEqSemver      operator = 7
-	opGreaterSemver     operator = 8
-	opGreaterEqSemver   operator = 9
-	opEqNum             operator = 10
-	opNotEqNum          operator = 11
-	opLessNum           operator = 12
-	opLessEqNum         operator = 13
-	opGreaterNum        operator = 14
-	opGreaterEqNum      operator = 15
-	opOneOfSensitive    operator = 16
-	opNotOneOfSensitive operator = 17
-)
-
-var opStrings = []string{
-	opOneOf:             "IS ONE OF",
-	opNotOneOf:          "IS NOT ONE OF",
-	opContains:          "CONTAINS",
-	opNotContains:       "DOES NOT CONTAIN",
-	opOneOfSemver:       "IS ONE OF (SemVer)",
-	opNotOneOfSemver:    "IS NOT ONE OF (SemVer)",
-	opLessSemver:        "< (SemVer)",
-	opLessEqSemver:      "<= (SemVer)",
-	opGreaterSemver:     "> (SemVer)",
-	opGreaterEqSemver:   ">= (SemVer)",
-	opEqNum:             "= (Number)",
-	opNotEqNum:          "<> (Number)",
-	opLessNum:           "< (Number)",
-	opLessEqNum:         "<= (Number)",
-	opGreaterNum:        "> (Number)",
-	opGreaterEqNum:      ">= (Number)",
-	opOneOfSensitive:    "IS ONE OF (Sensitive)",
-	opNotOneOfSensitive: "IS NOT ONE OF (Sensitive)",
-}
-
-func (op operator) String() string {
-	return opStrings[op]
-}
 
 var (
 	getAttributeType = reflect.TypeOf((*UserAttributes)(nil)).Elem()
@@ -85,7 +38,7 @@ func (conf *config) evaluatorsForUserType(userType reflect.Type) ([]entryEvalFun
 
 type entryEvalFunc = func(id keyID, logger *leveledLogger, userv reflect.Value) (interface{}, string)
 
-func entryEvaluators(root *rootNode, userType reflect.Type) ([]entryEvalFunc, error) {
+func entryEvaluators(root *wireconfig.RootNode, userType reflect.Type) ([]entryEvalFunc, error) {
 	tinfo, err := newUserTypeInfo(userType)
 	if err != nil {
 		return nil, err
@@ -104,7 +57,7 @@ func entryEvaluators(root *rootNode, userType reflect.Type) ([]entryEvalFunc, er
 	return entries, nil
 }
 
-func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) entryEvalFunc {
+func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) entryEvalFunc {
 	rules := node.RolloutRules
 	noUser := func(_ keyID, logger *leveledLogger, user reflect.Value) (interface{}, string) {
 		if logger.enabled(LogLevelWarn) && (len(rules) > 0 || len(node.PercentageRules) > 0) {
@@ -195,10 +148,10 @@ func entryEvaluator(key string, node *entry, tinfo *userTypeInfo) entryEvalFunc 
 	}
 }
 
-func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Value) (bool, error) {
+func rolloutMatcher(rule *wireconfig.RolloutRule, info *attrInfo) func(userVal reflect.Value) (bool, error) {
 	op, needTrue := uninvert(rule.Comparator)
 	switch op {
-	case opOneOf:
+	case wireconfig.OpOneOf:
 		items := splitFields(rule.ComparisonValue)
 		switch info.kind {
 		case kindInt:
@@ -275,14 +228,14 @@ func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Valu
 				return false, nil
 			}
 		}
-	case opContains:
+	case wireconfig.OpContains:
 		return func(user reflect.Value) (bool, error) {
 			if s := info.asString(user); s != "" {
 				return strings.Contains(s, rule.ComparisonValue) == needTrue, nil
 			}
 			return false, nil
 		}
-	case opOneOfSemver:
+	case wireconfig.OpOneOfSemver:
 		if info.asSemver == nil {
 			return errorMatcher(fmt.Errorf("%v can never match a semver", info.ftype))
 		}
@@ -311,12 +264,12 @@ func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Valu
 			}
 			return !needTrue, nil
 		}
-	case opLessSemver, opLessEqSemver:
+	case wireconfig.OpLessSemver, wireconfig.OpLessEqSemver:
 		if info.asSemver == nil {
 			return errorMatcher(fmt.Errorf("%v can never match a semver", info.ftype))
 		}
 		cmpval := 0
-		if op == opLessSemver {
+		if op == wireconfig.OpLessSemver {
 			cmpval = -1
 		}
 		cmpVersion, err := semver.Make(strings.TrimSpace(rule.ComparisonValue))
@@ -330,7 +283,7 @@ func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Valu
 			}
 			return (userVer.Compare(cmpVersion) <= cmpval) == needTrue, nil
 		}
-	case opEqNum:
+	case wireconfig.OpEqNum:
 		switch info.kind {
 		case kindInt:
 			cmpVal, err := intMatch(rule.ComparisonValue, info.ftype)
@@ -391,7 +344,7 @@ func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Valu
 				return (f == f1) == needTrue, nil
 			}
 		}
-	case opLessNum, opLessEqNum:
+	case wireconfig.OpLessNum, wireconfig.OpLessEqNum:
 		switch info.kind {
 		case kindInt:
 			cmpVal, err := intMatch(rule.ComparisonValue, info.ftype)
@@ -401,11 +354,11 @@ func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Valu
 			switch v := cmpVal.(type) {
 			case int64:
 				switch op {
-				case opLessNum:
+				case wireconfig.OpLessNum:
 					return func(user reflect.Value) (bool, error) {
 						return (user.FieldByIndex(info.index).Int() < v) == needTrue, nil
 					}
-				case opLessEqNum:
+				case wireconfig.OpLessEqNum:
 					return func(user reflect.Value) (bool, error) {
 						return (user.FieldByIndex(info.index).Int() <= v) == needTrue, nil
 					}
@@ -414,11 +367,11 @@ func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Valu
 				}
 			case float64:
 				switch op {
-				case opLessNum:
+				case wireconfig.OpLessNum:
 					return func(user reflect.Value) (bool, error) {
 						return (float64(user.FieldByIndex(info.index).Int()) < v) == needTrue, nil
 					}
-				case opLessEqNum:
+				case wireconfig.OpLessEqNum:
 					return func(user reflect.Value) (bool, error) {
 						return (float64(user.FieldByIndex(info.index).Int()) <= v) == needTrue, nil
 					}
@@ -436,11 +389,11 @@ func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Valu
 			switch v := cmpVal.(type) {
 			case uint64:
 				switch op {
-				case opLessNum:
+				case wireconfig.OpLessNum:
 					return func(user reflect.Value) (bool, error) {
 						return (user.FieldByIndex(info.index).Uint() < v) == needTrue, nil
 					}
-				case opLessEqNum:
+				case wireconfig.OpLessEqNum:
 					return func(user reflect.Value) (bool, error) {
 						return (user.FieldByIndex(info.index).Uint() <= v) == needTrue, nil
 					}
@@ -449,11 +402,11 @@ func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Valu
 				}
 			case float64:
 				switch op {
-				case opLessNum:
+				case wireconfig.OpLessNum:
 					return func(user reflect.Value) (bool, error) {
 						return (float64(user.FieldByIndex(info.index).Uint()) < v) == needTrue, nil
 					}
-				case opLessEqNum:
+				case wireconfig.OpLessEqNum:
 					return func(user reflect.Value) (bool, error) {
 						return (float64(user.FieldByIndex(info.index).Uint()) <= v) == needTrue, nil
 					}
@@ -472,7 +425,7 @@ func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Valu
 				return alwaysFalseMatcher
 			}
 			switch op {
-			case opLessNum:
+			case wireconfig.OpLessNum:
 				return func(user reflect.Value) (bool, error) {
 					f1 := user.FieldByIndex(info.index).Float()
 					if math.IsNaN(f1) {
@@ -480,7 +433,7 @@ func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Valu
 					}
 					return (f1 < f) == needTrue, nil
 				}
-			case opLessEqNum:
+			case wireconfig.OpLessEqNum:
 				return func(user reflect.Value) (bool, error) {
 					f1 := user.FieldByIndex(info.index).Float()
 					if math.IsNaN(f1) {
@@ -501,11 +454,11 @@ func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Valu
 			}
 			var cmp func(f1, f2 float64) bool
 			switch op {
-			case opLessNum:
+			case wireconfig.OpLessNum:
 				cmp = func(f1, f2 float64) bool {
 					return f1 < f2
 				}
-			case opLessEqNum:
+			case wireconfig.OpLessEqNum:
 				cmp = func(f1, f2 float64) bool {
 					return f1 <= f2
 				}
@@ -524,7 +477,7 @@ func rolloutMatcher(rule *rolloutRule, info *attrInfo) func(userVal reflect.Valu
 				return cmp(f1, f) == needTrue, nil
 			}
 		}
-	case opOneOfSensitive:
+	case wireconfig.OpOneOfSensitive:
 		separated := splitFields(rule.ComparisonValue)
 		set := make(map[[sha1.Size]byte]bool)
 		for _, item := range separated {
@@ -827,26 +780,26 @@ func parseSemver(s string) (*semver.Version, error) {
 //
 // For a negative or greater-than comparison, it returns
 // the equivalent non-inverted operation and false.
-func uninvert(op operator) (_ operator, needTrue bool) {
+func uninvert(op wireconfig.Operator) (_ wireconfig.Operator, needTrue bool) {
 	switch op {
-	case opNotOneOf:
-		return opOneOf, false
-	case opNotContains:
-		return opContains, false
-	case opGreaterSemver:
-		return opLessEqSemver, false
-	case opGreaterEqSemver:
-		return opLessSemver, false
-	case opNotOneOfSemver:
-		return opOneOfSemver, false
-	case opNotEqNum:
-		return opEqNum, false
-	case opGreaterNum:
-		return opLessEqNum, false
-	case opGreaterEqNum:
-		return opLessNum, false
-	case opNotOneOfSensitive:
-		return opOneOfSensitive, false
+	case wireconfig.OpNotOneOf:
+		return wireconfig.OpOneOf, false
+	case wireconfig.OpNotContains:
+		return wireconfig.OpContains, false
+	case wireconfig.OpGreaterSemver:
+		return wireconfig.OpLessEqSemver, false
+	case wireconfig.OpGreaterEqSemver:
+		return wireconfig.OpLessSemver, false
+	case wireconfig.OpNotOneOfSemver:
+		return wireconfig.OpOneOfSemver, false
+	case wireconfig.OpNotEqNum:
+		return wireconfig.OpEqNum, false
+	case wireconfig.OpGreaterNum:
+		return wireconfig.OpLessEqNum, false
+	case wireconfig.OpGreaterEqNum:
+		return wireconfig.OpLessNum, false
+	case wireconfig.OpNotOneOfSensitive:
+		return wireconfig.OpOneOfSensitive, false
 	}
 	return op, true
 }
@@ -881,7 +834,7 @@ type keyValue struct {
 	value interface{}
 }
 
-func keyValuesForRootNode(root *rootNode) map[string]keyValue {
+func keyValuesForRootNode(root *wireconfig.RootNode) map[string]keyValue {
 	m := make(map[string]keyValue)
 	add := func(variationID string, key string, value interface{}) {
 		if _, ok := m[variationID]; !ok {
@@ -903,7 +856,7 @@ func keyValuesForRootNode(root *rootNode) map[string]keyValue {
 	return m
 }
 
-func keysForRootNode(root *rootNode) []string {
+func keysForRootNode(root *wireconfig.RootNode) []string {
 	keys := make([]string, 0, len(root.Entries))
 	for k := range root.Entries {
 		keys = append(keys, k)

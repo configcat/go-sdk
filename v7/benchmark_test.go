@@ -5,33 +5,34 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 	qt "github.com/frankban/quicktest"
 )
 
 func BenchmarkGet(b *testing.B) {
 	benchmarks := []struct {
 		benchName string
-		node      *rootNode
+		node      *wireconfig.RootNode
 		rule      string
 		makeUser  func() User
 		want      string
 	}{{
 		benchName: "one-of",
-		node: &rootNode{
-			Entries: map[string]*entry{
+		node: &wireconfig.RootNode{
+			Entries: map[string]*wireconfig.Entry{
 				"rule": {
 					VariationID: "607147d5",
 					Value:       "no-match",
-					RolloutRules: []*rolloutRule{{
+					RolloutRules: []*wireconfig.RolloutRule{{
 						ComparisonAttribute: "Email",
 						ComparisonValue:     "a@configcat.com, b@configcat.com",
-						Comparator:          opOneOf,
+						Comparator:          wireconfig.OpOneOf,
 						VariationID:         "385d9803",
 						Value:               "email-match",
 					}, {
 						ComparisonAttribute: "Country",
 						ComparisonValue:     "United",
-						Comparator:          opNotOneOf,
+						Comparator:          wireconfig.OpNotOneOf,
 						VariationID:         "385d9803",
 						Value:               "country-match",
 					}},
@@ -49,15 +50,15 @@ func BenchmarkGet(b *testing.B) {
 		want: "no-match",
 	}, {
 		benchName: "less-than-with-int",
-		node: &rootNode{
-			Entries: map[string]*entry{
+		node: &wireconfig.RootNode{
+			Entries: map[string]*wireconfig.Entry{
 				"rule": {
 					VariationID: "607147d5",
 					Value:       "no-match",
-					RolloutRules: []*rolloutRule{{
+					RolloutRules: []*wireconfig.RolloutRule{{
 						ComparisonAttribute: "Age",
 						ComparisonValue:     "21",
-						Comparator:          opLessNum,
+						Comparator:          wireconfig.OpLessNum,
 						VariationID:         "385d9803",
 						Value:               "age-match",
 					}},
@@ -73,25 +74,25 @@ func BenchmarkGet(b *testing.B) {
 		want: "age-match",
 	}, {
 		benchName: "with-percentage",
-		node: &rootNode{
-			Entries: map[string]*entry{
+		node: &wireconfig.RootNode{
+			Entries: map[string]*wireconfig.Entry{
 				"bool30TrueAdvancedRules": {
 					VariationID: "607147d5",
 					Value:       "no-match",
-					RolloutRules: []*rolloutRule{{
+					RolloutRules: []*wireconfig.RolloutRule{{
 						ComparisonAttribute: "Email",
 						ComparisonValue:     "a@configcat.com, b@configcat.com",
-						Comparator:          opOneOf,
+						Comparator:          wireconfig.OpOneOf,
 						VariationID:         "385d9803",
 						Value:               "email-match",
 					}, {
 						ComparisonAttribute: "Country",
 						ComparisonValue:     "United",
-						Comparator:          opNotOneOf,
+						Comparator:          wireconfig.OpNotOneOf,
 						VariationID:         "385d9803",
 						Value:               "country-match",
 					}},
-					PercentageRules: []percentageRule{{
+					PercentageRules: []wireconfig.PercentageRule{{
 						VariationID: "607147d5",
 						Value:       "low-percent",
 						Percentage:  30,

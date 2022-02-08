@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 	qt "github.com/frankban/quicktest"
 )
 
-var variationConfig = &rootNode{
-	Entries: map[string]*entry{
+var variationConfig = &wireconfig.RootNode{
+	Entries: map[string]*wireconfig.Entry{
 		"first": {
 			Value:       false,
 			VariationID: "fakeIDFirst",
@@ -33,13 +34,13 @@ func TestClient_Refresh(t *testing.T) {
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value", stringEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value", wireconfig.StringEntry))
 	client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 
 	c.Assert(result, qt.Equals, "value")
 
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value2", stringEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value2", wireconfig.StringEntry))
 	client.Refresh(context.Background())
 	result = client.GetStringValue("key", "default", nil)
 	if result != "value2" {
@@ -55,13 +56,13 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value", stringEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value", wireconfig.StringEntry))
 	client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value")
 
 	srv.setResponse(configResponse{
-		body:  marshalJSON(rootNodeWithKeyValue("key", "value", stringEntry)),
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value", wireconfig.StringEntry)),
 		sleep: time.Second,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
@@ -78,7 +79,7 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 func TestClient_Float(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213, floatEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213, wireconfig.FloatEntry))
 	client.Refresh(context.Background())
 	result := client.GetFloatValue("key", 0, nil)
 	c.Assert(result, qt.Equals, 3213.0)
@@ -87,13 +88,13 @@ func TestClient_Float(t *testing.T) {
 func TestClient_Get_IsOneOf_Does_Not_Use_Contains_Semantics(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(&rootNode{
-		Entries: map[string]*entry{
+	srv.setResponseJSON(&wireconfig.RootNode{
+		Entries: map[string]*wireconfig.Entry{
 			"feature": {
 				Value:       false,
 				VariationID: "a377be39",
-				RolloutRules: []*rolloutRule{{
-					Comparator:          opOneOf,
+				RolloutRules: []*wireconfig.RolloutRule{{
+					Comparator:          wireconfig.OpOneOf,
 					ComparisonAttribute: "Identifier",
 					ComparisonValue:     "example,foobar",
 					Value:               true,
@@ -131,7 +132,7 @@ func TestClient_Get_Default(t *testing.T) {
 func TestClient_Get_Latest(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213, floatEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213, wireconfig.FloatEntry))
 	client.Refresh(context.Background())
 
 	result := client.GetFloatValue("key", 0, nil)
@@ -154,7 +155,7 @@ func TestClient_Get_WithFailingCacheSet(t *testing.T) {
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213, floatEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213, wireconfig.FloatEntry))
 	client.Refresh(context.Background())
 	result := client.GetFloatValue("key", 0, nil)
 	c.Assert(result, qt.Equals, 3213.0)
@@ -250,14 +251,14 @@ func TestClient_GetWithRedirectSuccess(t *testing.T) {
 	srv1, client := getTestClients(t)
 	srv2, _ := getTestClients(t)
 	srv2.key = srv1.key
-	redirect := forceRedirect
-	srv1.setResponseJSON(&rootNode{
-		Preferences: &preferences{
+	redirect := wireconfig.ForceRedirect
+	srv1.setResponseJSON(&wireconfig.RootNode{
+		Preferences: &wireconfig.Preferences{
 			URL:      srv2.config().BaseURL,
 			Redirect: &redirect,
 		},
 	})
-	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value", stringEntry))
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value", wireconfig.StringEntry))
 	client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value")
@@ -275,19 +276,19 @@ func TestClient_GetWithDifferentURLAndNoRedirect(t *testing.T) {
 	srv1, client := getTestClients(t)
 	srv2, _ := getTestClients(t)
 	srv2.key = srv1.key
-	redirect := noRedirect
-	srv1.setResponseJSON(&rootNode{
-		Preferences: &preferences{
+	redirect := wireconfig.Nodirect
+	srv1.setResponseJSON(&wireconfig.RootNode{
+		Preferences: &wireconfig.Preferences{
 			URL:      srv2.config().BaseURL,
 			Redirect: &redirect,
 		},
-		Entries: map[string]*entry{
-			"key": &entry{
+		Entries: map[string]*wireconfig.Entry{
+			"key": &wireconfig.Entry{
 				Value: "value1",
 			},
 		},
 	})
-	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2", stringEntry))
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2", wireconfig.StringEntry))
 	client.Refresh(context.Background())
 
 	// Check that the value still comes from the same server and
@@ -303,19 +304,19 @@ func TestClient_GetWithRedirectToSameURL(t *testing.T) {
 	srv1, client := getTestClients(t)
 	srv2, _ := getTestClients(t)
 	srv2.key = srv1.key
-	redirect := forceRedirect
-	srv1.setResponseJSON(&rootNode{
-		Preferences: &preferences{
+	redirect := wireconfig.ForceRedirect
+	srv1.setResponseJSON(&wireconfig.RootNode{
+		Preferences: &wireconfig.Preferences{
 			URL:      srv1.config().BaseURL,
 			Redirect: &redirect,
 		},
-		Entries: map[string]*entry{
-			"key": &entry{
+		Entries: map[string]*wireconfig.Entry{
+			"key": &wireconfig.Entry{
 				Value: "value1",
 			},
 		},
 	})
-	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2", stringEntry))
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2", wireconfig.StringEntry))
 	client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value1")
@@ -329,14 +330,14 @@ func TestClient_GetWithCustomURLAndShouldRedirect(t *testing.T) {
 	srv1, client := getTestClients(t)
 	srv2, _ := getTestClients(t)
 	srv2.key = srv1.key
-	redirect := shouldRedirect
-	srv1.setResponseJSON(&rootNode{
-		Preferences: &preferences{
+	redirect := wireconfig.ShouldRedirect
+	srv1.setResponseJSON(&wireconfig.RootNode{
+		Preferences: &wireconfig.Preferences{
 			URL:      srv2.config().BaseURL,
 			Redirect: &redirect,
 		},
 	})
-	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2", stringEntry))
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2", wireconfig.StringEntry))
 	err := client.Refresh(context.Background())
 	c.Assert(err, qt.ErrorMatches, "config fetch failed: refusing to redirect from custom URL without forced redirection")
 
@@ -353,14 +354,14 @@ func TestClient_GetWithStandardURLAndShouldRedirect(t *testing.T) {
 	// Use a mock transport so that we can serve the request even though it's
 	// going to a non localhost address.
 	transport := newMockHTTPTransport()
-	redirect := shouldRedirect
-	transport.enqueue(200, marshalJSON(&rootNode{
-		Preferences: &preferences{
+	redirect := wireconfig.ShouldRedirect
+	transport.enqueue(200, marshalJSON(&wireconfig.RootNode{
+		Preferences: &wireconfig.Preferences{
 			URL:      "https://fakeUrl",
 			Redirect: &redirect,
 		},
 	}))
-	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value", stringEntry)))
+	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value", wireconfig.StringEntry)))
 	client := NewCustomClient(Config{
 		SDKKey:    "fakeKey",
 		Logger:    newTestLogger(t, LogLevelDebug),
@@ -379,14 +380,14 @@ func TestClient_GetWithStandardURLAndNoRedirect(t *testing.T) {
 	// Use a mock transport so that we can serve the request even though it's
 	// going to a non localhost address.
 	transport := newMockHTTPTransport()
-	redirect := noRedirect
-	transport.enqueue(200, marshalJSON(&rootNode{
-		Preferences: &preferences{
+	redirect := wireconfig.Nodirect
+	transport.enqueue(200, marshalJSON(&wireconfig.RootNode{
+		Preferences: &wireconfig.Preferences{
 			URL:      "https://fakeUrl",
 			Redirect: &redirect,
 		},
-		Entries: map[string]*entry{
-			"key": &entry{
+		Entries: map[string]*wireconfig.Entry{
+			"key": &wireconfig.Entry{
 				Value: "value1",
 			},
 		},
@@ -400,7 +401,7 @@ func TestClient_GetWithStandardURLAndNoRedirect(t *testing.T) {
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value1")
 
-	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value2", stringEntry)))
+	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value2", wireconfig.StringEntry)))
 	// The next request should go to the redirected server.
 	client.Refresh(context.Background())
 
@@ -417,15 +418,15 @@ func TestClient_GetWithRedirectLoop(t *testing.T) {
 	srv1, client := getTestClients(t)
 	srv2, _ := getTestClients(t)
 	srv2.key = srv1.key
-	redirect := forceRedirect
-	srv1.setResponseJSON(&rootNode{
-		Preferences: &preferences{
+	redirect := wireconfig.ForceRedirect
+	srv1.setResponseJSON(&wireconfig.RootNode{
+		Preferences: &wireconfig.Preferences{
 			URL:      srv2.config().BaseURL,
 			Redirect: &redirect,
 		},
 	})
-	srv2.setResponseJSON(&rootNode{
-		Preferences: &preferences{
+	srv2.setResponseJSON(&wireconfig.RootNode{
+		Preferences: &wireconfig.Preferences{
 			URL:      srv1.config().BaseURL,
 			Redirect: &redirect,
 		},
@@ -450,7 +451,7 @@ func TestClient_GetWithInvalidConfig(t *testing.T) {
 func TestClient_GetInt(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 99, intEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 99, wireconfig.IntEntry))
 	client.Refresh(context.Background())
 	c.Check(client.GetIntValue("key", 0, nil), qt.Equals, 99)
 }
@@ -458,7 +459,7 @@ func TestClient_GetInt(t *testing.T) {
 func TestSnapshot_Get(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 99, intEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 99, wireconfig.IntEntry))
 	client.Refresh(context.Background())
 	c.Check(client.Snapshot(nil).GetValue("key"), qt.Equals, 99)
 }
@@ -484,10 +485,10 @@ func getTestClients(t *testing.T) (*configServer, *Client) {
 	return srv, client
 }
 
-func rootNodeWithKeyValue(key string, value interface{}, typ entryType) *rootNode {
-	return &rootNode{
-		Entries: map[string]*entry{
-			key: &entry{
+func rootNodeWithKeyValue(key string, value interface{}, typ wireconfig.EntryType) *wireconfig.RootNode {
+	return &wireconfig.RootNode{
+		Entries: map[string]*wireconfig.Entry{
+			key: &wireconfig.Entry{
 				Value: value,
 				Type:  typ,
 			},

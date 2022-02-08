@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
+
+	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 )
 
 type config struct {
 	jsonBody []byte
 	etag     string
-	root     *rootNode
+	root     *wireconfig.RootNode
 	// Note: this is a pointer because the configuration
 	// can be copied (with the withFetchTime method).
 	evaluators *sync.Map // reflect.Type -> map[string]entryEvalFunc
@@ -20,7 +22,7 @@ type config struct {
 }
 
 func parseConfig(jsonBody []byte, etag string, fetchTime time.Time) (*config, error) {
-	var root rootNode
+	var root wireconfig.RootNode
 	if err := json.Unmarshal([]byte(jsonBody), &root); err != nil {
 		return nil, err
 	}
@@ -28,7 +30,7 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time) (*config, er
 	return newConfig(&root, jsonBody, etag, fetchTime), nil
 }
 
-func newConfig(root *rootNode, jsonBody []byte, etag string, fetchTime time.Time) *config {
+func newConfig(root *wireconfig.RootNode, jsonBody []byte, etag string, fetchTime time.Time) *config {
 	return &config{
 		jsonBody:   jsonBody,
 		root:       root,
@@ -82,7 +84,7 @@ func (conf *config) keys() []string {
 	return conf.allKeys
 }
 
-func fixupRootNodeValues(n *rootNode) {
+func fixupRootNodeValues(n *wireconfig.RootNode) {
 	for _, entry := range n.Entries {
 		entry.Value = fixValue(entry.Value, entry.Type)
 		for _, rule := range entry.RolloutRules {
@@ -96,8 +98,8 @@ func fixupRootNodeValues(n *rootNode) {
 
 // fixValue fixes up int-valued entries, which will have the wrong type of value, so
 // change them from float64 to int.
-func fixValue(v interface{}, typ entryType) interface{} {
-	if typ != intEntry {
+func fixValue(v interface{}, typ wireconfig.EntryType) interface{} {
+	if typ != wireconfig.IntEntry {
 		return v
 	}
 	f, ok := v.(float64)
@@ -107,64 +109,3 @@ func fixValue(v interface{}, typ entryType) interface{} {
 	}
 	return int(f)
 }
-
-type rootNode struct {
-	Entries     map[string]*entry `json:"f"`
-	Preferences *preferences      `json:"p"`
-}
-
-type entry struct {
-	VariationID     string           `json:"i"`
-	Value           interface{}      `json:"v"`
-	Type            entryType        `json:"t"`
-	RolloutRules    []*rolloutRule   `json:"r"`
-	PercentageRules []percentageRule `json:"p"`
-}
-
-type rolloutRule struct {
-	VariationID         string      `json:"i"`
-	Value               interface{} `json:"v"`
-	ComparisonAttribute string      `json:"a"`
-	ComparisonValue     string      `json:"c"`
-	Comparator          operator    `json:"t"`
-}
-
-type percentageRule struct {
-	VariationID string      `json:"i"`
-	Value       interface{} `json:"v"`
-	Percentage  int64       `json:"p"`
-}
-
-type preferences struct {
-	URL      string           `json:"u"`
-	Redirect *redirectionKind `json:"r"` // NoRedirect, ShouldRedirect or ForceRedirect
-}
-
-type redirectionKind int
-
-const (
-	// noRedirect indicates that the configuration is available
-	// in this request, but that the next request should be
-	// made to the redirected address.
-	noRedirect redirectionKind = 0
-
-	// shouldRedirect indicates that there is no configuration
-	// available at this address, and that the client should
-	// redirect immediately. This does not take effect when
-	// talking to a custom URL.
-	shouldRedirect redirectionKind = 1
-
-	// forceRedirect indicates that there is no configuration
-	// available at this address, and that the client should redirect
-	// immediately even when talking to a custom URL.
-	forceRedirect redirectionKind = 2
-)
-
-type entryType int
-
-const (
-	boolEntry   entryType = 0
-	stringEntry entryType = 1
-	intEntry    entryType = 2
-	floatEntry  entryType = 3
-)

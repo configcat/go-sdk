@@ -9,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 )
 
 const configJSONName = "config_v5"
@@ -239,13 +241,13 @@ func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfi
 			return config, baseURL, nil
 		}
 		redirect := *preferences.Redirect
-		if redirect == forceRedirect {
+		if redirect == wireconfig.ForceRedirect {
 			f.logger.Infof("forced redirect to %v (count %d)", preferences.URL, i+1)
 			baseURL = preferences.URL
 			continue
 		}
 		if f.urlIsCustom {
-			if redirect == noRedirect {
+			if redirect == wireconfig.Nodirect {
 				// The config is available, but we won't respect the redirection
 				// request for a custom URL.
 				f.logger.Infof("config fetched but refusing to redirect from custom URL without forced redirection")
@@ -266,13 +268,13 @@ func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfi
 				"Dashboard: https://app.configcat.com/organization/data-governance. " +
 				"Only Organization Admins can access this preference.",
 		)
-		if redirect == noRedirect {
+		if redirect == wireconfig.Nodirect {
 			// We've already got the configuration data, we'll just fetch
 			// from the redirected URL next time.
 			f.logger.Infof("redirection on next fetch to %v", baseURL)
 			return config, baseURL, nil
 		}
-		if redirect != shouldRedirect {
+		if redirect != wireconfig.ShouldRedirect {
 			return nil, "", fmt.Errorf("unknown redirection kind %d in response", redirect)
 		}
 		f.logger.Infof("redirecting to %v", baseURL)
