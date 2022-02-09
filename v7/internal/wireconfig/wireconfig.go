@@ -109,5 +109,8 @@ var opStrings = []string{
 }
 
 func (op Operator) String() string {
+	if op < 0 || int(op) >= len(opStrings) {
+		return ""
+	}
 	return opStrings[op]
 }
