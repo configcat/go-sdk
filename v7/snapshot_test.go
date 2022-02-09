@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 	qt "github.com/frankban/quicktest"
 )
 
@@ -28,14 +29,14 @@ func TestNilSnapshot(t *testing.T) {
 
 var loggingTests = []struct {
 	testName    string
-	config      *rootNode
+	config      *wireconfig.RootNode
 	key         string
 	user        User
 	expectValue interface{}
 	expectLogs  []string
 }{{
 	testName:    "NoRules",
-	config:      rootNodeWithKeyValue("key", "value", stringEntry),
+	config:      rootNodeWithKeyValue("key", "value", wireconfig.StringEntry),
 	key:         "key",
 	expectValue: "value",
 	expectLogs: []string{
@@ -44,16 +45,16 @@ var loggingTests = []struct {
 	},
 }, {
 	testName: "RolloutRulesButNoUser",
-	config: &rootNode{
-		Entries: map[string]*entry{
+	config: &wireconfig.RootNode{
+		Entries: map[string]*wireconfig.Entry{
 			"key": {
 				Value: "defaultValue",
-				Type:  stringEntry,
-				RolloutRules: []*rolloutRule{{
+				Type:  wireconfig.StringEntry,
+				RolloutRules: []*wireconfig.RolloutRule{{
 					Value:               "e",
 					ComparisonAttribute: "attr",
 					ComparisonValue:     "x",
-					Comparator:          opContains,
+					Comparator:          wireconfig.OpContains,
 				}},
 			},
 		},
@@ -67,20 +68,20 @@ var loggingTests = []struct {
 	},
 }, {
 	testName: "RolloutRulesWithUser",
-	config: &rootNode{
-		Entries: map[string]*entry{
+	config: &wireconfig.RootNode{
+		Entries: map[string]*wireconfig.Entry{
 			"key": {
 				Value: "defaultValue",
-				Type:  stringEntry,
-				RolloutRules: []*rolloutRule{{
+				Type:  wireconfig.StringEntry,
+				RolloutRules: []*wireconfig.RolloutRule{{
 					Value:               "v1",
 					ComparisonAttribute: "Identifier",
-					Comparator:          opContains,
+					Comparator:          wireconfig.OpContains,
 					ComparisonValue:     "x",
 				}, {
 					Value:               "v2",
 					ComparisonAttribute: "Identifier",
-					Comparator:          opContains,
+					Comparator:          wireconfig.OpContains,
 					ComparisonValue:     "y",
 				}},
 			},
@@ -99,12 +100,12 @@ var loggingTests = []struct {
 	},
 }, {
 	testName: "PercentageRulesButNoUser",
-	config: &rootNode{
-		Entries: map[string]*entry{
+	config: &wireconfig.RootNode{
+		Entries: map[string]*wireconfig.Entry{
 			"key": {
 				Value: "defaultValue",
-				Type:  stringEntry,
-				PercentageRules: []percentageRule{{
+				Type:  wireconfig.StringEntry,
+				PercentageRules: []wireconfig.PercentageRule{{
 					Value:      "low-percent",
 					Percentage: 30,
 				}, {
@@ -123,12 +124,12 @@ var loggingTests = []struct {
 	},
 }, {
 	testName: "PercentageRulesWithUser",
-	config: &rootNode{
-		Entries: map[string]*entry{
+	config: &wireconfig.RootNode{
+		Entries: map[string]*wireconfig.Entry{
 			"key": {
 				Value: "defaultValue",
-				Type:  stringEntry,
-				PercentageRules: []percentageRule{{
+				Type:  wireconfig.StringEntry,
+				PercentageRules: []wireconfig.PercentageRule{{
 					Value:      "low-percent",
 					Percentage: 1,
 				}, {
@@ -149,16 +150,16 @@ var loggingTests = []struct {
 	},
 }, {
 	testName: "MatchErrorInUser",
-	config: &rootNode{
-		Entries: map[string]*entry{
+	config: &wireconfig.RootNode{
+		Entries: map[string]*wireconfig.Entry{
 			"key": {
 				Value: "defaultValue",
-				Type:  stringEntry,
-				RolloutRules: []*rolloutRule{{
+				Type:  wireconfig.StringEntry,
+				RolloutRules: []*wireconfig.RolloutRule{{
 					Value:               "e",
 					ComparisonAttribute: "Identifier",
 					ComparisonValue:     "1.2.3",
-					Comparator:          opLessSemver,
+					Comparator:          wireconfig.OpLessSemver,
 				}},
 			},
 		},
@@ -175,16 +176,16 @@ var loggingTests = []struct {
 	},
 }, {
 	testName: "MatchErrorRules",
-	config: &rootNode{
-		Entries: map[string]*entry{
+	config: &wireconfig.RootNode{
+		Entries: map[string]*wireconfig.Entry{
 			"key": {
 				Value: "defaultValue",
-				Type:  stringEntry,
-				RolloutRules: []*rolloutRule{{
+				Type:  wireconfig.StringEntry,
+				RolloutRules: []*wireconfig.RolloutRule{{
 					Value:               "e",
 					ComparisonAttribute: "Identifier",
 					ComparisonValue:     "bogus",
-					Comparator:          opLessSemver,
+					Comparator:          wireconfig.OpLessSemver,
 				}},
 			},
 		},
@@ -201,15 +202,15 @@ var loggingTests = []struct {
 	},
 }, {
 	testName: "UnknownKey",
-	config: &rootNode{
-		Entries: map[string]*entry{
+	config: &wireconfig.RootNode{
+		Entries: map[string]*wireconfig.Entry{
 			"key1": {
 				Value: "v1",
-				Type:  stringEntry,
+				Type:  wireconfig.StringEntry,
 			},
 			"key2": {
 				Value: "v2",
-				Type:  stringEntry,
+				Type:  wireconfig.StringEntry,
 			},
 		},
 	},
