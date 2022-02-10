@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 // Snapshot holds a snapshot of the Configcat configuration.
@@ -16,6 +18,27 @@ type Snapshot struct {
 	config  *config
 	user    reflect.Value
 	allKeys []string
+
+	// values holds the value for each possible value ID, as stored in
+	// config.values.
+	values []interface{}
+
+	// precalc holds precalculated value IDs as stored in config.precalc.
+	precalc []valueID
+
+	// cache records the value IDs that have been
+	// recorded for values that are not known ahead
+	// of time. Zero IDs represent Zero IDs represent unevaluated results.
+	// Entries are accessed and updated atomically which
+	// provides a mechanism whereby the result for any given key
+	// is only computed once for a given snapshot.
+	//
+	// The slot for a given key k is found at cache[-precalc[keyID(k)]-1].
+	//
+	// The cache is created by makeCache.
+	cache     []valueID
+	makeCache sync.Once
+
 	// evaluators maps keyID to the evaluator for that key.
 	evaluators []entryEvalFunc
 }
@@ -33,9 +56,8 @@ type Snapshot struct {
 // - s.GetVariationID returns "".
 // - s.GetVariationIDs returns nil.
 func NewSnapshot(logger Logger, values map[string]interface{}) (*Snapshot, error) {
-	valueSlice := make([]interface{}, numKeys())
+	valuesSlice := make([]interface{}, numKeys())
 	keys := make([]string, 0, len(values))
-
 	for name, val := range values {
 		switch val.(type) {
 		case bool, int, float64, string:
@@ -43,33 +65,47 @@ func NewSnapshot(logger Logger, values map[string]interface{}) (*Snapshot, error
 			return nil, fmt.Errorf("value for flag %q has unexpected type %T (%#v); must be bool, int, float64 or string", name, val, val)
 		}
 		id := idForKey(name, true)
-		if int(id) >= len(valueSlice) {
+		if int(id) >= len(valuesSlice) {
 			// We've added a new key, so expand the slices.
 			// This should be a rare case, so don't worry about
 			// this happening several times within this loop.
-			valueSlice1 := make([]interface{}, id+1)
-			copy(valueSlice1, valueSlice)
-			valueSlice = valueSlice1
+			valuesSlice1 := make([]interface{}, id+1)
+			copy(valuesSlice1, valuesSlice)
+			valuesSlice = valuesSlice1
 		}
-		valueSlice[id] = val
+		valuesSlice[id] = val
 		keys = append(keys, name)
 	}
 	// Save some allocations by using the same closure for every key.
-	eval := func(id keyID, logger *leveledLogger, userv reflect.Value) (interface{}, string) {
-		return valueSlice[id], ""
+	eval := func(id keyID, logger *leveledLogger, userv reflect.Value) (valueID, string) {
+		return valueID(id) + 1, ""
 	}
-	evaluators := make([]entryEvalFunc, len(valueSlice))
+	evaluators := make([]entryEvalFunc, len(valuesSlice))
+	precalc := make([]valueID, len(valuesSlice))
 	for i := range evaluators {
 		evaluators[i] = eval
+		precalc[i] = valueID(i) + 1
 	}
 	return &Snapshot{
 		logger:     newLeveledLogger(logger),
 		evaluators: evaluators,
 		allKeys:    keys,
+		values:     valuesSlice,
+		precalc:    precalc,
 	}, nil
 }
 
 func newSnapshot(cfg *config, user User, logger *leveledLogger) *Snapshot {
+	if user == nil && cfg != nil {
+		return cfg.noUserSnapshot
+	}
+	return _newSnapshot(cfg, user, logger)
+}
+
+// _newSnapshot is like newSnapshot except that it doesn't check
+// whether user is nil. It should only be used by the parseConfig code
+// for initializing config.noUserSnapshot.
+func _newSnapshot(cfg *config, user User, logger *leveledLogger) *Snapshot {
 	snap := &Snapshot{
 		config: cfg,
 		user:   reflect.ValueOf(user),
@@ -82,13 +118,15 @@ func newSnapshot(cfg *config, user User, logger *leveledLogger) *Snapshot {
 	if cfg == nil {
 		return snap
 	}
-	snap.allKeys = cfg.allKeys
 	evaluators, err := cfg.evaluatorsForUserType(userType)
 	if err != nil {
 		logger.Errorf("%v", err)
 		return snap
 	}
 	snap.evaluators = evaluators
+	snap.values = cfg.values
+	snap.allKeys = cfg.allKeys
+	snap.precalc = cfg.precalc
 	return snap
 }
 
@@ -101,12 +139,41 @@ func (snap *Snapshot) WithUser(user User) *Snapshot {
 		// need to do anything.
 		return snap
 	}
+	if user == nil {
+		return snap.config.noUserSnapshot
+	}
 	return newSnapshot(snap.config, user, snap.logger)
 }
 
 func (snap *Snapshot) value(id keyID, key string) interface{} {
+	if snap == nil {
+		return nil
+	}
+	if snap.logger.enabled(LogLevelInfo) || int(id) >= len(snap.precalc) {
+		// We want to see logs or we don't know about the key so use the slow path.
+		val, _ := snap.valueAndVariationID(id, key)
+		return val
+	}
+	valID := snap.precalc[id]
+	if valID > 0 {
+		return snap.valueForID(valID)
+	}
+	cacheIndex := int(-valID - 1)
+	snap.initCache()
+	if valID := atomic.LoadInt32(&snap.cache[cacheIndex]); valID > 0 {
+		// We've got a previous result, so return it. Note that we can only do this
+		// when we're not printing Info-level logs, because this avoids the usual
+		// logging of rule evaluation.
+		return snap.valueForID(valID)
+	}
 	val, _ := snap.valueAndVariationID(id, key)
 	return val
+}
+
+func (snap *Snapshot) initCache() {
+	snap.makeCache.Do(func() {
+		snap.cache = make([]valueID, snap.config.keysWithRules)
+	})
 }
 
 // GetVariationID returns the variation ID that will be used for the given key
@@ -129,11 +196,23 @@ func (snap *Snapshot) valueAndVariationID(id keyID, key string) (interface{}, st
 			" Here are the available keys: %s", key, strings.Join(snap.GetAllKeys(), ","))
 		return nil, ""
 	}
-	val, variationID := eval(id, snap.logger, snap.user)
+	valID, variationID := eval(id, snap.logger, snap.user)
+	val := snap.valueForID(valID)
 	if snap.logger.enabled(LogLevelInfo) {
 		snap.logger.Infof("Returning %v=%v.", key, val)
 	}
+	if v := snap.precalc[id]; v < 0 {
+		snap.initCache()
+		cacheIndex := -v - 1
+		atomic.StoreInt32(&snap.cache[cacheIndex], valID)
+	}
 	return val, variationID
+}
+
+// valueForID returns the actual value corresponding to
+// the given value ID.
+func (snap *Snapshot) valueForID(id valueID) interface{} {
+	return snap.values[id-1]
 }
 
 // GetValue returns a feature flag value regardless of type. If there is no

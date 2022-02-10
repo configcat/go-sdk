@@ -2,7 +2,10 @@ package configcat
 
 // The User interface represents the user-specific data that can influence
 // configcat rule evaluation. All Users are expected to provide an Identifier
-// attribute.
+// attribute. A User value is assumed to be immutable once it's been
+// provided to configcat - if it changes between feature flag evaluations,
+// there's no guarantee that the feature flag results will change accordingly
+// (use WithUser instead of mutating the value).
 //
 // The configcat client uses reflection to determine
 // what attributes are available:
