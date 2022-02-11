@@ -40,7 +40,6 @@ var loggingTests = []struct {
 	key:         "key",
 	expectValue: "value",
 	expectLogs: []string{
-		"INFO: fetching from $HOST_URL",
 		"INFO: Returning key=value.",
 	},
 }, {
@@ -62,7 +61,6 @@ var loggingTests = []struct {
 	key:         "key",
 	expectValue: "defaultValue",
 	expectLogs: []string{
-		"INFO: fetching from $HOST_URL",
 		"WARN: Evaluating GetValue(key). UserObject missing! You should pass a UserObject to GetValueForUser() in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object.",
 		"INFO: Returning key=defaultValue.",
 	},
@@ -93,7 +91,6 @@ var loggingTests = []struct {
 	},
 	expectValue: "v2",
 	expectLogs: []string{
-		"INFO: fetching from $HOST_URL",
 		"INFO: Evaluating rule: [Identifier:y] [CONTAINS] [x] => no match",
 		"INFO: Evaluating rule: [Identifier:y] [CONTAINS] [y] => match, returning: v2",
 		"INFO: Returning key=v2.",
@@ -105,7 +102,7 @@ var loggingTests = []struct {
 			"key": {
 				Value: "defaultValue",
 				Type:  wireconfig.StringEntry,
-				PercentageRules: []wireconfig.PercentageRule{{
+				PercentageRules: []*wireconfig.PercentageRule{{
 					Value:      "low-percent",
 					Percentage: 30,
 				}, {
@@ -118,7 +115,6 @@ var loggingTests = []struct {
 	key:         "key",
 	expectValue: "defaultValue",
 	expectLogs: []string{
-		"INFO: fetching from $HOST_URL",
 		"WARN: Evaluating GetValue(key). UserObject missing! You should pass a UserObject to GetValueForUser() in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object.",
 		"INFO: Returning key=defaultValue.",
 	},
@@ -129,7 +125,7 @@ var loggingTests = []struct {
 			"key": {
 				Value: "defaultValue",
 				Type:  wireconfig.StringEntry,
-				PercentageRules: []wireconfig.PercentageRule{{
+				PercentageRules: []*wireconfig.PercentageRule{{
 					Value:      "low-percent",
 					Percentage: 1,
 				}, {
@@ -145,7 +141,6 @@ var loggingTests = []struct {
 	},
 	expectValue: "high-percent",
 	expectLogs: []string{
-		"INFO: fetching from $HOST_URL",
 		"INFO: Returning key=high-percent.",
 	},
 }, {
@@ -170,7 +165,6 @@ var loggingTests = []struct {
 		Identifier: "bogus",
 	},
 	expectLogs: []string{
-		"INFO: fetching from $HOST_URL",
 		"INFO: Evaluating rule: [Identifier:bogus] [< (SemVer)] [1.2.3] => SKIP rule. Validation error: No Major.Minor.Patch elements found",
 		"INFO: Returning key=defaultValue.",
 	},
@@ -196,7 +190,6 @@ var loggingTests = []struct {
 		Identifier: "1.2.3",
 	},
 	expectLogs: []string{
-		"INFO: fetching from $HOST_URL",
 		"INFO: Evaluating rule: [Identifier:1.2.3] [< (SemVer)] [bogus] => SKIP rule. Validation error: No Major.Minor.Patch elements found",
 		"INFO: Returning key=defaultValue.",
 	},
@@ -217,7 +210,6 @@ var loggingTests = []struct {
 	key:         "unknownKey",
 	expectValue: nil,
 	expectLogs: []string{
-		"INFO: fetching from $HOST_URL",
 		"ERROR: error getting value: value not found for key unknownKey. Here are the available keys: key1,key2",
 	},
 }}
@@ -244,14 +236,20 @@ func TestLogging(t *testing.T) {
 			srv.setResponseJSON(test.config)
 			client.Refresh(context.Background())
 
-			expectLogs := append([]string(nil), test.expectLogs...)
-			for i := range expectLogs {
-				expectLogs[i] = strings.ReplaceAll(expectLogs[i], "$HOST_URL", cfg.BaseURL)
-			}
+			// We'll always get a "fetching from" message at the start.
+			c.Check(logs, qt.DeepEquals, []string{"INFO: fetching from " + cfg.BaseURL})
+			logs = nil
 
-			value := client.Snapshot(test.user).GetValue(test.key)
-			c.Check(value, qt.Equals, test.expectValue)
-			c.Check(logs, qt.DeepEquals, expectLogs)
+			snap := client.Snapshot(test.user)
+			// Run the test twice to make sure that caching doesn't
+			// interfere with the logging.
+			for i := 0; i < 2; i++ {
+				c.Logf("iteration %d", i)
+				logs = nil
+				value := snap.GetValue(test.key)
+				c.Check(value, qt.Equals, test.expectValue)
+				c.Check(logs, qt.DeepEquals, test.expectLogs)
+			}
 		})
 	}
 }
@@ -271,7 +269,7 @@ func TestNewSnapshot(t *testing.T) {
 	snap, err := NewSnapshot(newTestLogger(t, LogLevelDebug), values)
 	c.Assert(err, qt.IsNil)
 	for key, want := range values {
-		c.Assert(snap.GetValue(key), qt.Equals, want)
+		c.Check(snap.GetValue(key), qt.Equals, want)
 	}
 	// Sanity check that it works OK with Flag values.
 	c.Assert(Int("intFlag", 0).Get(snap), qt.Equals, 1)

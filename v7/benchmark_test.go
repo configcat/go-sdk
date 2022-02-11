@@ -92,7 +92,7 @@ func BenchmarkGet(b *testing.B) {
 						VariationID:         "385d9803",
 						Value:               "country-match",
 					}},
-					PercentageRules: []wireconfig.PercentageRule{{
+					PercentageRules: []*wireconfig.PercentageRule{{
 						VariationID: "607147d5",
 						Value:       "low-percent",
 						Percentage:  30,

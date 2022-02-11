@@ -9,11 +9,11 @@ type RootNode struct {
 }
 
 type Entry struct {
-	VariationID     string           `json:"i"`
-	Value           interface{}      `json:"v"`
-	Type            EntryType        `json:"t"`
-	RolloutRules    []*RolloutRule   `json:"r"`
-	PercentageRules []PercentageRule `json:"p"`
+	VariationID     string            `json:"i"`
+	Value           interface{}       `json:"v"`
+	Type            EntryType         `json:"t"`
+	RolloutRules    []*RolloutRule    `json:"r"`
+	PercentageRules []*PercentageRule `json:"p"`
 }
 
 type RolloutRule struct {
