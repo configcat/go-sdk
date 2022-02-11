@@ -12,21 +12,26 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+
+	qt "github.com/frankban/quicktest"
 )
+
+type testKind int
 
 const (
-	valueKind     = 0
-	variationKind = 1
+	valueKind     = testKind(0)
+	variationKind = testKind(1)
 )
 
-type integrationTest struct {
+type integrationTestSuite struct {
 	sdkKey   string
 	fileName string
-	kind     int
+	kind     testKind
 }
 
-var integrationTests = []integrationTest{{
+var integrationTestSuites = []integrationTestSuite{{
 	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A",
 	fileName: "testmatrix.csv",
 	kind:     valueKind,
@@ -53,14 +58,110 @@ var integrationTests = []integrationTest{{
 }}
 
 func TestRolloutIntegration(t *testing.T) {
-	for _, test := range integrationTests {
-		t.Run(test.fileName, test.runTest)
+	t.Parallel()
+	integration := os.Getenv("CONFIGCAT_DISABLE_INTEGRATION_TESTS") == ""
+	runIntegrationTests(t, integration, LogLevelDebug, func(t *testing.T, test integrationTest) {
+		snap := test.client.Snapshot(test.user)
+		var val interface{}
+		switch test.kind {
+		case valueKind:
+			val = snap.GetValue(test.key)
+		case variationKind:
+			val = snap.GetVariationID(test.key)
+		default:
+			t.Fatalf("unexpected kind %v", test.kind)
+		}
+		qt.Assert(t, val, qt.Equals, test.expect)
+	})
+}
+
+func TestRolloutLogLevels(t *testing.T) {
+	t.Parallel()
+	for _, level := range []LogLevel{
+		LogLevelPanic,
+		LogLevelFatal,
+		LogLevelError,
+		LogLevelWarn,
+		LogLevelInfo,
+		LogLevelDebug,
+		LogLevelTrace,
+	} {
+		level := level
+		t.Run(level.String(), func(t *testing.T) {
+			t.Parallel()
+			runIntegrationTests(t, false, level, func(t *testing.T, test integrationTest) {
+				snap := test.client.Snapshot(test.user)
+				// Run the test three times concurrently on the same snapshot so we get
+				// to test the cached case and concurrent case as well as the uncached case.
+				for i := 0; i < 3; i++ {
+					var val interface{}
+					switch test.kind {
+					case valueKind:
+						val = snap.GetValue(test.key)
+					case variationKind:
+						val = snap.GetVariationID(test.key)
+					}
+					qt.Check(t, val, qt.Equals, test.expect)
+				}
+			})
+		})
 	}
 }
 
-func (test integrationTest) runTest(t *testing.T) {
+func TestRolloutConcurrent(t *testing.T) {
+	t.Parallel()
+	// Test that the caching works OK by running all the tests
+	runIntegrationTests(t, false, LogLevelFatal, func(t *testing.T, test integrationTest) {
+		// Note: we can't call t.Parallel here because the outer client logger
+		// has been bound to this test.
+		snap := test.client.Snapshot(test.user)
+		// Run the test three times concurrently on the same snapshot so we get
+		// to test the cached case and concurrent case as well as the uncached case.
+		var wg sync.WaitGroup
+		for i := 0; i < 3; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				var val interface{}
+				switch test.kind {
+				case valueKind:
+					val = snap.GetValue(test.key)
+				case variationKind:
+					val = snap.GetVariationID(test.key)
+				}
+				qt.Check(t, val, qt.Equals, test.expect)
+			}()
+		}
+		wg.Wait()
+	})
+}
+
+func runIntegrationTests(t *testing.T, integration bool, logLevel LogLevel, runTest func(t *testing.T, test integrationTest)) {
+	for _, test := range integrationTestSuites {
+		test := test
+		t.Run(test.fileName, func(t *testing.T) {
+			t.Parallel()
+			test.runTests(t, integration, logLevel, runTest)
+		})
+	}
+}
+
+type integrationTest struct {
+	// client holds the client to use when querying.
+	client *Client
+	// user holds the user context for querying the value.
+	user User
+	// key holds a key to query
+	key string
+	// kind specifies what type of query to make.
+	kind testKind
+	// expect holds the expected result
+	expect interface{}
+}
+
+func (test integrationTestSuite) runTests(t *testing.T, integration bool, logLevel LogLevel, runTest func(t *testing.T, test integrationTest)) {
 	var cfg Config
-	if os.Getenv("CONFIGCAT_DISABLE_INTEGRATION_TESTS") != "" {
+	if !integration {
 		srv := newConfigServerWithKey(t, test.sdkKey)
 		srv.setResponse(configResponse{body: contentForIntegrationTestKey(test.sdkKey)})
 		cfg = srv.config()
@@ -88,15 +189,13 @@ func (test integrationTest) runTest(t *testing.T) {
 	settingKeys := header[4:]
 	customKey := header[3]
 
-	lineNumber := 1
-	for {
+	for lineNumber := 2; ; lineNumber++ {
 		line, err := reader.Read()
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			log.Fatal(err)
 		}
-		lineNumber++
 		t.Run(fmt.Sprintf("line-%d", lineNumber), func(t *testing.T) {
 			var user User
 			if line[0] != "##null##" {
@@ -112,46 +211,50 @@ func (test integrationTest) runTest(t *testing.T) {
 				}
 				user = userVal
 			}
-			t.Logf("user %#v", user)
+			if logLevel >= LogLevelInfo {
+				t.Logf("user %#v", user)
+			}
 
 			for i, settingKey := range settingKeys {
 				t.Run(fmt.Sprintf("key-%s", settingKey), func(t *testing.T) {
-					t.Logf("rule:\n%s", describeRules(client.fetcher.current(), settingKey))
-					tlogger.logFunc = t.Logf
-					var val interface{}
-					switch test.kind {
-					case valueKind:
-						val = client.Snapshot(user).value(idForKey(settingKey, false), settingKey)
-					case variationKind:
-						val = client.Snapshot(user).GetVariationID(settingKey)
-					default:
-						t.Fatalf("unexpected kind %v", test.kind)
+					if logLevel >= LogLevelInfo {
+						t.Logf("rule:\n%s", describeRules(client.fetcher.current(), settingKey))
 					}
+					tlogger.logFunc = t.Logf
 					expected := line[i+4]
 					var expectedVal interface{}
-					var err error
-					switch val := val.(type) {
-					case bool:
-						expectedVal, err = strconv.ParseBool(expected)
-					case int:
-						expectedVal, err = strconv.Atoi(expected)
-					case float64:
-						expectedVal, err = strconv.ParseFloat(expected, 64)
-					case string:
+					if test.kind == valueKind {
+						expectedVal = parseString(expected)
+					} else {
 						expectedVal = expected
-					default:
-						t.Fatalf("value was not handled %T %#v; expected %q", val, val, expected)
 					}
-					if err != nil {
-						t.Fatalf("cannot parse expected value %q as %T: %v", expected, val, err)
-					}
-					if val != expectedVal {
-						t.Errorf("unexpected result for key %s at %s:%d; got %#v want %#v", settingKey, file.Name(), lineNumber, val, expectedVal)
-					}
+					runTest(t, integrationTest{
+						client: client,
+						user:   user,
+						key:    settingKey,
+						kind:   test.kind,
+						expect: expectedVal,
+					})
 				})
 			}
 		})
 	}
+}
+
+func parseString(s string) interface{} {
+	if v, err := strconv.Atoi(s); err == nil {
+		return v
+	}
+	if v, err := strconv.ParseFloat(s, 64); err == nil {
+		return v
+	}
+	switch s {
+	case "True":
+		return true
+	case "False":
+		return false
+	}
+	return s
 }
 
 func nullStr(s string) string {
