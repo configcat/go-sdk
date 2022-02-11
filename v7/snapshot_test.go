@@ -92,7 +92,7 @@ var loggingTests = []struct {
 	expectValue: "v2",
 	expectLogs: []string{
 		"INFO: Evaluating rule: [Identifier:y] [CONTAINS] [x] => no match",
-		"INFO: Evaluating rule: [Identifier:y] [CONTAINS] [y] => match, returning: v2",
+		"INFO: Evaluating rule: [Identifier:y] [CONTAINS] [y] => match",
 		"INFO: Returning key=v2.",
 	},
 }, {

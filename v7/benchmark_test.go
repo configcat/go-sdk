@@ -113,6 +113,61 @@ func BenchmarkGet(b *testing.B) {
 			}
 		},
 		want: "high-percent",
+	}, {
+		benchName: "no-rules",
+		node: &wireconfig.RootNode{
+			Entries: map[string]*wireconfig.Entry{
+				"simple": {
+					Value: "no-match",
+				},
+			},
+		},
+		rule: "simple",
+		makeUser: func() User {
+			return &UserData{
+				Identifier: "unknown-identifier",
+				Email:      "x@configcat.com",
+				Country:    "United",
+			}
+		},
+		want: "no-match",
+	}, {
+		benchName: "no-user",
+		node: &wireconfig.RootNode{
+			Entries: map[string]*wireconfig.Entry{
+				"bool30TrueAdvancedRules": {
+					VariationID: "607147d5",
+					Value:       "no-match",
+					RolloutRules: []*wireconfig.RolloutRule{{
+						ComparisonAttribute: "Email",
+						ComparisonValue:     "a@configcat.com, b@configcat.com",
+						Comparator:          wireconfig.OpOneOf,
+						VariationID:         "385d9803",
+						Value:               "email-match",
+					}, {
+						ComparisonAttribute: "Country",
+						ComparisonValue:     "United",
+						Comparator:          wireconfig.OpNotOneOf,
+						VariationID:         "385d9803",
+						Value:               "country-match",
+					}},
+					PercentageRules: []*wireconfig.PercentageRule{{
+						VariationID: "607147d5",
+						Value:       "low-percent",
+						Percentage:  30,
+					}, {
+						VariationID: "385d9803",
+						Value:       "high-percent",
+						Percentage:  70,
+					}},
+				},
+			},
+		},
+		rule: "bool30TrueAdvancedRules",
+		makeUser: func() User {
+			return nil
+		},
+		want: "no-match",
 	}}
 	for _, bench := range benchmarks {
 		b.Run(bench.benchName, func(b *testing.B) {
@@ -125,21 +180,23 @@ func BenchmarkGet(b *testing.B) {
 			client := NewCustomClient(cfg)
 			client.Refresh(context.Background())
 			defer client.Close()
+			user := bench.makeUser()
 			b.Run("get-and-make", func(b *testing.B) {
-				val := client.GetStringValue(bench.rule, "", bench.makeUser())
+				rule := String(bench.rule, "")
+				val := rule.Get(client.Snapshot(user))
 				if val != bench.want {
 					b.Fatalf("unexpected result %#v", val)
 				}
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					client.GetStringValue(bench.rule, "", bench.makeUser())
+					rule.Get(client.Snapshot(user))
 				}
 			})
 			b.Run("get-only", func(b *testing.B) {
 				rule := String(bench.rule, "")
-				snap := client.Snapshot(bench.makeUser())
-				val := rule.Get(client.Snapshot(bench.makeUser()))
+				snap := client.Snapshot(user)
+				val := rule.Get(snap)
 				if val != bench.want {
 					b.Fatalf("unexpected result %#v", val)
 				}

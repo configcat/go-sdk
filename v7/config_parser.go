@@ -19,26 +19,71 @@ type config struct {
 	allKeys    []string
 	keyValues  map[string]keyValue
 	fetchTime  time.Time
+	// values holds all the values that can be returned from the
+	// configuration, keyed by valueID-1.
+	values []interface{}
+
+	// precalc holds value IDs for keys that we know
+	// the values of ahead of time because they're not
+	// dependent on the user value, indexed by key id.
+	// For values that we don't know ahead of time, the
+	// precalc entry contains a negative number n. (-n - 1) is the index
+	// into the cache slice which will hold the value eventually
+	// when it's been calculated for a particular user.
+	precalc []valueID
+
+	// keysWithRules holds the number of keys that have
+	// rules (i.e. that do not have a value in precalc).
+	keysWithRules int
+
+	// noUserSnapshot holds a predefined snapshot of the
+	// configuration with no user.
+	noUserSnapshot *Snapshot
 }
 
-func parseConfig(jsonBody []byte, etag string, fetchTime time.Time) (*config, error) {
+// valueID holds an integer representation of a value that
+// can be returned from a feature flag. It's one more
+// than the index into the config.values or Snapshot.values slice.
+type valueID = int32
+
+func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger) (*config, error) {
 	var root wireconfig.RootNode
 	if err := json.Unmarshal([]byte(jsonBody), &root); err != nil {
 		return nil, err
 	}
-	fixupRootNodeValues(&root)
-	return newConfig(&root, jsonBody, etag, fetchTime), nil
-}
-
-func newConfig(root *wireconfig.RootNode, jsonBody []byte, etag string, fetchTime time.Time) *config {
-	return &config{
+	conf := &config{
 		jsonBody:   jsonBody,
-		root:       root,
+		root:       &root,
 		evaluators: new(sync.Map),
-		keyValues:  keyValuesForRootNode(root),
-		allKeys:    keysForRootNode(root),
+		keyValues:  keyValuesForRootNode(&root),
+		allKeys:    keysForRootNode(&root),
 		etag:       etag,
 		fetchTime:  fetchTime,
+		precalc:    make([]valueID, numKeys()),
+	}
+	conf.fixup(make(map[interface{}]valueID))
+	conf.precalculate()
+	conf.noUserSnapshot = _newSnapshot(conf, nil, logger)
+	return conf, nil
+}
+
+// precalculate populates conf.precalc with value IDs that
+// are known ahead of time or negative indexes into the cache slice
+// where the value will be stored later.
+func (conf *config) precalculate() {
+	for name, entry := range conf.root.Entries {
+		id := idForKey(name, true)
+		if int(id) >= len(conf.precalc) {
+			precalc1 := make([]valueID, id+1)
+			copy(precalc1, conf.precalc)
+			conf.precalc = precalc1
+		}
+		if len(entry.RolloutRules) == 0 && len(entry.PercentageRules) == 0 {
+			conf.precalc[id] = entry.ValueID
+			continue
+		}
+		conf.keysWithRules++
+		conf.precalc[id] = -valueID(conf.keysWithRules)
 	}
 }
 
@@ -84,16 +129,33 @@ func (conf *config) keys() []string {
 	return conf.allKeys
 }
 
-func fixupRootNodeValues(n *wireconfig.RootNode) {
-	for _, entry := range n.Entries {
+// fixup makes sure that int-valued entries have integer values
+// and populates the ValueID fields in conf.root.
+func (conf *config) fixup(valueMap map[interface{}]valueID) {
+	for _, entry := range conf.root.Entries {
 		entry.Value = fixValue(entry.Value, entry.Type)
+		entry.ValueID = conf.idForValue(entry.Value, valueMap)
 		for _, rule := range entry.RolloutRules {
 			rule.Value = fixValue(rule.Value, entry.Type)
+			rule.ValueID = conf.idForValue(rule.Value, valueMap)
 		}
 		for _, rule := range entry.PercentageRules {
 			rule.Value = fixValue(rule.Value, entry.Type)
+			rule.ValueID = conf.idForValue(rule.Value, valueMap)
 		}
 	}
+}
+
+func (conf *config) idForValue(v interface{}, valueMap map[interface{}]valueID) valueID {
+	if id, ok := valueMap[v]; ok {
+		return id
+	}
+	// Start at 1 so the zero value always means "not known yet"
+	// so we can rely on zero-initialization of the evaluation context.
+	id := valueID(len(conf.values) + 1)
+	valueMap[v] = id
+	conf.values = append(conf.values, v)
+	return id
 }
 
 // fixValue fixes up int-valued entries, which will have the wrong type of value, so

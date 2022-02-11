@@ -14,6 +14,8 @@ type Entry struct {
 	Type            EntryType         `json:"t"`
 	RolloutRules    []*RolloutRule    `json:"r"`
 	PercentageRules []*PercentageRule `json:"p"`
+
+	ValueID int32 `json:"-"`
 }
 
 type RolloutRule struct {
@@ -22,12 +24,16 @@ type RolloutRule struct {
 	ComparisonAttribute string      `json:"a"`
 	ComparisonValue     string      `json:"c"`
 	Comparator          Operator    `json:"t"`
+
+	ValueID int32 `json:"-"`
 }
 
 type PercentageRule struct {
 	VariationID string      `json:"i"`
 	Value       interface{} `json:"v"`
 	Percentage  int64       `json:"p"`
+
+	ValueID int32 `json:"-"`
 }
 
 type Preferences struct {

@@ -36,7 +36,7 @@ func (conf *config) evaluatorsForUserType(userType reflect.Type) ([]entryEvalFun
 	return entries1.([]entryEvalFunc), nil
 }
 
-type entryEvalFunc = func(id keyID, logger *leveledLogger, userv reflect.Value) (interface{}, string)
+type entryEvalFunc = func(id keyID, logger *leveledLogger, userv reflect.Value) (int32, string)
 
 func entryEvaluators(root *wireconfig.RootNode, userType reflect.Type) ([]entryEvalFunc, error) {
 	tinfo, err := newUserTypeInfo(userType)
@@ -59,13 +59,13 @@ func entryEvaluators(root *wireconfig.RootNode, userType reflect.Type) ([]entryE
 
 func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) entryEvalFunc {
 	rules := node.RolloutRules
-	noUser := func(_ keyID, logger *leveledLogger, user reflect.Value) (interface{}, string) {
+	noUser := func(_ keyID, logger *leveledLogger, user reflect.Value) (valueID, string) {
 		if logger.enabled(LogLevelWarn) && (len(rules) > 0 || len(node.PercentageRules) > 0) {
 			logger.Warnf("Evaluating GetValue(%s). UserObject missing! You should pass a "+
 				"UserObject to GetValueForUser() in order to make targeting work properly. "+
 				"Read more: https://configcat.com/docs/advanced/user-object.", key)
 		}
-		return node.Value, node.VariationID
+		return node.ValueID, node.VariationID
 	}
 
 	if tinfo == nil {
@@ -81,7 +81,7 @@ func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) ent
 	identifierInfo := tinfo.attrInfo("Identifier")
 	keyBytes := []byte(key)
 
-	return func(id keyID, logger *leveledLogger, userv reflect.Value) (interface{}, string) {
+	return func(id keyID, logger *leveledLogger, userv reflect.Value) (valueID, string) {
 		if tinfo.deref {
 			if userv.IsNil() {
 				return noUser(id, logger, userv)
@@ -93,15 +93,14 @@ func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) ent
 			matched, err := matcher(userv)
 			if matched {
 				if logger.enabled(LogLevelInfo) {
-					logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => match, returning: %v",
+					logger.Infof("Evaluating rule: [%s:%s] [%s] [%s] => match",
 						rule.ComparisonAttribute,
 						attrInfos[i].asString(userv),
 						rule.Comparator,
 						rule.ComparisonValue,
-						rule.Value,
 					)
 				}
-				return rule.Value, rule.VariationID
+				return rule.ValueID, rule.VariationID
 			}
 			if err != nil {
 				if logger.enabled(LogLevelInfo) {
@@ -140,11 +139,11 @@ func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) ent
 			for _, rule := range node.PercentageRules {
 				bucket += rule.Percentage
 				if scaled < bucket {
-					return rule.Value, rule.VariationID
+					return rule.ValueID, rule.VariationID
 				}
 			}
 		}
-		return node.Value, node.VariationID
+		return node.ValueID, node.VariationID
 	}
 }
 

@@ -166,7 +166,7 @@ func (test integrationTestSuite) runTests(t *testing.T, integration bool, logLev
 		srv.setResponse(configResponse{body: contentForIntegrationTestKey(test.sdkKey)})
 		cfg = srv.config()
 	}
-	tlogger := newTestLogger(t, LogLevelDebug).(*testLogger)
+	tlogger := newTestLogger(t, logLevel).(*testLogger)
 	cfg.Logger = tlogger
 	cfg.SDKKey = test.sdkKey
 	client := NewCustomClient(cfg)

@@ -206,7 +206,7 @@ func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevCon
 		f.logger.Debugf("empty config text in cache")
 		return nil, "", err
 	}
-	cfg, cacheErr = parseConfig(configText, "", time.Time{})
+	cfg, cacheErr = parseConfig(configText, "", time.Time{}, f.logger)
 	if cacheErr != nil {
 		f.logger.Errorf("cache contained invalid config: %v", err)
 		return nil, "", err
@@ -313,7 +313,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 		if err != nil {
 			return nil, fmt.Errorf("config fetch read failed: %v", err)
 		}
-		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now())
+		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now(), f.logger)
 		if err != nil {
 			return nil, fmt.Errorf("config fetch returned invalid body: %v", err)
 		}
