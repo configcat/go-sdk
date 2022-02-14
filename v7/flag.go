@@ -4,6 +4,16 @@ import (
 	"sync"
 )
 
+// Flag is the interface implemented by all flag types.
+type Flag interface {
+	// Key returns the flag's key.
+	Key() string
+
+	// GetValue returns the flag's value. It will always
+	// return the appropriate type for the flag (never nil).
+	GetValue(snap *Snapshot) interface{}
+}
+
 // Bool returns a representation of a boolean-valued flag.
 // This can to be used as the value of a global variable
 // for a specific flag; for example:
@@ -23,10 +33,12 @@ func Bool(key string, defaultValue bool) BoolFlag {
 	}
 }
 
+var _ Flag = BoolFlag{}
+
 type BoolFlag struct {
 	id           keyID
 	key          string
-	defaultValue bool
+	defaultValue interface{}
 }
 
 // Key returns the name of the flag as passed to Bool.
@@ -38,7 +50,13 @@ func (f BoolFlag) Key() string {
 // given snapshot. It returns the flag's default value if snap is nil
 // or the key isn't in the configuration.
 func (f BoolFlag) Get(snap *Snapshot) bool {
-	if v, ok := snap.value(f.id, f.key).(bool); ok {
+	return f.GetValue(snap).(bool)
+}
+
+// GetValue implements Flag.GetValue.
+func (f BoolFlag) GetValue(snap *Snapshot) interface{} {
+	v := snap.value(f.id, f.key)
+	if _, ok := v.(bool); ok {
 		return v
 	}
 	return f.defaultValue
@@ -53,10 +71,12 @@ func Int(key string, defaultValue int) IntFlag {
 	}
 }
 
+var _ Flag = IntFlag{}
+
 type IntFlag struct {
 	id           keyID
 	key          string
-	defaultValue int
+	defaultValue interface{}
 }
 
 // Key returns the name of the flag as passed to Int.
@@ -68,7 +88,13 @@ func (f IntFlag) Key() string {
 // given snapshot. It returns the flag's default value if snap is nil
 // or the key isn't in the configuration.
 func (f IntFlag) Get(snap *Snapshot) int {
-	if v, ok := snap.value(f.id, f.key).(int); ok {
+	return f.GetValue(snap).(int)
+}
+
+// GetValue implements Flag.GetValue.
+func (f IntFlag) GetValue(snap *Snapshot) interface{} {
+	v := snap.value(f.id, f.key)
+	if _, ok := v.(int); ok {
 		return v
 	}
 	return f.defaultValue
@@ -83,10 +109,12 @@ func String(key string, defaultValue string) StringFlag {
 	}
 }
 
+var _ Flag = StringFlag{}
+
 type StringFlag struct {
 	id           keyID
 	key          string
-	defaultValue string
+	defaultValue interface{}
 }
 
 // Key returns the name of the flag as passed to String.
@@ -98,7 +126,13 @@ func (f StringFlag) Key() string {
 // given snapshot. It returns the flag's default value if snap is nil
 // or the key isn't in the configuration.
 func (f StringFlag) Get(snap *Snapshot) string {
-	if v, ok := snap.value(f.id, f.key).(string); ok {
+	return f.GetValue(snap).(string)
+}
+
+// GetValue implements Flag.GetValue.
+func (f StringFlag) GetValue(snap *Snapshot) interface{} {
+	v := snap.value(f.id, f.key)
+	if _, ok := v.(string); ok {
 		return v
 	}
 	return f.defaultValue
@@ -113,10 +147,12 @@ func Float(key string, defaultValue float64) FloatFlag {
 	}
 }
 
+var _ Flag = FloatFlag{}
+
 type FloatFlag struct {
 	id           keyID
 	key          string
-	defaultValue float64
+	defaultValue interface{}
 }
 
 // Key returns the name of the flag as passed to Float.
@@ -128,7 +164,13 @@ func (f FloatFlag) Key() string {
 // given snapshot. It returns the flag's default value if snap is nil
 // or the key isn't in the configuration.
 func (f FloatFlag) Get(snap *Snapshot) float64 {
-	if v, ok := snap.value(f.id, f.key).(float64); ok {
+	return f.GetValue(snap).(float64)
+}
+
+// GetValue implements Flag.GetValue.
+func (f FloatFlag) GetValue(snap *Snapshot) interface{} {
+	v := snap.value(f.id, f.key)
+	if _, ok := v.(float64); ok {
 		return v
 	}
 	return f.defaultValue
