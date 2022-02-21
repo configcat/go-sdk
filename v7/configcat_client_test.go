@@ -456,6 +456,54 @@ func TestClient_GetInt(t *testing.T) {
 	c.Check(client.GetIntValue("key", 0, nil), qt.Equals, 99)
 }
 
+func TestClient_DefaultUser(t *testing.T) {
+	type user struct {
+		Cluster string `configcat:"cluster"`
+	}
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	cfg := srv.config()
+	cfg.PollingMode = Manual
+	u := &user{
+		Cluster: "somewhere",
+	}
+	cfg.DefaultUser = u
+	client := NewCustomClient(cfg)
+	t.Cleanup(client.Close)
+
+	srv.setResponseJSON(&wireconfig.RootNode{
+		Entries: map[string]*wireconfig.Entry{
+			"foo": &wireconfig.Entry{
+				Value: "default",
+				Type:  wireconfig.StringEntry,
+				RolloutRules: []*wireconfig.RolloutRule{{
+					Value:               "somewhere-match",
+					ComparisonAttribute: "cluster",
+					Comparator:          wireconfig.OpOneOf,
+					ComparisonValue:     "somewhere",
+				}},
+			},
+		},
+	})
+	client.Refresh(context.Background())
+	c.Check(client.GetStringValue("foo", "", nil), qt.Equals, "somewhere-match")
+
+	snap := client.Snapshot(nil)
+	fooFlag := String("foo", "")
+	c.Check(fooFlag.Get(snap), qt.Equals, "somewhere-match")
+
+	snap = snap.WithUser(nil)
+	c.Check(fooFlag.Get(snap), qt.Equals, "somewhere-match")
+
+	snap = snap.WithUser(u)
+	c.Check(fooFlag.Get(snap), qt.Equals, "somewhere-match")
+
+	snap = snap.WithUser(&user{
+		Cluster: "otherwhere",
+	})
+	c.Check(fooFlag.Get(snap), qt.Equals, "default")
+}
+
 func TestSnapshot_Get(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
