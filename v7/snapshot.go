@@ -96,8 +96,8 @@ func NewSnapshot(logger Logger, values map[string]interface{}) (*Snapshot, error
 }
 
 func newSnapshot(cfg *config, user User, logger *leveledLogger) *Snapshot {
-	if user == nil && cfg != nil {
-		return cfg.noUserSnapshot
+	if cfg != nil && (user == nil || user == cfg.defaultUser) {
+		return cfg.defaultUserSnapshot
 	}
 	return _newSnapshot(cfg, user, logger)
 }
@@ -132,6 +132,7 @@ func _newSnapshot(cfg *config, user User, logger *leveledLogger) *Snapshot {
 
 // WithUser returns a copy of s associated with the
 // given user. If snap is nil, it returns nil.
+// If user is nil, it uses Config.DefaultUser.
 func (snap *Snapshot) WithUser(user User) *Snapshot {
 	if snap == nil || snap.config == nil {
 		// Note: when there's no config, we know there are no
@@ -139,8 +140,8 @@ func (snap *Snapshot) WithUser(user User) *Snapshot {
 		// need to do anything.
 		return snap
 	}
-	if user == nil {
-		return snap.config.noUserSnapshot
+	if user == nil || user == snap.config.defaultUser {
+		return snap.config.defaultUserSnapshot
 	}
 	return newSnapshot(snap.config, user, snap.logger)
 }

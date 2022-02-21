@@ -36,9 +36,13 @@ type config struct {
 	// rules (i.e. that do not have a value in precalc).
 	keysWithRules int
 
-	// noUserSnapshot holds a predefined snapshot of the
-	// configuration with no user.
-	noUserSnapshot *Snapshot
+	// defaultUserSnapshot holds a predefined snapshot of the
+	// configuration with the default user.
+	defaultUserSnapshot *Snapshot
+
+	// defaultUser holds the user that defaultUserSnapshot was
+	// created with.
+	defaultUser User
 }
 
 // valueID holds an integer representation of a value that
@@ -46,24 +50,25 @@ type config struct {
 // than the index into the config.values or Snapshot.values slice.
 type valueID = int32
 
-func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger) (*config, error) {
+func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger, defaultUser User) (*config, error) {
 	var root wireconfig.RootNode
 	if err := json.Unmarshal([]byte(jsonBody), &root); err != nil {
 		return nil, err
 	}
 	conf := &config{
-		jsonBody:   jsonBody,
-		root:       &root,
-		evaluators: new(sync.Map),
-		keyValues:  keyValuesForRootNode(&root),
-		allKeys:    keysForRootNode(&root),
-		etag:       etag,
-		fetchTime:  fetchTime,
-		precalc:    make([]valueID, numKeys()),
+		jsonBody:    jsonBody,
+		root:        &root,
+		evaluators:  new(sync.Map),
+		keyValues:   keyValuesForRootNode(&root),
+		allKeys:     keysForRootNode(&root),
+		etag:        etag,
+		fetchTime:   fetchTime,
+		precalc:     make([]valueID, numKeys()),
+		defaultUser: defaultUser,
 	}
 	conf.fixup(make(map[interface{}]valueID))
 	conf.precalculate()
-	conf.noUserSnapshot = _newSnapshot(conf, nil, logger)
+	conf.defaultUserSnapshot = _newSnapshot(conf, defaultUser, logger)
 	return conf, nil
 }
 

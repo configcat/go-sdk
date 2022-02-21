@@ -11,11 +11,12 @@ import (
 
 func BenchmarkGet(b *testing.B) {
 	benchmarks := []struct {
-		benchName string
-		node      *wireconfig.RootNode
-		rule      string
-		makeUser  func() User
-		want      string
+		benchName      string
+		node           *wireconfig.RootNode
+		rule           string
+		makeUser       func() User
+		want           string
+		setDefaultUser bool
 	}{{
 		benchName: "one-of",
 		node: &wireconfig.RootNode{
@@ -48,6 +49,39 @@ func BenchmarkGet(b *testing.B) {
 			}
 		},
 		want: "no-match",
+	}, {
+		benchName: "one-of-with-default-user",
+		node: &wireconfig.RootNode{
+			Entries: map[string]*wireconfig.Entry{
+				"rule": {
+					VariationID: "607147d5",
+					Value:       "no-match",
+					RolloutRules: []*wireconfig.RolloutRule{{
+						ComparisonAttribute: "Email",
+						ComparisonValue:     "a@configcat.com, b@configcat.com",
+						Comparator:          wireconfig.OpOneOf,
+						VariationID:         "385d9803",
+						Value:               "email-match",
+					}, {
+						ComparisonAttribute: "Country",
+						ComparisonValue:     "United",
+						Comparator:          wireconfig.OpNotOneOf,
+						VariationID:         "385d9803",
+						Value:               "country-match",
+					}},
+				},
+			},
+		},
+		rule: "rule",
+		makeUser: func() User {
+			return &UserData{
+				Identifier: "unknown-identifier",
+				Email:      "x@configcat.com",
+				Country:    "United",
+			}
+		},
+		setDefaultUser: true,
+		want:           "no-match",
 	}, {
 		benchName: "less-than-with-int",
 		node: &wireconfig.RootNode{
@@ -176,23 +210,27 @@ func BenchmarkGet(b *testing.B) {
 			cfg := srv.config()
 			cfg.PollingMode = Manual
 			cfg.Logger = DefaultLogger(LogLevelError)
+			user := bench.makeUser()
+			if bench.setDefaultUser {
+				cfg.DefaultUser = user
+			}
 
 			client := NewCustomClient(cfg)
 			client.Refresh(context.Background())
 			defer client.Close()
-			user := bench.makeUser()
-			b.Run("get-and-make", func(b *testing.B) {
-				rule := String(bench.rule, "")
-				val := rule.Get(client.Snapshot(user))
-				if val != bench.want {
-					b.Fatalf("unexpected result %#v", val)
-				}
-				b.ReportAllocs()
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
-					rule.Get(client.Snapshot(user))
-				}
-			})
+			cfg.DefaultUser =
+				b.Run("get-and-make", func(b *testing.B) {
+					rule := String(bench.rule, "")
+					val := rule.Get(client.Snapshot(user))
+					if val != bench.want {
+						b.Fatalf("unexpected result %#v", val)
+					}
+					b.ReportAllocs()
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						rule.Get(client.Snapshot(user))
+					}
+				})
 			b.Run("get-only", func(b *testing.B) {
 				rule := String(bench.rule, "")
 				snap := client.Snapshot(user)

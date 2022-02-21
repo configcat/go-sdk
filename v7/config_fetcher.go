@@ -28,6 +28,7 @@ type configFetcher struct {
 	client       *http.Client
 	urlIsCustom  bool
 	changeNotify func()
+	defaultUser  User
 
 	ctx       context.Context
 	ctxCancel func()
@@ -51,7 +52,7 @@ type configFetcher struct {
 }
 
 // newConfigFetcher returns a
-func newConfigFetcher(cfg Config, logger *leveledLogger) *configFetcher {
+func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *configFetcher {
 	f := &configFetcher{
 		sdkKey:       cfg.SDKKey,
 		cache:        cfg.Cache,
@@ -63,6 +64,7 @@ func newConfigFetcher(cfg Config, logger *leveledLogger) *configFetcher {
 			Transport: cfg.Transport,
 		},
 		doneInitialGet: make(chan struct{}),
+		defaultUser:    defaultUser,
 	}
 	f.ctx, f.ctxCancel = context.WithCancel(context.Background())
 	if cfg.BaseURL == "" {
@@ -206,7 +208,7 @@ func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevCon
 		f.logger.Debugf("empty config text in cache")
 		return nil, "", err
 	}
-	cfg, cacheErr = parseConfig(configText, "", time.Time{}, f.logger)
+	cfg, cacheErr = parseConfig(configText, "", time.Time{}, f.logger, f.defaultUser)
 	if cacheErr != nil {
 		f.logger.Errorf("cache contained invalid config: %v", err)
 		return nil, "", err
@@ -313,7 +315,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 		if err != nil {
 			return nil, fmt.Errorf("config fetch read failed: %v", err)
 		}
-		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now(), f.logger)
+		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now(), f.logger, f.defaultUser)
 		if err != nil {
 			return nil, fmt.Errorf("config fetch returned invalid body: %v", err)
 		}

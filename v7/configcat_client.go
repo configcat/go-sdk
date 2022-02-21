@@ -73,6 +73,15 @@ type Config struct {
 	// (only Organization Admins have access).
 	// The default is Global.
 	DataGovernance DataGovernance
+
+	// DefaultUser holds the default user information to associate
+	// with the Flagger, used whenever a nil User is passed.
+	// This usually won't contain user-specific
+	// information, but it may be useful when feature flags are dependent
+	// on attributes of the current machine or similar. It's somewhat
+	// more efficient to use DefaultUser=u than to call flagger.Snapshot(u)
+	// on every feature flag evaluation.
+	DefaultUser User
 }
 
 // ConfigCache is a cache API used to make custom cache implementations.
@@ -100,6 +109,7 @@ type Client struct {
 	fetcher        *configFetcher
 	needGetCheck   bool
 	firstFetchWait sync.Once
+	defaultUser    User
 }
 
 // PollingMode specifies a strategy for refreshing the configuration.
@@ -144,8 +154,9 @@ func NewCustomClient(cfg Config) *Client {
 	return &Client{
 		cfg:          cfg,
 		logger:       logger,
-		fetcher:      newConfigFetcher(cfg, logger),
+		fetcher:      newConfigFetcher(cfg, logger, cfg.DefaultUser),
 		needGetCheck: cfg.PollingMode == Lazy || cfg.PollingMode == AutoPoll && !cfg.NoWaitForRefresh,
+		defaultUser:  cfg.DefaultUser,
 	}
 }
 
@@ -174,6 +185,7 @@ func (client *Client) Close() {
 // GetBoolValue returns the value of a boolean-typed feature flag, or defaultValue if no
 // value can be found. If user is non-nil, it will be used to
 // choose the value (see the User documentation for details).
+// If user is nil and Config.DefaultUser was non-nil, that will be used instead.
 //
 // In Lazy refresh mode, this can block indefinitely while the configuration
 // is fetched. Use RefreshIfOlder explicitly if explicit control of timeouts
@@ -198,7 +210,7 @@ func (client *Client) GetStringValue(key string, defaultValue string, user User)
 }
 
 // GetVariationID returns the variation ID (analytics) that will be used for the given key
-// with respect to the current user, or the default value if none is found.
+// with respect to the given user, or the default value if none is found.
 func (client *Client) GetVariationID(key string, defaultVariationId string, user User) string {
 	if result := client.Snapshot(user).GetVariationID(key); result != "" {
 		return result
@@ -207,7 +219,7 @@ func (client *Client) GetVariationID(key string, defaultVariationId string, user
 }
 
 // GetVariationIDs returns all variation IDs (analytics) in the current configuration
-// that apply to the given user.
+// that apply to the given user, or Config.DefaultUser if user is nil.
 func (client *Client) GetVariationIDs(user User) []string {
 	return client.Snapshot(user).GetVariationIDs()
 }
@@ -224,6 +236,9 @@ func (client *Client) GetAllKeys() []string {
 	return client.Snapshot(nil).GetAllKeys()
 }
 
+// Snapshot returns an immuatable snapshot of the most recent feature
+// flags retrieved by the client, associated with the given user, or
+// Config.DefaultUser if user is nil.
 func (client *Client) Snapshot(user User) *Snapshot {
 	if client.needGetCheck {
 		switch client.cfg.PollingMode {
