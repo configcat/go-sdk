@@ -64,7 +64,7 @@ func makeContent(flags map[string]*Flag) ([]byte, error) {
 		Entries: make(map[string]*wireconfig.Entry, len(flags)),
 	}
 	for name, flag := range flags {
-		e, err := flag.entry()
+		e, err := flag.entry(name)
 		if err != nil {
 			return nil, fmt.Errorf("invalid flag %q: %v", name, err)
 		}

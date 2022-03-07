@@ -38,17 +38,18 @@ type Rule struct {
 	Value interface{}
 }
 
-func (f *Flag) entry() (*wireconfig.Entry, error) {
+func (f *Flag) entry(key string) (*wireconfig.Entry, error) {
 	ft := typeOf(f.Default)
 	if ft == invalidEntry {
 		return nil, fmt.Errorf("invalid type %T for default value %#v", f.Default, f.Default)
 	}
 	e := &wireconfig.Entry{
+		VariationID:  "v_" + key,
 		Type:         ft,
 		Value:        f.Default,
 		RolloutRules: make([]*wireconfig.RolloutRule, 0, len(f.Rules)),
 	}
-	for _, rule := range f.Rules {
+	for i, rule := range f.Rules {
 		if rule.Comparator.String() == "" {
 			return nil, fmt.Errorf("invalid comparator value %d", rule.Comparator)
 		}
@@ -66,6 +67,7 @@ func (f *Flag) entry() (*wireconfig.Entry, error) {
 			ComparisonAttribute: rule.ComparisonAttribute,
 			Comparator:          wireconfig.Operator(rule.Comparator),
 			ComparisonValue:     rule.ComparisonValue,
+			VariationID:         fmt.Sprintf("v%d_%s", i, key),
 		})
 	}
 	return e, nil
