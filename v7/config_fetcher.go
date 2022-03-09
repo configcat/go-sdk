@@ -21,14 +21,15 @@ const (
 )
 
 type configFetcher struct {
-	sdkKey       string
-	cacheKey     string
-	cache        ConfigCache
-	logger       *leveledLogger
-	client       *http.Client
-	urlIsCustom  bool
-	changeNotify func()
-	defaultUser  User
+	sdkKey            string
+	cacheKey          string
+	cache             ConfigCache
+	logger            *leveledLogger
+	client            *http.Client
+	urlIsCustom       bool
+	changeNotify      func()
+	defaultUser       User
+	pollingIdentifier string
 
 	ctx       context.Context
 	ctxCancel func()
@@ -63,8 +64,9 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *conf
 			Timeout:   cfg.HTTPTimeout,
 			Transport: cfg.Transport,
 		},
-		doneInitialGet: make(chan struct{}),
-		defaultUser:    defaultUser,
+		doneInitialGet:    make(chan struct{}),
+		defaultUser:       defaultUser,
+		pollingIdentifier: pollingModeToIdentifier(cfg.PollingMode),
 	}
 	f.ctx, f.ctxCancel = context.WithCancel(context.Background())
 	if cfg.BaseURL == "" {
@@ -293,7 +295,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 	if err != nil {
 		return nil, err
 	}
-	request.Header.Set("X-ConfigCat-UserAgent", "ConfigCat-Go/"+version)
+	request.Header.Set("X-ConfigCat-UserAgent", "ConfigCat-Go/"+f.pollingIdentifier+"-"+version)
 
 	if prevConfig != nil && prevConfig.etag != "" {
 		request.Header.Add("If-None-Match", prevConfig.etag)
@@ -333,4 +335,17 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 
 func sdkKeyToCacheKey(sdkKey string) string {
 	return fmt.Sprintf("go_"+configJSONName+"_%x", sha1.Sum([]byte(sdkKey)))
+}
+
+func pollingModeToIdentifier(pollingMode PollingMode) string {
+	switch pollingMode {
+	case AutoPoll:
+		return "a"
+	case Lazy:
+		return "l"
+	case Manual:
+		return "m"
+	default:
+		return "-"
+	}
 }
