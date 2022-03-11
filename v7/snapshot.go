@@ -157,8 +157,20 @@ func (snap *Snapshot) value(id keyID, key string) interface{} {
 	}
 	valID := snap.precalc[id]
 	if valID > 0 {
+		// We've got a precalculated value for the key.
 		return snap.valueForID(valID)
 	}
+	if valID == 0 {
+		// The key isn't found in this configuration.
+		if !snap.logger.enabled(LogLevelError) {
+			return nil
+		}
+		// Use the default implementation which will do the
+		// appropriate logging for us.
+		val, _ := snap.valueAndVariationID(id, key)
+		return val
+	}
+	// Look up the key in the cache.
 	cacheIndex := int(-valID - 1)
 	snap.initCache()
 	if valID := atomic.LoadInt32(&snap.cache[cacheIndex]); valID > 0 {
