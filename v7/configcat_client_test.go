@@ -85,6 +85,19 @@ func TestClient_Float(t *testing.T) {
 	c.Assert(result, qt.Equals, 3213.0)
 }
 
+func TestClient_KeyNotFound(t *testing.T) {
+	c := qt.New(t)
+	// By creating this flag first, we ensure that its key ID is already
+	// allocated when the configuration is parsed, so we test the
+	// path when precalculated slots has no entry for a key.
+	Bool("k1", false)
+	srv, client := getTestClients(t)
+	srv.setResponseJSON(rootNodeWithKeyValue("k2", 3213, wireconfig.IntEntry))
+	client.Refresh(context.Background())
+	result := client.GetIntValue("k1", 0, nil)
+	c.Assert(result, qt.Equals, 0)
+}
+
 func TestClient_Get_IsOneOf_Does_Not_Use_Contains_Semantics(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
@@ -528,6 +541,7 @@ func getTestClients(t *testing.T) (*configServer, *Client) {
 	srv := newConfigServer(t)
 	cfg := srv.config()
 	cfg.PollingMode = Manual
+	cfg.Logger = DefaultLogger(LogLevelFatal)
 	client := NewCustomClient(cfg)
 	t.Cleanup(client.Close)
 	return srv, client
