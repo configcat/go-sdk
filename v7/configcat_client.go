@@ -159,7 +159,7 @@ func NewCustomClient(cfg Config) *Client {
 		cfg.FlagOverrides.preLoad(logger)
 	}
 	var fetcher *configFetcher
-	if (!cfg.FlagOverrides.isValid()) || cfg.FlagOverrides.Behaviour != LocalOnly {
+	if cfg.FlagOverrides.entries == nil || cfg.FlagOverrides.Behaviour != LocalOnly {
 		fetcher = newConfigFetcher(cfg, logger, cfg.DefaultUser)
 	}
 	return &Client{

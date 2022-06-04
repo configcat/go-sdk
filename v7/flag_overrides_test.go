@@ -64,6 +64,30 @@ func TestFlagOverrides_Values_LocalOnly(t *testing.T) {
 	c.Assert(client.GetStringValue("stringSetting", "", nil), qt.Equals, "test")
 }
 
+func TestFlagOverrides_Values_Ignored_On_Wrong_Behaviour(t *testing.T) {
+	c := qt.New(t)
+	cfg := Config{
+		FlagOverrides: FlagOverrides{
+			Values: map[string]interface{}{
+				"enabledFeature":  true,
+				"disabledFeature": false,
+				"intSetting":      5,
+				"doubleSetting":   3.14,
+				"stringSetting":   "test",
+			},
+			Behaviour: 5,
+		},
+	}
+	client := NewCustomClient(cfg)
+	defer client.Close()
+
+	c.Assert(client.GetBoolValue("enabledFeature", false, nil), qt.IsFalse)
+	c.Assert(client.GetBoolValue("disabledFeature", false, nil), qt.IsFalse)
+	c.Assert(client.GetIntValue("intSetting", 0, nil), qt.Equals, 0)
+	c.Assert(client.GetFloatValue("doubleSetting", 0.0, nil), qt.Equals, 0.0)
+	c.Assert(client.GetStringValue("stringSetting", "", nil), qt.Equals, "")
+}
+
 func TestFlagOverrides_Values_LocalOverRemote(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)

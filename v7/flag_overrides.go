@@ -53,19 +53,20 @@ func (f *FlagOverrides) isValid() bool {
 }
 
 func (f *FlagOverrides) preLoad(logger *leveledLogger) {
+	if f.Behaviour != LocalOnly && f.Behaviour != LocalOverRemote && f.Behaviour != RemoteOverLocal {
+		logger.Errorf("flag overrides behaviour configuration is invalid. 'Behavior' is %v.", f.Behaviour)
+		return
+	}
+	if !f.isValid() {
+		logger.Errorf("flag overrides configuration is invalid. 'Values' or 'FilePath' must be set.")
+		return
+	}
+
 	f.entries = f.loadEntries(logger)
 	f.fixEntries()
 }
 
 func (f *FlagOverrides) loadEntries(logger *leveledLogger) map[string]*wireconfig.Entry {
-	if f.Behaviour != LocalOnly && f.Behaviour != LocalOverRemote && f.Behaviour != RemoteOverLocal {
-		logger.Errorf("flag overrides configuration is invalid. 'Behavior' value: %v.", f.Behaviour)
-		return map[string]*wireconfig.Entry{}
-	}
-	if f.Values == nil && f.FilePath == "" {
-		logger.Errorf("flag overrides configuration is invalid. 'Values' or 'FilePath' must be set.")
-		return map[string]*wireconfig.Entry{}
-	}
 	if f.Values != nil {
 		entries := make(map[string]*wireconfig.Entry, len(f.Values))
 		for key, value := range f.Values {
@@ -83,7 +84,7 @@ func (f *FlagOverrides) loadEntriesFromFile(logger *leveledLogger) map[string]*w
 	data, err := ioutil.ReadFile(f.FilePath)
 	if err != nil {
 		logger.Errorf("unable to read local JSON file: %v", err)
-		return map[string]*wireconfig.Entry{}
+		return nil
 	}
 	var simplified wireconfig.SimplifiedConfig
 	reader := bytes.NewReader(data)
@@ -102,16 +103,19 @@ func (f *FlagOverrides) loadEntriesFromFile(logger *leveledLogger) map[string]*w
 	var root wireconfig.RootNode
 	if _, err = reader.Seek(0, io.SeekStart); err != nil {
 		logger.Errorf("error during reading local JSON file: %v", err)
-		return map[string]*wireconfig.Entry{}
+		return nil
 	}
 	if err := decoder.Decode(&root); err != nil {
 		logger.Errorf("error during reading local JSON file: %v", err)
-		return map[string]*wireconfig.Entry{}
+		return nil
 	}
 	return root.Entries
 }
 
 func (f *FlagOverrides) fixEntries() {
+	if f.entries == nil {
+		return
+	}
 	for _, entry := range f.entries {
 		if b, ok := entry.Value.(bool); ok {
 			entry.Value = b
