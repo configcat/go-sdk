@@ -178,7 +178,7 @@ func TestClient_Get_WithEmptySDKKey(t *testing.T) {
 	c := qt.New(t)
 	client := NewClient("")
 	err := client.Refresh(context.Background())
-	c.Assert(err, qt.ErrorMatches, `config fetch failed: empty SDK key in configcat configuration!`)
+	c.Assert(err, qt.ErrorMatches, `config fetch failed: empty SDK key in configcat configuration`)
 }
 
 func TestClient_Get_WithEmptyKey(t *testing.T) {
@@ -200,6 +200,19 @@ func TestClient_Keys(t *testing.T) {
 	client.Refresh(context.Background())
 
 	keys := client.GetAllKeys()
+	c.Assert(keys, qt.HasLen, 16)
+}
+
+func TestClient_AllValues(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	keys := client.GetAllValues(nil)
 	c.Assert(keys, qt.HasLen, 16)
 }
 
@@ -296,7 +309,7 @@ func TestClient_GetWithDifferentURLAndNoRedirect(t *testing.T) {
 			Redirect: &redirect,
 		},
 		Entries: map[string]*wireconfig.Entry{
-			"key": &wireconfig.Entry{
+			"key": {
 				Value: "value1",
 			},
 		},
@@ -324,7 +337,7 @@ func TestClient_GetWithRedirectToSameURL(t *testing.T) {
 			Redirect: &redirect,
 		},
 		Entries: map[string]*wireconfig.Entry{
-			"key": &wireconfig.Entry{
+			"key": {
 				Value: "value1",
 			},
 		},
@@ -400,7 +413,7 @@ func TestClient_GetWithStandardURLAndNoRedirect(t *testing.T) {
 			Redirect: &redirect,
 		},
 		Entries: map[string]*wireconfig.Entry{
-			"key": &wireconfig.Entry{
+			"key": {
 				Value: "value1",
 			},
 		},
@@ -486,7 +499,7 @@ func TestClient_DefaultUser(t *testing.T) {
 
 	srv.setResponseJSON(&wireconfig.RootNode{
 		Entries: map[string]*wireconfig.Entry{
-			"foo": &wireconfig.Entry{
+			"foo": {
 				Value: "default",
 				Type:  wireconfig.StringEntry,
 				RolloutRules: []*wireconfig.RolloutRule{{
@@ -550,7 +563,7 @@ func getTestClients(t *testing.T) (*configServer, *Client) {
 func rootNodeWithKeyValue(key string, value interface{}, typ wireconfig.EntryType) *wireconfig.RootNode {
 	return &wireconfig.RootNode{
 		Entries: map[string]*wireconfig.Entry{
-			key: &wireconfig.Entry{
+			key: {
 				Value: value,
 				Type:  typ,
 			},

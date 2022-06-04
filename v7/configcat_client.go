@@ -1,4 +1,4 @@
-// ConfigCat SDK for Go (https://configcat.com)
+// Package configcat contains the Go SDK of ConfigCat (https://configcat.com)
 package configcat
 
 import (
@@ -82,6 +82,9 @@ type Config struct {
 	// more efficient to use DefaultUser=u than to call flagger.Snapshot(u)
 	// on every feature flag evaluation.
 	DefaultUser User
+
+	// FlagOverrides holds the feature flag and setting overrides.
+	FlagOverrides *FlagOverrides
 }
 
 // ConfigCache is a cache API used to make custom cache implementations.
@@ -107,6 +110,7 @@ type Client struct {
 	logger         *leveledLogger
 	cfg            Config
 	fetcher        *configFetcher
+	overrides      *FlagOverrides
 	needGetCheck   bool
 	firstFetchWait sync.Once
 	defaultUser    User
@@ -151,12 +155,20 @@ func NewCustomClient(cfg Config) *Client {
 		cfg.PollInterval = DefaultPollInterval
 	}
 	logger := newLeveledLogger(cfg.Logger)
+	var fetcher *configFetcher
+	if cfg.FlagOverrides == nil || cfg.FlagOverrides.Behaviour != LocalOnly {
+		fetcher = newConfigFetcher(cfg, logger, cfg.DefaultUser)
+	}
+	if cfg.FlagOverrides != nil {
+		cfg.FlagOverrides.preLoad(logger)
+	}
 	return &Client{
 		cfg:          cfg,
 		logger:       logger,
-		fetcher:      newConfigFetcher(cfg, logger, cfg.DefaultUser),
+		fetcher:      fetcher,
 		needGetCheck: cfg.PollingMode == Lazy || cfg.PollingMode == AutoPoll && !cfg.NoWaitForRefresh,
 		defaultUser:  cfg.DefaultUser,
+		overrides:    cfg.FlagOverrides,
 	}
 }
 
@@ -167,19 +179,27 @@ func (client *Client) Refresh(ctx context.Context) error {
 	// Note: add a tiny bit to the current time so that we refresh
 	// even if the current time hasn't changed since the last
 	// time we refreshed.
-	return client.fetcher.refreshIfOlder(ctx, time.Now().Add(1), true)
+	if client.fetcher != nil {
+		return client.fetcher.refreshIfOlder(ctx, time.Now().Add(1), true)
+	}
+	return nil
 }
 
 // RefreshIfOlder is like Refresh but refreshes the configuration only
 // if the most recently fetched configuration is older than the given
 // age.
 func (client *Client) RefreshIfOlder(ctx context.Context, age time.Duration) error {
-	return client.fetcher.refreshIfOlder(ctx, time.Now().Add(-age), true)
+	if client.fetcher != nil {
+		return client.fetcher.refreshIfOlder(ctx, time.Now().Add(-age), true)
+	}
+	return nil
 }
 
 // Close shuts down the client. After closing, it shouldn't be used.
 func (client *Client) Close() {
-	client.fetcher.close()
+	if client.fetcher != nil {
+		client.fetcher.close()
+	}
 }
 
 // GetBoolValue returns the value of a boolean-typed feature flag, or defaultValue if no
@@ -236,10 +256,27 @@ func (client *Client) GetAllKeys() []string {
 	return client.Snapshot(nil).GetAllKeys()
 }
 
-// Snapshot returns an immuatable snapshot of the most recent feature
+// GetAllValues returns all keys and values in a key-value map.
+func (client *Client) GetAllValues(user User) map[string]interface{} {
+	return client.Snapshot(user).GetAllValues()
+}
+
+// Snapshot returns an immutable snapshot of the most recent feature
 // flags retrieved by the client, associated with the given user, or
 // Config.DefaultUser if user is nil.
 func (client *Client) Snapshot(user User) *Snapshot {
+	if client.overrides != nil && client.overrides.Behaviour == LocalOnly {
+		result := make(map[string]interface{}, len(client.overrides.entries))
+		for key, entry := range client.overrides.entries {
+			result[key] = entry.Value
+		}
+		snap, err := NewSnapshot(client.logger, result)
+		if err != nil {
+			client.logger.Errorf("could not create local only snapshot: %v", err)
+			return nil
+		}
+		return snap
+	}
 	if client.needGetCheck {
 		switch client.cfg.PollingMode {
 		case Lazy:

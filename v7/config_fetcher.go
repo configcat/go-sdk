@@ -30,6 +30,7 @@ type configFetcher struct {
 	changeNotify      func()
 	defaultUser       User
 	pollingIdentifier string
+	overrides         *FlagOverrides
 
 	ctx       context.Context
 	ctxCancel func()
@@ -58,6 +59,7 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *conf
 		sdkKey:       cfg.SDKKey,
 		cache:        cfg.Cache,
 		cacheKey:     sdkKeyToCacheKey(cfg.SDKKey),
+		overrides:    cfg.FlagOverrides,
 		changeNotify: cfg.ChangeNotify,
 		logger:       logger,
 		client: &http.Client{
@@ -210,7 +212,7 @@ func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevCon
 		f.logger.Debugf("empty config text in cache")
 		return nil, "", err
 	}
-	cfg, cacheErr = parseConfig(configText, "", time.Time{}, f.logger, f.defaultUser)
+	cfg, cacheErr = parseConfig(configText, "", time.Time{}, f.logger, f.defaultUser, f.overrides)
 	if cacheErr != nil {
 		f.logger.Errorf("cache contained invalid config: %v", err)
 		return nil, "", err
@@ -289,7 +291,7 @@ func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfi
 // fetchHTTPWithoutRedirect does the actual HTTP fetch of the config.
 func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL string, prevConfig *config) (*config, error) {
 	if f.sdkKey == "" {
-		return nil, fmt.Errorf("empty SDK key in configcat configuration!")
+		return nil, fmt.Errorf("empty SDK key in configcat configuration")
 	}
 	request, err := http.NewRequest("GET", baseURL+"/configuration-files/"+f.sdkKey+"/"+configJSONName+".json", nil)
 	if err != nil {
@@ -317,7 +319,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 		if err != nil {
 			return nil, fmt.Errorf("config fetch read failed: %v", err)
 		}
-		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now(), f.logger, f.defaultUser)
+		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now(), f.logger, f.defaultUser, f.overrides)
 		if err != nil {
 			return nil, fmt.Errorf("config fetch returned invalid body: %v", err)
 		}
