@@ -50,13 +50,13 @@ type config struct {
 // than the index into the config.values or Snapshot.values slice.
 type valueID = int32
 
-func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger, defaultUser User, overrides *FlagOverrides) (*config, error) {
+func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger, defaultUser User, overrides FlagOverrides) (*config, error) {
 	var root wireconfig.RootNode
 	if err := json.Unmarshal(jsonBody, &root); err != nil {
 		return nil, err
 	}
-	if overrides != nil {
-		mergeEntriesWithOverrides(root.Entries, overrides)
+	if overrides.entries != nil {
+		mergeEntriesWithOverrides(root.Entries, overrides.entries, overrides.Behaviour)
 	}
 	conf := &config{
 		jsonBody:    jsonBody,
@@ -180,11 +180,11 @@ func fixValue(v interface{}, typ wireconfig.EntryType) interface{} {
 	return int(f)
 }
 
-func mergeEntriesWithOverrides(remoteEntries map[string]*wireconfig.Entry, overrides *FlagOverrides) {
-	for key, entry := range overrides.entries {
-		if overrides.Behaviour == LocalOverRemote {
+func mergeEntriesWithOverrides(remoteEntries map[string]*wireconfig.Entry, localEntries map[string]*wireconfig.Entry, behaviour OverrideBehaviour) {
+	for key, entry := range localEntries {
+		if behaviour == LocalOverRemote {
 			remoteEntries[key] = entry
-		} else if overrides.Behaviour == RemoteOverLocal {
+		} else if behaviour == RemoteOverLocal {
 			if _, ok := remoteEntries[key]; !ok {
 				remoteEntries[key] = entry
 			}

@@ -48,6 +48,10 @@ type FlagOverrides struct {
 	entries map[string]*wireconfig.Entry
 }
 
+func (f *FlagOverrides) isValid() bool {
+	return f.Values != nil || f.FilePath != ""
+}
+
 func (f *FlagOverrides) preLoad(logger *leveledLogger) {
 	f.entries = f.loadEntries(logger)
 	f.fixEntries()

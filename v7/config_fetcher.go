@@ -30,7 +30,7 @@ type configFetcher struct {
 	changeNotify      func()
 	defaultUser       User
 	pollingIdentifier string
-	overrides         *FlagOverrides
+	overrides         FlagOverrides
 
 	ctx       context.Context
 	ctxCancel func()
