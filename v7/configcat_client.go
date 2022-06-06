@@ -84,7 +84,7 @@ type Config struct {
 	DefaultUser User
 
 	// FlagOverrides holds the feature flag and setting overrides.
-	FlagOverrides FlagOverrides
+	FlagOverrides *FlagOverrides
 }
 
 // ConfigCache is a cache API used to make custom cache implementations.
@@ -110,7 +110,7 @@ type Client struct {
 	logger         *leveledLogger
 	cfg            Config
 	fetcher        *configFetcher
-	overrides      FlagOverrides
+	overrides      *FlagOverrides
 	needGetCheck   bool
 	firstFetchWait sync.Once
 	defaultUser    User
@@ -155,11 +155,11 @@ func NewCustomClient(cfg Config) *Client {
 		cfg.PollInterval = DefaultPollInterval
 	}
 	logger := newLeveledLogger(cfg.Logger)
-	if cfg.FlagOverrides.isValid() {
+	if cfg.FlagOverrides != nil {
 		cfg.FlagOverrides.preLoad(logger)
 	}
 	var fetcher *configFetcher
-	if cfg.FlagOverrides.entries == nil || cfg.FlagOverrides.Behaviour != LocalOnly {
+	if cfg.FlagOverrides == nil || cfg.FlagOverrides.Behaviour != LocalOnly {
 		fetcher = newConfigFetcher(cfg, logger, cfg.DefaultUser)
 	}
 	return &Client{
@@ -265,17 +265,8 @@ func (client *Client) GetAllValues(user User) map[string]interface{} {
 // flags retrieved by the client, associated with the given user, or
 // Config.DefaultUser if user is nil.
 func (client *Client) Snapshot(user User) *Snapshot {
-	if client.overrides.entries != nil && client.overrides.Behaviour == LocalOnly {
-		result := make(map[string]interface{}, len(client.overrides.entries))
-		for key, entry := range client.overrides.entries {
-			result[key] = entry.Value
-		}
-		snap, err := NewSnapshot(client.logger, result)
-		if err != nil {
-			client.logger.Errorf("could not create local only snapshot: %v", err)
-			return nil
-		}
-		return snap
+	if client.overrides != nil && client.overrides.Behaviour == LocalOnly {
+		return client.overrides.localOnlySnapshot
 	}
 	if client.needGetCheck {
 		switch client.cfg.PollingMode {

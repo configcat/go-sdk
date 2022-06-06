@@ -10,7 +10,7 @@ import (
 func TestFlagOverrides_File_Simple(t *testing.T) {
 	c := qt.New(t)
 	cfg := Config{
-		FlagOverrides: FlagOverrides{
+		FlagOverrides: &FlagOverrides{
 			FilePath: "../resources/local-simple.json",
 		},
 	}
@@ -27,7 +27,7 @@ func TestFlagOverrides_File_Simple(t *testing.T) {
 func TestFlagOverrides_File_Complex(t *testing.T) {
 	c := qt.New(t)
 	cfg := Config{
-		FlagOverrides: FlagOverrides{
+		FlagOverrides: &FlagOverrides{
 			FilePath: "../resources/local.json",
 		},
 	}
@@ -41,10 +41,23 @@ func TestFlagOverrides_File_Complex(t *testing.T) {
 	c.Assert(client.GetStringValue("stringSetting", "", nil), qt.Equals, "test")
 }
 
+func TestFlagOverrides_Int_Float(t *testing.T) {
+	c := qt.New(t)
+	cfg := Config{
+		FlagOverrides: &FlagOverrides{
+			FilePath: "../resources/local-simple.json",
+		},
+	}
+	client := NewCustomClient(cfg)
+	defer client.Close()
+
+	c.Assert(client.GetFloatValue("intSetting", 0, nil), qt.Equals, 5.0)
+}
+
 func TestFlagOverrides_Values_LocalOnly(t *testing.T) {
 	c := qt.New(t)
 	cfg := Config{
-		FlagOverrides: FlagOverrides{
+		FlagOverrides: &FlagOverrides{
 			Values: map[string]interface{}{
 				"enabledFeature":  true,
 				"disabledFeature": false,
@@ -67,7 +80,7 @@ func TestFlagOverrides_Values_LocalOnly(t *testing.T) {
 func TestFlagOverrides_Values_Ignored_On_Wrong_Behaviour(t *testing.T) {
 	c := qt.New(t)
 	cfg := Config{
-		FlagOverrides: FlagOverrides{
+		FlagOverrides: &FlagOverrides{
 			Values: map[string]interface{}{
 				"enabledFeature":  true,
 				"disabledFeature": false,
@@ -94,7 +107,7 @@ func TestFlagOverrides_Values_LocalOverRemote(t *testing.T) {
 	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, wireconfig.BoolEntry))
 	cfg := srv.config()
 
-	cfg.FlagOverrides = FlagOverrides{
+	cfg.FlagOverrides = &FlagOverrides{
 		Values: map[string]interface{}{
 			"fakeKey":     true,
 			"nonexisting": true,
@@ -117,7 +130,7 @@ func TestFlagOverrides_Values_RemoteOverLocal(t *testing.T) {
 	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, wireconfig.BoolEntry))
 	cfg := srv.config()
 
-	cfg.FlagOverrides = FlagOverrides{
+	cfg.FlagOverrides = &FlagOverrides{
 		Values: map[string]interface{}{
 			"fakeKey":     true,
 			"nonexisting": true,
@@ -140,7 +153,7 @@ func TestFlagOverrides_Values_Remote_Invalid(t *testing.T) {
 	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, wireconfig.BoolEntry))
 	cfg := srv.config()
 
-	cfg.FlagOverrides = FlagOverrides{
+	cfg.FlagOverrides = &FlagOverrides{
 		Values: map[string]interface{}{
 			"fakeKey": true,
 			"invalid": BoolFlag{},
@@ -163,7 +176,7 @@ func TestFlagOverrides_Values_Local_Invalid(t *testing.T) {
 	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, wireconfig.BoolEntry))
 	cfg := srv.config()
 
-	cfg.FlagOverrides = FlagOverrides{
+	cfg.FlagOverrides = &FlagOverrides{
 		Values: map[string]interface{}{
 			"fakeKey": true,
 			"invalid": BoolFlag{},

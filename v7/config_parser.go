@@ -50,12 +50,12 @@ type config struct {
 // than the index into the config.values or Snapshot.values slice.
 type valueID = int32
 
-func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger, defaultUser User, overrides FlagOverrides) (*config, error) {
+func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger, defaultUser User, overrides *FlagOverrides) (*config, error) {
 	var root wireconfig.RootNode
 	if err := json.Unmarshal(jsonBody, &root); err != nil {
 		return nil, err
 	}
-	if overrides.entries != nil {
+	if overrides != nil {
 		mergeEntriesWithOverrides(root.Entries, overrides.entries, overrides.Behaviour)
 	}
 	conf := &config{

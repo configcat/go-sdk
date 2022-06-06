@@ -40,16 +40,14 @@ type FlagOverrides struct {
 	Behaviour OverrideBehaviour
 
 	// Values is a map that contains the overrides.
+	// Each value must be one of the following types: bool, int, float64, or string.
 	Values map[string]interface{}
 
 	// FilePath is the path to a JSON file that contains the overrides.
 	FilePath string
 
-	entries map[string]*wireconfig.Entry
-}
-
-func (f *FlagOverrides) isValid() bool {
-	return f.Values != nil || f.FilePath != ""
+	entries           map[string]*wireconfig.Entry
+	localOnlySnapshot *Snapshot
 }
 
 func (f *FlagOverrides) preLoad(logger *leveledLogger) {
@@ -57,19 +55,28 @@ func (f *FlagOverrides) preLoad(logger *leveledLogger) {
 		logger.Errorf("flag overrides behaviour configuration is invalid. 'Behavior' is %v.", f.Behaviour)
 		return
 	}
-	if !f.isValid() {
+	if f.Values == nil && f.FilePath == "" {
 		logger.Errorf("flag overrides configuration is invalid. 'Values' or 'FilePath' must be set.")
 		return
 	}
 
 	f.entries = f.loadEntries(logger)
 	f.fixEntries()
+	if f.Behaviour == LocalOnly {
+		f.localOnlySnapshot = f.createLocalOnlySnapshot(logger)
+	}
 }
 
 func (f *FlagOverrides) loadEntries(logger *leveledLogger) map[string]*wireconfig.Entry {
 	if f.Values != nil {
 		entries := make(map[string]*wireconfig.Entry, len(f.Values))
 		for key, value := range f.Values {
+			switch value.(type) {
+			case bool, int, float64, string:
+			default:
+				logger.Errorf("value for flag %q has unexpected type %T (%#v); must be bool, int, float64 or string", key, value, value)
+				return nil
+			}
 			entries[key] = &wireconfig.Entry{
 				Value:       value,
 				VariationID: "",
@@ -117,20 +124,33 @@ func (f *FlagOverrides) fixEntries() {
 		return
 	}
 	for _, entry := range f.entries {
-		if b, ok := entry.Value.(bool); ok {
-			entry.Value = b
+		switch value := entry.Value.(type) {
+		case bool:
+			entry.Value = value
 			entry.Type = wireconfig.BoolEntry
-		} else if s, ok := entry.Value.(string); ok {
-			entry.Value = s
+		case string:
+			entry.Value = value
 			entry.Type = wireconfig.StringEntry
-		} else if n, ok := entry.Value.(json.Number); ok {
-			if i, err := n.Int64(); err == nil {
+		case json.Number:
+			if i, err := value.Int64(); err == nil {
 				entry.Value = int(i)
 				entry.Type = wireconfig.IntEntry
-			} else if fl, err := n.Float64(); err == nil {
+			} else if fl, err := value.Float64(); err == nil {
 				entry.Value = fl
 				entry.Type = wireconfig.FloatEntry
 			}
 		}
 	}
+}
+
+func (f *FlagOverrides) createLocalOnlySnapshot(logger *leveledLogger) *Snapshot {
+	result := make(map[string]interface{}, len(f.entries))
+	for key, entry := range f.entries {
+		result[key] = entry.Value
+	}
+	snap, err := NewSnapshot(logger, result)
+	if err != nil {
+		logger.Errorf("could not create local only snapshot: %v", err)
+	}
+	return snap
 }
