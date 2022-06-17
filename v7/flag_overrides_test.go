@@ -38,6 +38,10 @@ func TestFlagOverrides_File_Complex(t *testing.T) {
 	c.Assert(client.GetBoolValue("enabledFeature", false, nil), qt.IsTrue)
 	c.Assert(client.GetBoolValue("disabledFeature", false, nil), qt.IsFalse)
 	c.Assert(client.GetIntValue("intSetting", 0, nil), qt.Equals, 5)
+	// This is unfortunate but unavoidable. We can't tell the difference between
+	// a float and an int value in JSON, so when asking for a flag without
+	// knowing its type, we'll default to float.
+	c.Assert(client.Snapshot(nil).GetValue("intSetting"), qt.Equals, 5.0)
 	c.Assert(client.GetFloatValue("doubleSetting", 0.0, nil), qt.Equals, 3.14)
 	c.Assert(client.GetStringValue("stringSetting", "", nil), qt.Equals, "test")
 }
@@ -123,6 +127,32 @@ func TestFlagOverrides_Values_LocalOverRemote(t *testing.T) {
 
 	c.Assert(client.GetBoolValue("fakeKey", false, nil), qt.IsTrue)
 	c.Assert(client.GetBoolValue("nonexisting", false, nil), qt.IsTrue)
+}
+
+func TestFlagOverrides_Values_LocalOverRemoteRespectsRemoteIntType(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponseJSON(rootNodeWithKeyValue("intKey", 5, wireconfig.IntEntry))
+	cfg := srv.config()
+
+	// Even though the value has been specified as float locally,
+	// the config parser sees the fact that the actual type specified
+	// remotely is int, so changes the type locally to correspond.
+	// This logic is there so that JSON (which doesn't support int types)
+	// keys will work better with int flags.
+	cfg.FlagOverrides = &FlagOverrides{
+		Values: map[string]interface{}{
+			"intKey": 4.0,
+		},
+		Behavior: LocalOverRemote,
+	}
+
+	client := NewCustomClient(cfg)
+	defer client.Close()
+	err := client.Refresh(context.Background())
+	c.Assert(err, qt.Equals, nil)
+
+	c.Assert(client.Snapshot(nil).GetValue("intKey"), qt.Equals, 4)
 }
 
 func TestFlagOverrides_Values_RemoteOverLocal(t *testing.T) {
