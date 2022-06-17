@@ -43,7 +43,7 @@ type FlagOverrides struct {
 	Values map[string]interface{}
 
 	// FilePath is the path to a JSON file that contains the overrides.
-	// TODO link to docs on the format of this.
+	// The supported JSON file formats are documented here: https://configcat.com/docs/sdk-reference/go/#json-file-structure
 	FilePath string
 
 	// entries is populated by loadEntries from the above fields.
