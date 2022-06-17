@@ -98,6 +98,9 @@ func (f IntFlag) GetValue(snap *Snapshot) interface{} {
 	case int:
 		return v
 	case float64:
+		// This can happen when a numeric override flag is used
+		// with SimplifiedConfig, which can't tell the difference
+		// between int and float64.
 		return int(v1)
 	}
 	return f.defaultValue

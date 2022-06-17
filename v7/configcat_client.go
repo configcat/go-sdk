@@ -157,11 +157,10 @@ func NewCustomClient(cfg Config) *Client {
 	if cfg.FlagOverrides != nil {
 		cfg.FlagOverrides.loadEntries(logger)
 	}
-	fetcher := newConfigFetcher(cfg, logger, cfg.DefaultUser)
 	return &Client{
 		cfg:          cfg,
 		logger:       logger,
-		fetcher:      fetcher,
+		fetcher:      newConfigFetcher(cfg, logger, cfg.DefaultUser),
 		needGetCheck: cfg.PollingMode == Lazy || cfg.PollingMode == AutoPoll && !cfg.NoWaitForRefresh,
 		defaultUser:  cfg.DefaultUser,
 	}
@@ -174,27 +173,19 @@ func (client *Client) Refresh(ctx context.Context) error {
 	// Note: add a tiny bit to the current time so that we refresh
 	// even if the current time hasn't changed since the last
 	// time we refreshed.
-	if client.fetcher != nil {
-		return client.fetcher.refreshIfOlder(ctx, time.Now().Add(1), true)
-	}
-	return nil
+	return client.fetcher.refreshIfOlder(ctx, time.Now().Add(1), true)
 }
 
 // RefreshIfOlder is like Refresh but refreshes the configuration only
 // if the most recently fetched configuration is older than the given
 // age.
 func (client *Client) RefreshIfOlder(ctx context.Context, age time.Duration) error {
-	if client.fetcher != nil {
-		return client.fetcher.refreshIfOlder(ctx, time.Now().Add(-age), true)
-	}
-	return nil
+	return client.fetcher.refreshIfOlder(ctx, time.Now().Add(-age), true)
 }
 
 // Close shuts down the client. After closing, it shouldn't be used.
 func (client *Client) Close() {
-	if client.fetcher != nil {
-		client.fetcher.close()
-	}
+	client.fetcher.close()
 }
 
 // GetBoolValue returns the value of a boolean-typed feature flag, or defaultValue if no

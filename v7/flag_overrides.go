@@ -60,46 +60,55 @@ func (f *FlagOverrides) loadEntries(logger *leveledLogger) {
 		return
 	}
 	if f.Values == nil {
-		f.entries = f.loadEntriesFromFile(logger)
-		return
-	}
-	f.entries = make(map[string]*wireconfig.Entry, len(f.Values))
-	for key, value := range f.Values {
-		f.entries[key] = &wireconfig.Entry{
-			Value: value,
+		f.loadEntriesFromFile(logger)
+	} else {
+		f.entries = make(map[string]*wireconfig.Entry, len(f.Values))
+		for key, value := range f.Values {
+			f.entries[key] = &wireconfig.Entry{
+				Value: value,
+			}
 		}
 	}
-	f.fixEntries(logger)
+	f.setEntryTypes(logger)
 }
 
-func (f *FlagOverrides) loadEntriesFromFile(logger *leveledLogger) map[string]*wireconfig.Entry {
+func (f *FlagOverrides) loadEntriesFromFile(logger *leveledLogger) {
 	data, err := ioutil.ReadFile(f.FilePath)
 	if err != nil {
 		logger.Errorf("unable to read local JSON file: %v", err)
-		return nil
+		return
 	}
 	// Try the simplified configuration first.
 	var simplified wireconfig.SimplifiedConfig
 	if err := json.Unmarshal(data, &simplified); err == nil && simplified.Flags != nil {
-		entries := make(map[string]*wireconfig.Entry, len(simplified.Flags))
+		f.entries = make(map[string]*wireconfig.Entry, len(simplified.Flags))
 		for key, value := range simplified.Flags {
-			entries[key] = &wireconfig.Entry{
+			f.entries[key] = &wireconfig.Entry{
 				Value: value,
 			}
 		}
-		return entries
+		return
 	}
 	// Fall back to using the full wire configuration.
 	var root wireconfig.RootNode
 	if err := json.Unmarshal(data, &root); err != nil {
 		logger.Errorf("error reading local JSON file %q: %v", f.FilePath, err)
-		return nil
+		return
 	}
-	return root.Entries
+	f.entries = root.Entries
 }
 
-func (f *FlagOverrides) fixEntries(logger *leveledLogger) {
+// setEntryTypes sets all the entry types in f.entries from the value.
+// Note that JSON doesn't support integer types, so when using SimplifiedConfig,
+// we might end up with a float type for an int flag, but that ambiguity
+// is dealt with in IntFlag.GetValue.
+func (f *FlagOverrides) setEntryTypes(logger *leveledLogger) {
 	for key, entry := range f.entries {
+		if entry.Type != 0 {
+			// The Type has already been set (by reading in the
+			// full config file) so don't second-guess it.
+			continue
+		}
 		switch value := entry.Value.(type) {
 		case bool:
 			entry.Type = wireconfig.BoolEntry
