@@ -46,6 +46,23 @@ func TestFlagOverrides_File_Complex(t *testing.T) {
 	c.Assert(client.GetStringValue("stringSetting", "", nil), qt.Equals, "test")
 }
 
+func TestFlagOverrides_File_Targeting(t *testing.T) {
+	c := qt.New(t)
+	cfg := Config{
+		FlagOverrides: &FlagOverrides{
+			FilePath: "../resources/local.json",
+		},
+	}
+	client := NewCustomClient(cfg)
+	defer client.Close()
+
+	user1 := &UserData{Identifier: "csp@matching.com"}
+	c.Assert(client.GetBoolValue("disabledFeature", false, user1), qt.IsTrue)
+
+	user2 := &UserData{Identifier: "csp@notmatching.com"}
+	c.Assert(client.GetBoolValue("disabledFeature", false, user2), qt.IsFalse)
+}
+
 func TestFlagOverrides_Int_Float(t *testing.T) {
 	c := qt.New(t)
 	cfg := Config{
