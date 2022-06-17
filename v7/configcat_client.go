@@ -110,7 +110,6 @@ type Client struct {
 	logger         *leveledLogger
 	cfg            Config
 	fetcher        *configFetcher
-	overrides      *FlagOverrides
 	needGetCheck   bool
 	firstFetchWait sync.Once
 	defaultUser    User
@@ -156,19 +155,15 @@ func NewCustomClient(cfg Config) *Client {
 	}
 	logger := newLeveledLogger(cfg.Logger)
 	if cfg.FlagOverrides != nil {
-		cfg.FlagOverrides.preLoad(logger)
+		cfg.FlagOverrides.loadEntries(logger)
 	}
-	var fetcher *configFetcher
-	if cfg.FlagOverrides == nil || cfg.FlagOverrides.Behaviour != LocalOnly {
-		fetcher = newConfigFetcher(cfg, logger, cfg.DefaultUser)
-	}
+	fetcher := newConfigFetcher(cfg, logger, cfg.DefaultUser)
 	return &Client{
 		cfg:          cfg,
 		logger:       logger,
 		fetcher:      fetcher,
 		needGetCheck: cfg.PollingMode == Lazy || cfg.PollingMode == AutoPoll && !cfg.NoWaitForRefresh,
 		defaultUser:  cfg.DefaultUser,
-		overrides:    cfg.FlagOverrides,
 	}
 }
 
@@ -265,9 +260,6 @@ func (client *Client) GetAllValues(user User) map[string]interface{} {
 // flags retrieved by the client, associated with the given user, or
 // Config.DefaultUser if user is nil.
 func (client *Client) Snapshot(user User) *Snapshot {
-	if client.overrides != nil && client.overrides.Behaviour == LocalOnly {
-		return client.overrides.localOnlySnapshot
-	}
 	if client.needGetCheck {
 		switch client.cfg.PollingMode {
 		case Lazy:

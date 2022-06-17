@@ -94,8 +94,11 @@ func (f IntFlag) Get(snap *Snapshot) int {
 // GetValue implements Flag.GetValue.
 func (f IntFlag) GetValue(snap *Snapshot) interface{} {
 	v := snap.value(f.id, f.key)
-	if _, ok := v.(int); ok {
+	switch v1 := v.(type) {
+	case int:
 		return v
+	case float64:
+		return int(v1)
 	}
 	return f.defaultValue
 }
@@ -170,11 +173,8 @@ func (f FloatFlag) Get(snap *Snapshot) float64 {
 // GetValue implements Flag.GetValue.
 func (f FloatFlag) GetValue(snap *Snapshot) interface{} {
 	v := snap.value(f.id, f.key)
-	switch result := v.(type) {
-	case int:
-		return float64(result)
-	case float64:
-		return result
+	if _, ok := v.(float64); ok {
+		return v
 	}
 	return f.defaultValue
 }

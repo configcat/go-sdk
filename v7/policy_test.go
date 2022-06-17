@@ -11,7 +11,7 @@ import (
 	qt "github.com/frankban/quicktest"
 )
 
-// TestFetchFailWithCacheFallback tests that cache fallback behaviour
+// TestFetchFailWithCacheFallback tests that cache fallback behavior
 // works as expected.
 func TestFetchFailWithCacheFallback(t *testing.T) {
 	c := qt.New(t)
