@@ -1,15 +1,14 @@
 package configcat
 
 import (
-	"bytes"
 	"encoding/json"
-	"github.com/configcat/go-sdk/v7/internal/wireconfig"
-	"io"
 	"io/ioutil"
+
+	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 )
 
-// OverrideBehaviour describes how the overrides should behave.
-type OverrideBehaviour int
+// OverrideBehavior describes how the overrides should behave.
+type OverrideBehavior int
 
 const (
 	// LocalOnly means that when evaluating values, the SDK will not use feature flags and settings from the
@@ -36,55 +35,41 @@ const (
 //
 // With FilePath, you can set up the SDK to load your feature flag overrides from a JSON file.
 type FlagOverrides struct {
-	// Behaviour describes how the overrides should behave. Default is LocalOnly.
-	Behaviour OverrideBehaviour
+	// Behavior describes how the overrides should behave. Default is LocalOnly.
+	Behavior OverrideBehavior
 
 	// Values is a map that contains the overrides.
 	// Each value must be one of the following types: bool, int, float64, or string.
 	Values map[string]interface{}
 
 	// FilePath is the path to a JSON file that contains the overrides.
+	// TODO link to docs on the format of this.
 	FilePath string
 
-	entries           map[string]*wireconfig.Entry
-	localOnlySnapshot *Snapshot
+	// entries is populated by loadEntries from the above fields.
+	entries map[string]*wireconfig.Entry
 }
 
-func (f *FlagOverrides) preLoad(logger *leveledLogger) {
-	if f.Behaviour != LocalOnly && f.Behaviour != LocalOverRemote && f.Behaviour != RemoteOverLocal {
-		logger.Errorf("flag overrides behaviour configuration is invalid. 'Behavior' is %v.", f.Behaviour)
+func (f *FlagOverrides) loadEntries(logger *leveledLogger) {
+	if f.Behavior != LocalOnly && f.Behavior != LocalOverRemote && f.Behavior != RemoteOverLocal {
+		logger.Errorf("flag overrides behavior configuration is invalid. 'Behavior' is %v.", f.Behavior)
 		return
 	}
 	if f.Values == nil && f.FilePath == "" {
 		logger.Errorf("flag overrides configuration is invalid. 'Values' or 'FilePath' must be set.")
 		return
 	}
-
-	f.entries = f.loadEntries(logger)
-	f.fixEntries()
-	if f.Behaviour == LocalOnly {
-		f.localOnlySnapshot = f.createLocalOnlySnapshot(logger)
+	if f.Values == nil {
+		f.entries = f.loadEntriesFromFile(logger)
+		return
 	}
-}
-
-func (f *FlagOverrides) loadEntries(logger *leveledLogger) map[string]*wireconfig.Entry {
-	if f.Values != nil {
-		entries := make(map[string]*wireconfig.Entry, len(f.Values))
-		for key, value := range f.Values {
-			switch value.(type) {
-			case bool, int, float64, string:
-			default:
-				logger.Errorf("value for flag %q has unexpected type %T (%#v); must be bool, int, float64 or string", key, value, value)
-				return nil
-			}
-			entries[key] = &wireconfig.Entry{
-				Value:       value,
-				VariationID: "",
-			}
+	f.entries = make(map[string]*wireconfig.Entry, len(f.Values))
+	for key, value := range f.Values {
+		f.entries[key] = &wireconfig.Entry{
+			Value: value,
 		}
-		return entries
 	}
-	return f.loadEntriesFromFile(logger)
+	f.fixEntries(logger)
 }
 
 func (f *FlagOverrides) loadEntriesFromFile(logger *leveledLogger) map[string]*wireconfig.Entry {
@@ -93,64 +78,40 @@ func (f *FlagOverrides) loadEntriesFromFile(logger *leveledLogger) map[string]*w
 		logger.Errorf("unable to read local JSON file: %v", err)
 		return nil
 	}
+	// Try the simplified configuration first.
 	var simplified wireconfig.SimplifiedConfig
-	reader := bytes.NewReader(data)
-	decoder := json.NewDecoder(reader)
-	decoder.UseNumber()
-	if err := decoder.Decode(&simplified); err == nil && simplified.Flags != nil {
+	if err := json.Unmarshal(data, &simplified); err == nil && simplified.Flags != nil {
 		entries := make(map[string]*wireconfig.Entry, len(simplified.Flags))
 		for key, value := range simplified.Flags {
 			entries[key] = &wireconfig.Entry{
-				Value:       value,
-				VariationID: "",
+				Value: value,
 			}
 		}
 		return entries
 	}
+	// Fall back to using the full wire configuration.
 	var root wireconfig.RootNode
-	if _, err = reader.Seek(0, io.SeekStart); err != nil {
-		logger.Errorf("error during reading local JSON file: %v", err)
-		return nil
-	}
-	if err := decoder.Decode(&root); err != nil {
-		logger.Errorf("error during reading local JSON file: %v", err)
+	if err := json.Unmarshal(data, &root); err != nil {
+		logger.Errorf("error reading local JSON file %q: %v", f.FilePath, err)
 		return nil
 	}
 	return root.Entries
 }
 
-func (f *FlagOverrides) fixEntries() {
-	if f.entries == nil {
-		return
-	}
-	for _, entry := range f.entries {
+func (f *FlagOverrides) fixEntries(logger *leveledLogger) {
+	for key, entry := range f.entries {
 		switch value := entry.Value.(type) {
 		case bool:
-			entry.Value = value
 			entry.Type = wireconfig.BoolEntry
 		case string:
-			entry.Value = value
 			entry.Type = wireconfig.StringEntry
-		case json.Number:
-			if i, err := value.Int64(); err == nil {
-				entry.Value = int(i)
-				entry.Type = wireconfig.IntEntry
-			} else if fl, err := value.Float64(); err == nil {
-				entry.Value = fl
-				entry.Type = wireconfig.FloatEntry
-			}
+		case float64:
+			entry.Type = wireconfig.FloatEntry
+		case int:
+			entry.Type = wireconfig.IntEntry
+		default:
+			logger.Errorf("ignoring override value for flag %q with unexpected type %T (%#v); must be bool, int, float64 or string", key, value, value)
+			delete(f.entries, key)
 		}
 	}
-}
-
-func (f *FlagOverrides) createLocalOnlySnapshot(logger *leveledLogger) *Snapshot {
-	result := make(map[string]interface{}, len(f.entries))
-	for key, entry := range f.entries {
-		result[key] = entry.Value
-	}
-	snap, err := NewSnapshot(logger, result)
-	if err != nil {
-		logger.Errorf("could not create local only snapshot: %v", err)
-	}
-	return snap
 }

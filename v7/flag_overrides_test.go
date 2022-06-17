@@ -2,9 +2,10 @@ package configcat
 
 import (
 	"context"
+	"testing"
+
 	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 	qt "github.com/frankban/quicktest"
-	"testing"
 )
 
 func TestFlagOverrides_File_Simple(t *testing.T) {
@@ -77,7 +78,7 @@ func TestFlagOverrides_Values_LocalOnly(t *testing.T) {
 	c.Assert(client.GetStringValue("stringSetting", "", nil), qt.Equals, "test")
 }
 
-func TestFlagOverrides_Values_Ignored_On_Wrong_Behaviour(t *testing.T) {
+func TestFlagOverrides_Values_Ignored_On_Wrong_Behavior(t *testing.T) {
 	c := qt.New(t)
 	cfg := Config{
 		FlagOverrides: &FlagOverrides{
@@ -88,7 +89,7 @@ func TestFlagOverrides_Values_Ignored_On_Wrong_Behaviour(t *testing.T) {
 				"doubleSetting":   3.14,
 				"stringSetting":   "test",
 			},
-			Behaviour: 5,
+			Behavior: 5,
 		},
 	}
 	client := NewCustomClient(cfg)
@@ -112,7 +113,7 @@ func TestFlagOverrides_Values_LocalOverRemote(t *testing.T) {
 			"fakeKey":     true,
 			"nonexisting": true,
 		},
-		Behaviour: LocalOverRemote,
+		Behavior: LocalOverRemote,
 	}
 
 	client := NewCustomClient(cfg)
@@ -135,7 +136,7 @@ func TestFlagOverrides_Values_RemoteOverLocal(t *testing.T) {
 			"fakeKey":     true,
 			"nonexisting": true,
 		},
-		Behaviour: RemoteOverLocal,
+		Behavior: RemoteOverLocal,
 	}
 
 	client := NewCustomClient(cfg)
@@ -158,7 +159,7 @@ func TestFlagOverrides_Values_Remote_Invalid(t *testing.T) {
 			"fakeKey": true,
 			"invalid": BoolFlag{},
 		},
-		Behaviour: RemoteOverLocal,
+		Behavior: RemoteOverLocal,
 	}
 
 	client := NewCustomClient(cfg)
@@ -181,7 +182,7 @@ func TestFlagOverrides_Values_Local_Invalid(t *testing.T) {
 			"fakeKey": true,
 			"invalid": BoolFlag{},
 		},
-		Behaviour: LocalOnly,
+		Behavior: LocalOnly,
 	}
 
 	client := NewCustomClient(cfg)
@@ -189,6 +190,6 @@ func TestFlagOverrides_Values_Local_Invalid(t *testing.T) {
 	err := client.Refresh(context.Background())
 	c.Assert(err, qt.Equals, nil)
 
-	c.Assert(client.GetBoolValue("fakeKey", false, nil), qt.IsFalse)
+	c.Assert(client.GetBoolValue("fakeKey", false, nil), qt.IsTrue)
 	c.Assert(client.GetBoolValue("invalid", false, nil), qt.IsFalse)
 }

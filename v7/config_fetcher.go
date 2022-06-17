@@ -194,6 +194,14 @@ func (f *configFetcher) fetcher(prevConfig *config, logError bool) {
 }
 
 func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevConfig *config) (_ *config, _newURL string, _err error) {
+	if f.overrides != nil && f.overrides.Behavior == LocalOnly {
+		// TODO could potentially refresh f.overrides if it's come from a file.
+		cfg, err := parseConfig(nil, "", time.Now(), f.logger, f.defaultUser, f.overrides)
+		if err != nil {
+			return nil, "", err
+		}
+		return cfg, "", nil
+	}
 	cfg, newBaseURL, err := f.fetchHTTP(ctx, baseURL, prevConfig)
 	if err == nil {
 		return cfg, newBaseURL, nil
