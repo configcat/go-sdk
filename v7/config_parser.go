@@ -50,11 +50,15 @@ type config struct {
 // than the index into the config.values or Snapshot.values slice.
 type valueID = int32
 
-func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger, defaultUser User) (*config, error) {
+func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger, defaultUser User, overrides *FlagOverrides) (*config, error) {
 	var root wireconfig.RootNode
-	if err := json.Unmarshal([]byte(jsonBody), &root); err != nil {
-		return nil, err
+	// Note: jsonBody can be nil when we've got overrides only.
+	if jsonBody != nil {
+		if err := json.Unmarshal(jsonBody, &root); err != nil {
+			return nil, err
+		}
 	}
+	mergeWithOverrides(&root, overrides)
 	conf := &config{
 		jsonBody:    jsonBody,
 		root:        &root,
@@ -175,4 +179,35 @@ func fixValue(v interface{}, typ wireconfig.EntryType) interface{} {
 		return v
 	}
 	return int(f)
+}
+
+func mergeWithOverrides(root *wireconfig.RootNode, overrides *FlagOverrides) {
+	if overrides == nil {
+		return
+	}
+	if overrides.Behavior == LocalOnly || len(root.Entries) == 0 {
+		root.Entries = overrides.entries
+		return
+	}
+	if root.Entries == nil {
+		root.Entries = make(map[string]*wireconfig.Entry)
+	}
+	for key, localEntry := range overrides.entries {
+		entry, ok := root.Entries[key]
+		switch {
+		case !ok:
+			root.Entries[key] = localEntry
+		case overrides.Behavior == RemoteOverLocal:
+		case entry.Type == localEntry.Type:
+			*entry = *localEntry
+		case entry.Type == wireconfig.IntEntry && localEntry.Type == wireconfig.FloatEntry:
+			*entry = *localEntry
+			entry.Type = wireconfig.IntEntry
+		default:
+			// Type clash. Just override anyway.
+			// TODO could return an error in this case, as it's likely
+			// to be a local config issue.
+			*entry = *localEntry
+		}
+	}
 }

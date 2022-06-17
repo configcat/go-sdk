@@ -279,3 +279,17 @@ func (snap *Snapshot) GetAllKeys() []string {
 	}
 	return snap.allKeys
 }
+
+// GetAllValues returns all keys and values in a key-value map.
+func (snap *Snapshot) GetAllValues() map[string]interface{} {
+	if snap == nil || snap.config == nil {
+		return nil
+	}
+	keys := snap.config.keys()
+	values := make(map[string]interface{}, len(keys))
+	for _, key := range keys {
+		id := idForKey(key, false)
+		values[key] = snap.value(id, key)
+	}
+	return values
+}

@@ -2,18 +2,23 @@ package main
 
 import (
 	"fmt"
-	"github.com/configcat/go-sdk/v6"
+	"github.com/configcat/go-sdk/v7"
 )
 
 func main() {
-	client := configcat.NewCustomClient("PKDVCLf-Hq-h-kCzMp-L7Q/HhOWfwVtZ0mb30i9wi17GQ",
-		configcat.ClientConfig{Logger: configcat.DefaultLogger(configcat.LogLevelInfo)})
+	client := configcat.NewCustomClient(configcat.Config{
+		SDKKey: "PKDVCLf-Hq-h-kCzMp-L7Q/HhOWfwVtZ0mb30i9wi17GQ",
+		Logger: configcat.DefaultLogger(configcat.LogLevelInfo),
+	})
 
 	// create a user object to identify your user (optional)
-	user := configcat.NewUserWithAdditionalAttributes("##SOME-USER-IDENTIFICATION##", "configcat@example.com", "", nil)
+	user := &configcat.UserData{
+		Identifier: "##SOME-USER-IDENTIFICATION##",
+		Email:      "configcat@example.com",
+	}
 
 	// get individual config values identified by a key and a user object
-	value := client.GetValueForUser("isPOCFeatureEnabled", false, user)
+	value := client.GetBoolValue("isPOCFeatureEnabled", false, user)
 
 	fmt.Println("isPOCFeatureEnabled: ", value)
 }

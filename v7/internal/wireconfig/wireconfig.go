@@ -41,6 +41,10 @@ type Preferences struct {
 	Redirect *RedirectionKind `json:"r"` // NoRedirect, ShouldRedirect or ForceRedirect
 }
 
+type SimplifiedConfig struct {
+	Flags map[string]interface{} `json:"flags"`
+}
+
 type RedirectionKind int
 
 const (
