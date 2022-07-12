@@ -535,7 +535,14 @@ func TestSnapshot_Get(t *testing.T) {
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(rootNodeWithKeyValue("key", 99, wireconfig.IntEntry))
 	client.Refresh(context.Background())
-	c.Check(client.Snapshot(nil).GetValue("key"), qt.Equals, 99)
+	snap := client.Snapshot(nil)
+	c.Check(snap.GetValue("key"), qt.Equals, 99)
+	c.Check(snap.FetchTime(), qt.Not(qt.Equals), time.Time{})
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 101, wireconfig.IntEntry))
+	client.Refresh(context.Background())
+	c.Check(snap.GetValue("key"), qt.Equals, 99)
+	c.Check(client.Snapshot(nil).GetValue("key"), qt.Equals, 101)
+	c.Check(client.Snapshot(nil).FetchTime().After(snap.FetchTime()), qt.IsTrue)
 }
 
 type failingCache struct{}

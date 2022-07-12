@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Snapshot holds a snapshot of the Configcat configuration.
@@ -288,4 +289,11 @@ func (snap *Snapshot) GetAllValues() map[string]interface{} {
 		values[key] = snap.GetValue(key)
 	}
 	return values
+}
+
+func (snap *Snapshot) FetchTime() time.Time {
+	if snap == nil || snap.config == nil {
+		return time.Time{}
+	}
+	return snap.config.fetchTime
 }
