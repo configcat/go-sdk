@@ -200,9 +200,25 @@ func (client *Client) GetBoolValue(key string, defaultValue bool, user User) boo
 	return Bool(key, defaultValue).Get(client.Snapshot(user))
 }
 
+// GetBoolValueDetails returns the value and evaluation details of a boolean-typed feature flag.
+// If user is non-nil, it will be used to choose the value (see the User documentation for details).
+// If user is nil and Config.DefaultUser was non-nil, that will be used instead.
+//
+// In Lazy refresh mode, this can block indefinitely while the configuration
+// is fetched. Use RefreshIfOlder explicitly if explicit control of timeouts
+// is needed.
+func (client *Client) GetBoolValueDetails(key string, defaultValue bool, user User) BoolEvaluationDetails {
+	return Bool(key, defaultValue).GetWithDetails(client.Snapshot(user))
+}
+
 // GetIntValue is like GetBoolValue except for int-typed (whole number) feature flags.
 func (client *Client) GetIntValue(key string, defaultValue int, user User) int {
 	return Int(key, defaultValue).Get(client.Snapshot(user))
+}
+
+// GetIntValueDetails is like GetBoolValueDetails except for int-typed (whole number) feature flags.
+func (client *Client) GetIntValueDetails(key string, defaultValue int, user User) IntEvaluationDetails {
+	return Int(key, defaultValue).GetWithDetails(client.Snapshot(user))
 }
 
 // GetFloatValue is like GetBoolValue except for float-typed (decimal number) feature flags.
@@ -210,9 +226,19 @@ func (client *Client) GetFloatValue(key string, defaultValue float64, user User)
 	return Float(key, defaultValue).Get(client.Snapshot(user))
 }
 
+// GetFloatValueDetails is like GetBoolValueDetails except for float-typed (decimal number) feature flags.
+func (client *Client) GetFloatValueDetails(key string, defaultValue float64, user User) FloatEvaluationDetails {
+	return Float(key, defaultValue).GetWithDetails(client.Snapshot(user))
+}
+
 // GetStringValue is like GetBoolValue except for string-typed (text) feature flags.
 func (client *Client) GetStringValue(key string, defaultValue string, user User) string {
 	return String(key, defaultValue).Get(client.Snapshot(user))
+}
+
+// GetStringValueDetails is like GetBoolValueDetails except for string-typed (text) feature flags.
+func (client *Client) GetStringValueDetails(key string, defaultValue string, user User) StringEvaluationDetails {
+	return String(key, defaultValue).GetWithDetails(client.Snapshot(user))
 }
 
 // GetVariationID returns the variation ID (analytics) that will be used for the given key

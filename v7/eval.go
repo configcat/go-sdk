@@ -36,7 +36,7 @@ func (conf *config) evaluatorsForUserType(userType reflect.Type) ([]entryEvalFun
 	return entries1.([]entryEvalFunc), nil
 }
 
-type entryEvalFunc = func(id keyID, logger *leveledLogger, userv reflect.Value) (int32, string)
+type entryEvalFunc = func(id keyID, logger *leveledLogger, userv reflect.Value) int32
 
 func entryEvaluators(root *wireconfig.RootNode, userType reflect.Type) ([]entryEvalFunc, error) {
 	tinfo, err := newUserTypeInfo(userType)
@@ -59,13 +59,13 @@ func entryEvaluators(root *wireconfig.RootNode, userType reflect.Type) ([]entryE
 
 func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) entryEvalFunc {
 	rules := node.RolloutRules
-	noUser := func(_ keyID, logger *leveledLogger, user reflect.Value) (valueID, string) {
+	noUser := func(_ keyID, logger *leveledLogger, user reflect.Value) valueID {
 		if logger.enabled(LogLevelWarn) && (len(rules) > 0 || len(node.PercentageRules) > 0) {
 			logger.Warnf("Evaluating GetValue(%s). UserObject missing! You should pass a "+
 				"UserObject to GetValueForUser() in order to make targeting work properly. "+
 				"Read more: https://configcat.com/docs/advanced/user-object.", key)
 		}
-		return node.ValueID, node.VariationID
+		return node.ValueID
 	}
 
 	if tinfo == nil {
@@ -81,7 +81,7 @@ func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) ent
 	identifierInfo := tinfo.attrInfo("Identifier")
 	keyBytes := []byte(key)
 
-	return func(id keyID, logger *leveledLogger, userv reflect.Value) (valueID, string) {
+	return func(id keyID, logger *leveledLogger, userv reflect.Value) valueID {
 		if tinfo.deref {
 			if userv.IsNil() {
 				return noUser(id, logger, userv)
@@ -100,7 +100,7 @@ func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) ent
 						rule.ComparisonValue,
 					)
 				}
-				return rule.ValueID, rule.VariationID
+				return rule.ValueID
 			}
 			if err != nil {
 				if logger.enabled(LogLevelInfo) {
@@ -139,11 +139,11 @@ func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) ent
 			for _, rule := range node.PercentageRules {
 				bucket += rule.Percentage
 				if scaled < bucket {
-					return rule.ValueID, rule.VariationID
+					return rule.ValueID
 				}
 			}
 		}
-		return node.ValueID, node.VariationID
+		return node.ValueID
 	}
 }
 

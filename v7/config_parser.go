@@ -9,6 +9,13 @@ import (
 	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 )
 
+type valueDetails struct {
+	value          interface{}
+	variationId    string
+	rolloutRule    *wireconfig.RolloutRule
+	percentageRule *wireconfig.PercentageRule
+}
+
 type config struct {
 	jsonBody []byte
 	etag     string
@@ -19,9 +26,9 @@ type config struct {
 	allKeys    []string
 	keyValues  map[string]keyValue
 	fetchTime  time.Time
-	// values holds all the values that can be returned from the
+	// values holds all the values and eval details that can be returned from the
 	// configuration, keyed by valueID-1.
-	values []interface{}
+	values []valueDetails
 
 	// precalc holds value IDs for keys that we know
 	// the values of ahead of time because they're not
@@ -143,19 +150,19 @@ func (conf *config) keys() []string {
 func (conf *config) fixup(valueMap map[interface{}]valueID) {
 	for _, entry := range conf.root.Entries {
 		entry.Value = fixValue(entry.Value, entry.Type)
-		entry.ValueID = conf.idForValue(entry.Value, valueMap)
+		entry.ValueID = conf.idForValue(entry.Value, entry.VariationID, nil, nil, valueMap)
 		for _, rule := range entry.RolloutRules {
 			rule.Value = fixValue(rule.Value, entry.Type)
-			rule.ValueID = conf.idForValue(rule.Value, valueMap)
+			rule.ValueID = conf.idForValue(rule.Value, rule.VariationID, rule, nil, valueMap)
 		}
 		for _, rule := range entry.PercentageRules {
 			rule.Value = fixValue(rule.Value, entry.Type)
-			rule.ValueID = conf.idForValue(rule.Value, valueMap)
+			rule.ValueID = conf.idForValue(rule.Value, rule.VariationID, nil, rule, valueMap)
 		}
 	}
 }
 
-func (conf *config) idForValue(v interface{}, valueMap map[interface{}]valueID) valueID {
+func (conf *config) idForValue(v interface{}, varId string, rule *wireconfig.RolloutRule, percRule *wireconfig.PercentageRule, valueMap map[interface{}]valueID) valueID {
 	if id, ok := valueMap[v]; ok {
 		return id
 	}
@@ -163,7 +170,7 @@ func (conf *config) idForValue(v interface{}, valueMap map[interface{}]valueID) 
 	// so we can rely on zero-initialization of the evaluation context.
 	id := valueID(len(conf.values) + 1)
 	valueMap[v] = id
-	conf.values = append(conf.values, v)
+	conf.values = append(conf.values, valueDetails{value: v, variationId: varId, rolloutRule: rule, percentageRule: percRule})
 	return id
 }
 

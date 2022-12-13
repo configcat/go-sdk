@@ -1,6 +1,8 @@
 package configcat
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 )
 
@@ -12,6 +14,11 @@ type Flag interface {
 	// GetValue returns the flag's value. It will always
 	// return the appropriate type for the flag (never nil).
 	GetValue(snap *Snapshot) interface{}
+
+	// GetValueDetails returns the evaluation details
+	// along with the flag's value. Its Value field always
+	// have the appropriate type for the flag.
+	GetValueDetails(snap *Snapshot) EvaluationDetails
 }
 
 // Bool returns a representation of a boolean-valued flag.
@@ -53,6 +60,14 @@ func (f BoolFlag) Get(snap *Snapshot) bool {
 	return f.GetValue(snap).(bool)
 }
 
+// GetWithDetails returns the evaluation details along with the flag's value.
+// It returns BoolEvaluationDetails with the flag's default value if snap is nil
+// or the key isn't in the configuration.
+func (f BoolFlag) GetWithDetails(snap *Snapshot) BoolEvaluationDetails {
+	details := f.GetValueDetails(snap)
+	return BoolEvaluationDetails{Meta: details.Meta, Value: details.Value.(bool)}
+}
+
 // GetValue implements Flag.GetValue.
 func (f BoolFlag) GetValue(snap *Snapshot) interface{} {
 	v := snap.value(f.id, f.key)
@@ -60,6 +75,26 @@ func (f BoolFlag) GetValue(snap *Snapshot) interface{} {
 		return v
 	}
 	return f.defaultValue
+}
+
+// GetValueDetails implements Flag.GetValueDetails.
+func (f BoolFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
+	details := snap.evalDetailsForKeyId(f.id, f.key)
+	boolVal, ok := details.Value.(bool)
+	if !ok {
+		return EvaluationDetails{
+			Value: f.defaultValue,
+			Meta: EvaluationDetailsMeta{
+				Key:            f.key,
+				Error:          errors.New(fmt.Sprintf("could not convert %s to bool", details.Value)),
+				User:           snap.originalUser,
+				FetchTime:      snap.FetchTime(),
+				IsDefaultValue: true,
+			},
+		}
+	}
+	details.Value = boolVal
+	return details
 }
 
 // Int is like Bool but for int-valued flags.
@@ -91,19 +126,41 @@ func (f IntFlag) Get(snap *Snapshot) int {
 	return f.GetValue(snap).(int)
 }
 
+// GetWithDetails returns the evaluation details along with the flag's value.
+// It returns IntEvaluationDetails with the flag's default value if snap is nil
+// or the key isn't in the configuration.
+func (f IntFlag) GetWithDetails(snap *Snapshot) IntEvaluationDetails {
+	details := f.GetValueDetails(snap)
+	return IntEvaluationDetails{Meta: details.Meta, Value: details.Value.(int)}
+}
+
 // GetValue implements Flag.GetValue.
 func (f IntFlag) GetValue(snap *Snapshot) interface{} {
 	v := snap.value(f.id, f.key)
-	switch v1 := v.(type) {
-	case int:
-		return v
-	case float64:
-		// This can happen when a numeric override flag is used
-		// with SimplifiedConfig, which can't tell the difference
-		// between int and float64.
-		return int(v1)
+	if res, ok := convertInt(v); ok {
+		return res
 	}
 	return f.defaultValue
+}
+
+// GetValueDetails implements Flag.GetValueDetails.
+func (f IntFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
+	details := snap.evalDetailsForKeyId(f.id, f.key)
+	intVal, ok := convertInt(details.Value)
+	if !ok {
+		return EvaluationDetails{
+			Value: f.defaultValue,
+			Meta: EvaluationDetailsMeta{
+				Key:            f.key,
+				Error:          errors.New(fmt.Sprintf("could not convert %s to int", details.Value)),
+				User:           snap.originalUser,
+				FetchTime:      snap.FetchTime(),
+				IsDefaultValue: true,
+			},
+		}
+	}
+	details.Value = intVal
+	return details
 }
 
 // String is like Bool but for string-valued flags.
@@ -135,6 +192,14 @@ func (f StringFlag) Get(snap *Snapshot) string {
 	return f.GetValue(snap).(string)
 }
 
+// GetWithDetails returns the evaluation details along with the flag's value.
+// It returns StringEvaluationDetails with the flag's default value if snap is nil
+// or the key isn't in the configuration.
+func (f StringFlag) GetWithDetails(snap *Snapshot) StringEvaluationDetails {
+	details := f.GetValueDetails(snap)
+	return StringEvaluationDetails{Meta: details.Meta, Value: details.Value.(string)}
+}
+
 // GetValue implements Flag.GetValue.
 func (f StringFlag) GetValue(snap *Snapshot) interface{} {
 	v := snap.value(f.id, f.key)
@@ -142,6 +207,26 @@ func (f StringFlag) GetValue(snap *Snapshot) interface{} {
 		return v
 	}
 	return f.defaultValue
+}
+
+// GetValueDetails implements Flag.GetValueDetails.
+func (f StringFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
+	details := snap.evalDetailsForKeyId(f.id, f.key)
+	stringVal, ok := details.Value.(string)
+	if !ok {
+		return EvaluationDetails{
+			Value: f.defaultValue,
+			Meta: EvaluationDetailsMeta{
+				Key:            f.key,
+				Error:          errors.New(fmt.Sprintf("could not convert %s to string", details.Value)),
+				User:           snap.originalUser,
+				FetchTime:      snap.FetchTime(),
+				IsDefaultValue: true,
+			},
+		}
+	}
+	details.Value = stringVal
+	return details
 }
 
 // Float is like Bool but for float-valued flags.
@@ -173,6 +258,14 @@ func (f FloatFlag) Get(snap *Snapshot) float64 {
 	return f.GetValue(snap).(float64)
 }
 
+// GetWithDetails returns the evaluation details along with the flag's value.
+// It returns FloatEvaluationDetails with the flag's default value if snap is nil
+// or the key isn't in the configuration.
+func (f FloatFlag) GetWithDetails(snap *Snapshot) FloatEvaluationDetails {
+	details := f.GetValueDetails(snap)
+	return FloatEvaluationDetails{Meta: details.Meta, Value: details.Value.(float64)}
+}
+
 // GetValue implements Flag.GetValue.
 func (f FloatFlag) GetValue(snap *Snapshot) interface{} {
 	v := snap.value(f.id, f.key)
@@ -180,6 +273,26 @@ func (f FloatFlag) GetValue(snap *Snapshot) interface{} {
 		return v
 	}
 	return f.defaultValue
+}
+
+// GetValueDetails implements Flag.GetValueDetails.
+func (f FloatFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
+	details := snap.evalDetailsForKeyId(f.id, f.key)
+	floatVal, ok := details.Value.(float64)
+	if !ok {
+		return EvaluationDetails{
+			Value: f.defaultValue,
+			Meta: EvaluationDetailsMeta{
+				Key:            f.key,
+				Error:          errors.New(fmt.Sprintf("could not convert %s to float64", details.Value)),
+				User:           snap.originalUser,
+				FetchTime:      snap.FetchTime(),
+				IsDefaultValue: true,
+			},
+		}
+	}
+	details.Value = floatVal
+	return details
 }
 
 type keyID uint32
@@ -216,4 +329,17 @@ func numKeys() int {
 	keyIDs.mu.Lock()
 	defer keyIDs.mu.Unlock()
 	return int(keyIDs.max)
+}
+
+func convertInt(val interface{}) (interface{}, bool) {
+	switch v1 := val.(type) {
+	case int:
+		return val, true
+	case float64:
+		// This can happen when a numeric override flag is used
+		// with SimplifiedConfig, which can't tell the difference
+		// between int and float64.
+		return int(v1), true
+	}
+	return nil, false
 }

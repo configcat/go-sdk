@@ -1,6 +1,7 @@
 package configcat
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -15,14 +16,15 @@ import (
 // A nil snapshot is OK to use and acts like a configuration
 // with no keys.
 type Snapshot struct {
-	logger  *leveledLogger
-	config  *config
-	user    reflect.Value
-	allKeys []string
+	logger       *leveledLogger
+	config       *config
+	originalUser User
+	user         reflect.Value
+	allKeys      []string
 
-	// values holds the value for each possible value ID, as stored in
-	// config.values.
-	values []interface{}
+	// values holds the value and eval details for each
+	// possible value ID, as stored in config.values.
+	values []valueDetails
 
 	// precalc holds precalculated value IDs as stored in config.precalc.
 	precalc []valueID
@@ -57,7 +59,7 @@ type Snapshot struct {
 // - s.GetVariationID returns "".
 // - s.GetVariationIDs returns nil.
 func NewSnapshot(logger Logger, values map[string]interface{}) (*Snapshot, error) {
-	valuesSlice := make([]interface{}, numKeys())
+	valuesSlice := make([]valueDetails, numKeys())
 	keys := make([]string, 0, len(values))
 	for name, val := range values {
 		switch val.(type) {
@@ -70,16 +72,16 @@ func NewSnapshot(logger Logger, values map[string]interface{}) (*Snapshot, error
 			// We've added a new key, so expand the slices.
 			// This should be a rare case, so don't worry about
 			// this happening several times within this loop.
-			valuesSlice1 := make([]interface{}, id+1)
+			valuesSlice1 := make([]valueDetails, id+1)
 			copy(valuesSlice1, valuesSlice)
 			valuesSlice = valuesSlice1
 		}
-		valuesSlice[id] = val
+		valuesSlice[id] = valueDetails{value: val}
 		keys = append(keys, name)
 	}
 	// Save some allocations by using the same closure for every key.
-	eval := func(id keyID, logger *leveledLogger, userv reflect.Value) (valueID, string) {
-		return valueID(id) + 1, ""
+	eval := func(id keyID, logger *leveledLogger, userv reflect.Value) valueID {
+		return valueID(id) + 1
 	}
 	evaluators := make([]entryEvalFunc, len(valuesSlice))
 	precalc := make([]valueID, len(valuesSlice))
@@ -108,9 +110,10 @@ func newSnapshot(cfg *config, user User, logger *leveledLogger) *Snapshot {
 // for initializing config.noUserSnapshot.
 func _newSnapshot(cfg *config, user User, logger *leveledLogger) *Snapshot {
 	snap := &Snapshot{
-		config: cfg,
-		user:   reflect.ValueOf(user),
-		logger: logger,
+		config:       cfg,
+		user:         reflect.ValueOf(user),
+		logger:       logger,
+		originalUser: user,
 	}
 	var userType reflect.Type
 	if user != nil {
@@ -148,28 +151,29 @@ func (snap *Snapshot) WithUser(user User) *Snapshot {
 }
 
 func (snap *Snapshot) value(id keyID, key string) interface{} {
+	if details, err := snap.evalDetails(id, key); err == nil {
+		return details.value
+	}
+	return nil
+}
+
+func (snap *Snapshot) evalDetails(id keyID, key string) (*valueDetails, error) {
 	if snap == nil {
-		return nil
+		return nil, errors.New("snapshot is nil")
 	}
 	if snap.logger.enabled(LogLevelInfo) || int(id) >= len(snap.precalc) {
-		// We want to see logs or we don't know about the key so use the slow path.
-		val, _ := snap.valueAndVariationID(id, key)
-		return val
+		// We want to see logs, or we don't know about the key so use the slow path.
+		return snap.valueWithDetails(id, key)
 	}
 	valID := snap.precalc[id]
 	if valID > 0 {
 		// We've got a precalculated value for the key.
-		return snap.valueForID(valID)
+		return snap.valueForID(valID), nil
 	}
 	if valID == 0 {
-		// The key isn't found in this configuration.
-		if !snap.logger.enabled(LogLevelError) {
-			return nil
-		}
-		// Use the default implementation which will do the
-		// appropriate logging for us.
-		val, _ := snap.valueAndVariationID(id, key)
-		return val
+		// Use the default implementation which will
+		// get the appropriate error for us
+		return snap.valueWithDetails(id, key)
 	}
 	// Look up the key in the cache.
 	cacheIndex := int(-valID - 1)
@@ -178,10 +182,10 @@ func (snap *Snapshot) value(id keyID, key string) interface{} {
 		// We've got a previous result, so return it. Note that we can only do this
 		// when we're not printing Info-level logs, because this avoids the usual
 		// logging of rule evaluation.
-		return snap.valueForID(valID)
+		return snap.valueForID(valID), nil
 	}
-	val, _ := snap.valueAndVariationID(id, key)
-	return val
+
+	return snap.valueWithDetails(id, key)
 }
 
 func (snap *Snapshot) initCache() {
@@ -190,43 +194,61 @@ func (snap *Snapshot) initCache() {
 	})
 }
 
-// GetVariationID returns the variation ID that will be used for the given key
-// with respect to the current user, or the empty string if none is found.
-func (snap *Snapshot) GetVariationID(key string) string {
-	_, variationID := snap.valueAndVariationID(idForKey(key, false), key)
-	return variationID
-}
-
-func (snap *Snapshot) valueAndVariationID(id keyID, key string) (interface{}, string) {
+func (snap *Snapshot) valueWithDetails(id keyID, key string) (*valueDetails, error) {
 	if snap == nil {
-		return nil, ""
+		return nil, errors.New("snapshot is nil")
 	}
 	var eval entryEvalFunc
 	if int(id) < len(snap.evaluators) {
 		eval = snap.evaluators[id]
 	}
 	if eval == nil {
-		snap.logger.Errorf("error getting value: value not found for key %s."+
+		err := fmt.Sprintf("error getting value: value not found for key %s."+
 			" Here are the available keys: %s", key, strings.Join(snap.GetAllKeys(), ","))
-		return nil, ""
+		snap.logger.Errorf(err)
+		return nil, errors.New(err)
 	}
-	valID, variationID := eval(id, snap.logger, snap.user)
+	valID := eval(id, snap.logger, snap.user)
 	val := snap.valueForID(valID)
 	if snap.logger.enabled(LogLevelInfo) {
-		snap.logger.Infof("Returning %v=%v.", key, val)
+		snap.logger.Infof("Returning %v=%v.", key, val.value)
 	}
 	if v := snap.precalc[id]; v < 0 {
 		snap.initCache()
 		cacheIndex := -v - 1
 		atomic.StoreInt32(&snap.cache[cacheIndex], valID)
 	}
-	return val, variationID
+	return val, nil
+}
+
+func (snap *Snapshot) evalDetailsForKeyId(id keyID, key string) EvaluationDetails {
+	details, err := snap.evalDetails(id, key)
+	if err != nil {
+		return EvaluationDetails{Value: nil, Meta: EvaluationDetailsMeta{
+			Key:            key,
+			User:           snap.originalUser,
+			IsDefaultValue: true,
+			Error:          err,
+			FetchTime:      snap.config.fetchTime,
+		}}
+	}
+
+	return EvaluationDetails{Value: details.value, Meta: EvaluationDetailsMeta{
+		Key:                             key,
+		VariationId:                     details.variationId,
+		User:                            snap.originalUser,
+		IsDefaultValue:                  false,
+		Error:                           nil,
+		FetchTime:                       snap.config.fetchTime,
+		MatchedEvaluationRule:           *details.rolloutRule,
+		MatchedEvaluationPercentageRule: *details.percentageRule,
+	}}
 }
 
 // valueForID returns the actual value corresponding to
 // the given value ID.
-func (snap *Snapshot) valueForID(id valueID) interface{} {
-	return snap.values[id-1]
+func (snap *Snapshot) valueForID(id valueID) *valueDetails {
+	return &snap.values[id-1]
 }
 
 // GetValue returns a feature flag value regardless of type. If there is no
@@ -240,6 +262,12 @@ func (snap *Snapshot) valueForID(id valueID) interface{} {
 // 	value := someFlag.Get(snap)
 func (snap *Snapshot) GetValue(key string) interface{} {
 	return snap.value(idForKey(key, false), key)
+}
+
+// GetValueDetails returns the value and evaluation details of a feature flag or setting
+// with respect to the current user, or nil if none is found.
+func (snap *Snapshot) GetValueDetails(key string) EvaluationDetails {
+	return snap.evalDetailsForKeyId(idForKey(key, false), key)
 }
 
 // GetKeyValueForVariationID returns the key and value that
@@ -257,6 +285,15 @@ func (snap *Snapshot) GetKeyValueForVariationID(id string) (string, interface{})
 	return key, value
 }
 
+// GetVariationID returns the variation ID that will be used for the given key
+// with respect to the current user, or the empty string if none is found.
+func (snap *Snapshot) GetVariationID(key string) string {
+	if details, err := snap.evalDetails(idForKey(key, false), key); err == nil {
+		return details.variationId
+	}
+	return ""
+}
+
 // GetVariationIDs returns all variation IDs in the current configuration
 // that apply to the current user.
 func (snap *Snapshot) GetVariationIDs() []string {
@@ -267,8 +304,9 @@ func (snap *Snapshot) GetVariationIDs() []string {
 	ids := make([]string, 0, len(keys))
 	for _, key := range keys {
 		id := idForKey(key, false)
-		_, varID := snap.evaluators[id](id, snap.logger, snap.user)
-		ids = append(ids, varID)
+		valId := snap.evaluators[id](id, snap.logger, snap.user)
+		val := snap.valueForID(valId)
+		ids = append(ids, val.variationId)
 	}
 	return ids
 }
