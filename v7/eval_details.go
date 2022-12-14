@@ -13,8 +13,8 @@ type EvaluationDetailsMeta struct {
 	IsDefaultValue                  bool
 	Error                           error
 	FetchTime                       time.Time
-	MatchedEvaluationRule           *wireconfig.RolloutRule
-	MatchedEvaluationPercentageRule *wireconfig.PercentageRule
+	MatchedEvaluationRule           *RolloutRule
+	MatchedEvaluationPercentageRule *PercentageRule
 }
 
 // EvaluationDetails holds the additional evaluation information along with the value of a feature flag or setting.
@@ -45,4 +45,34 @@ type StringEvaluationDetails struct {
 type FloatEvaluationDetails struct {
 	Meta  EvaluationDetailsMeta
 	Value float64
+}
+
+type RolloutRule struct {
+	ComparisonAttribute string
+	ComparisonValue     string
+	Comparator          int
+}
+
+type PercentageRule struct {
+	VariationID string
+	Percentage  int64
+}
+
+func newPublicRolloutRuleOrNil(rule *wireconfig.RolloutRule) *RolloutRule {
+	if rule == nil {
+		return nil
+	}
+
+	return &RolloutRule{
+		Comparator:          int(rule.Comparator),
+		ComparisonAttribute: rule.ComparisonAttribute,
+		ComparisonValue:     rule.ComparisonValue}
+}
+
+func newPublicPercentageRuleOrNil(rule *wireconfig.PercentageRule) *PercentageRule {
+	if rule == nil {
+		return nil
+	}
+
+	return &PercentageRule{Percentage: rule.Percentage}
 }

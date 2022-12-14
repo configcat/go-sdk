@@ -3,7 +3,6 @@ package configcat
 
 import (
 	"context"
-	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 	"net/http"
 	"sync"
 	"time"
@@ -20,7 +19,7 @@ type Hooks struct {
 	OnError func(err error)
 
 	// OnConfigChanged is called, when the settings configuration has changed.
-	OnConfigChanged func(map[string]*wireconfig.Entry)
+	OnConfigChanged func()
 }
 
 // Config describes configuration options for the Client.
@@ -102,6 +101,9 @@ type Config struct {
 
 	// Hooks controls the events sent by Client.
 	Hooks *Hooks
+
+	// Offline indicates whether the SDK should be initialized in offline mode or not.
+	Offline bool
 }
 
 // ConfigCache is a cache API used to make custom cache implementations.
@@ -170,7 +172,7 @@ func NewCustomClient(cfg Config) *Client {
 	if cfg.PollInterval < 1 {
 		cfg.PollInterval = DefaultPollInterval
 	}
-	logger := newLeveledLogger(cfg.Logger)
+	logger := newLeveledLogger(cfg.Logger, cfg.Hooks)
 	if cfg.FlagOverrides != nil {
 		cfg.FlagOverrides.loadEntries(logger)
 	}
@@ -198,6 +200,11 @@ func (client *Client) Refresh(ctx context.Context) error {
 // age.
 func (client *Client) RefreshIfOlder(ctx context.Context, age time.Duration) error {
 	return client.fetcher.refreshIfOlder(ctx, time.Now().Add(-age), true)
+}
+
+// IsOffline returns true when the SDK is configured not to initiate HTTP requests, otherwise false.
+func (client *Client) IsOffline() bool {
+	return client.cfg.Offline
 }
 
 // Close shuts down the client. After closing, it shouldn't be used.
@@ -258,8 +265,14 @@ func (client *Client) GetStringValueDetails(key string, defaultValue string, use
 	return String(key, defaultValue).GetWithDetails(client.Snapshot(user))
 }
 
+// GetAllValueDetails returns values along with evaluation details of all feature flags and settings.
+func (client *Client) GetAllValueDetails(user User) []EvaluationDetails {
+	return client.Snapshot(user).GetAllValueDetails()
+}
+
 // GetVariationID returns the variation ID (analytics) that will be used for the given key
 // with respect to the given user, or the default value if none is found.
+// Deprecated: This method is obsolete and will be removed in a future major version. Please use GetBoolValueDetails / GetIntValueDetails / GetFloatValueDetails / GetStringValueDetails instead.
 func (client *Client) GetVariationID(key string, defaultVariationId string, user User) string {
 	if result := client.Snapshot(user).GetVariationID(key); result != "" {
 		return result
@@ -269,6 +282,7 @@ func (client *Client) GetVariationID(key string, defaultVariationId string, user
 
 // GetVariationIDs returns all variation IDs (analytics) in the current configuration
 // that apply to the given user, or Config.DefaultUser if user is nil.
+// Deprecated: This method is obsolete and will be removed in a future major version. Please use GetAllValueDetails instead.
 func (client *Client) GetVariationIDs(user User) []string {
 	return client.Snapshot(user).GetVariationIDs()
 }

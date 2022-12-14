@@ -99,7 +99,7 @@ func NewSnapshot(logger Logger, values map[string]interface{}) (*Snapshot, error
 		precalc[i] = valueID(i) + 1
 	}
 	return &Snapshot{
-		logger:     newLeveledLogger(logger),
+		logger:     newLeveledLogger(logger, nil),
 		evaluators: evaluators,
 		allKeys:    keys,
 		values:     valuesSlice,
@@ -240,8 +240,8 @@ func (snap *Snapshot) details(id keyID, key string) (*valueDetails, error) {
 				VariationId:                     varID,
 				User:                            snap.originalUser,
 				FetchTime:                       snap.FetchTime(),
-				MatchedEvaluationRule:           rollout,
-				MatchedEvaluationPercentageRule: percentage,
+				MatchedEvaluationRule:           newPublicRolloutRuleOrNil(rollout),
+				MatchedEvaluationPercentageRule: newPublicPercentageRuleOrNil(percentage),
 			},
 		})
 	}
@@ -265,8 +265,8 @@ func (snap *Snapshot) evalDetailsForKeyId(id keyID, key string) EvaluationDetail
 		VariationId:                     details.variationId,
 		User:                            snap.originalUser,
 		FetchTime:                       snap.config.fetchTime,
-		MatchedEvaluationRule:           details.rolloutRule,
-		MatchedEvaluationPercentageRule: details.percentageRule,
+		MatchedEvaluationRule:           newPublicRolloutRuleOrNil(details.rolloutRule),
+		MatchedEvaluationPercentageRule: newPublicPercentageRuleOrNil(details.percentageRule),
 	}}
 }
 
@@ -295,6 +295,16 @@ func (snap *Snapshot) GetValueDetails(key string) EvaluationDetails {
 	return snap.evalDetailsForKeyId(idForKey(key, false), key)
 }
 
+// GetAllValueDetails returns values along with evaluation details of all feature flags and settings.
+func (snap *Snapshot) GetAllValueDetails() []EvaluationDetails {
+	keys := snap.GetAllKeys()
+	details := make([]EvaluationDetails, 0, len(keys))
+	for _, key := range keys {
+		details = append(details, snap.GetValueDetails(key))
+	}
+	return details
+}
+
 // GetKeyValueForVariationID returns the key and value that
 // are associated with the given variation ID. If the
 // variation ID isn't found, it returns "", nil.
@@ -312,6 +322,7 @@ func (snap *Snapshot) GetKeyValueForVariationID(id string) (string, interface{})
 
 // GetVariationID returns the variation ID that will be used for the given key
 // with respect to the current user, or the empty string if none is found.
+// Deprecated: This method is obsolete and will be removed in a future major version. Please use GetValueDetails instead.
 func (snap *Snapshot) GetVariationID(key string) string {
 	if details, err := snap.details(idForKey(key, false), key); err == nil {
 		return details.variationId
@@ -321,6 +332,7 @@ func (snap *Snapshot) GetVariationID(key string) string {
 
 // GetVariationIDs returns all variation IDs in the current configuration
 // that apply to the current user.
+// Deprecated: This method is obsolete and will be removed in a future major version. Please use GetAllValueDetails instead.
 func (snap *Snapshot) GetVariationIDs() []string {
 	if snap == nil || snap.config == nil {
 		return nil

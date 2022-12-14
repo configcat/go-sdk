@@ -564,7 +564,7 @@ func TestClient_GetBoolDetails(t *testing.T) {
 	c.Assert(details.Meta.User, qt.Equals, user)
 	c.Assert(details.Meta.VariationId, qt.Equals, "385d9803")
 	c.Assert(details.Meta.MatchedEvaluationPercentageRule, qt.IsNil)
-	c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, wireconfig.OpOneOf)
+	c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, 0)
 	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
 	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonValue, qt.Equals, "a@configcat.com, b@configcat.com")
 }
@@ -588,7 +588,7 @@ func TestClient_GetStringDetails(t *testing.T) {
 	c.Assert(details.Meta.User, qt.Equals, user)
 	c.Assert(details.Meta.VariationId, qt.Equals, "d0cd8f06")
 	c.Assert(details.Meta.MatchedEvaluationPercentageRule, qt.IsNil)
-	c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, wireconfig.OpContains)
+	c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, 2)
 	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
 	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
 }
@@ -633,9 +633,25 @@ func TestClient_GetFloatDetails(t *testing.T) {
 	c.Assert(details.Meta.User, qt.Equals, user)
 	c.Assert(details.Meta.VariationId, qt.Equals, "3f7826de")
 	c.Assert(details.Meta.MatchedEvaluationPercentageRule, qt.IsNil)
-	c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, wireconfig.OpContains)
+	c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, 2)
 	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
 	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
+}
+
+func TestClient_GetAllDetails(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
+
+	keys := client.GetAllKeys()
+	details := client.GetAllValueDetails(user)
+	c.Assert(len(details), qt.Equals, len(keys))
 }
 
 func TestClient_GetDetails_Reflected_User(t *testing.T) {
@@ -672,7 +688,7 @@ func TestClient_Hooks_OnFlagEvaluated(t *testing.T) {
 		c.Assert(details.Meta.User, qt.Equals, user)
 		c.Assert(details.Meta.VariationId, qt.Equals, "3f7826de")
 		c.Assert(details.Meta.MatchedEvaluationPercentageRule, qt.IsNil)
-		c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, wireconfig.OpContains)
+		c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, 2)
 		c.Assert(details.Meta.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
 		c.Assert(details.Meta.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
 		called <- struct{}{}
