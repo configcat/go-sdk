@@ -667,6 +667,7 @@ func TestClient_GetDetails_Reflected_User(t *testing.T) {
 
 	details := client.GetFloatValueDetails("double25Pi25E25Gr25Zero", 0.0, user)
 	c.Assert(details.Meta.User, qt.Equals, user)
+	c.Assert(srv.requestCount, qt.Equals, 1)
 }
 
 func TestClient_Hooks_OnFlagEvaluated(t *testing.T) {
@@ -705,6 +706,25 @@ func TestClient_Hooks_OnFlagEvaluated(t *testing.T) {
 	}
 }
 
+func TestClient_OfflineMode(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	config := srv.config()
+	config.Offline = true
+	config.Cache = newCacheForSdkKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A")
+	client := NewCustomClient(config)
+	client.Refresh(context.Background())
+
+	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
+
+	details := client.GetAllValueDetails(user)
+	c.Assert(len(details), qt.Equals, 16)
+	c.Assert(srv.requestCount, qt.Equals, 0)
+}
+
 type failingCache struct{}
 
 // get reads the configuration from the cache.
@@ -715,6 +735,23 @@ func (cache failingCache) Get(ctx context.Context, key string) ([]byte, error) {
 // set writes the configuration into the cache.
 func (cache failingCache) Set(ctx context.Context, key string, value []byte) error {
 	return errors.New("fake failing cache fails to set")
+}
+
+type preConfCache struct {
+	initial []byte
+}
+
+func newCacheForSdkKey(sdkKey string) *preConfCache {
+	data := []byte(contentForIntegrationTestKey(sdkKey))
+	return &preConfCache{initial: data}
+}
+
+func (cache *preConfCache) Get(ctx context.Context, key string) ([]byte, error) {
+	return cache.initial, nil
+}
+
+func (cache *preConfCache) Set(ctx context.Context, key string, value []byte) error {
+	return nil
 }
 
 func getTestClients(t *testing.T) (*configServer, *Client) {
