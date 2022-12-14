@@ -3,12 +3,25 @@ package configcat
 
 import (
 	"context"
+	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 	"net/http"
 	"sync"
 	"time"
 )
 
 const DefaultPollInterval = 60 * time.Second
+
+// Hooks describes the events sent by Client.
+type Hooks struct {
+	// OnFlagEvaluated is called each time when the SDK evaluates a feature flag or setting.
+	OnFlagEvaluated func(details *EvaluationDetails)
+
+	// OnError is called when an error occurs within the ConfigCat SDK.
+	OnError func(err error)
+
+	// OnConfigChanged is called, when the settings configuration has changed.
+	OnConfigChanged func(map[string]*wireconfig.Entry)
+}
 
 // Config describes configuration options for the Client.
 type Config struct {
@@ -64,6 +77,7 @@ type Config struct {
 
 	// ChangeNotify is called, if not nil, when the settings configuration
 	// has changed.
+	// Deprecated: Use Hooks instead.
 	ChangeNotify func()
 
 	// DataGovernance specifies the data governance mode.
@@ -85,6 +99,9 @@ type Config struct {
 
 	// FlagOverrides holds the feature flag and setting overrides.
 	FlagOverrides *FlagOverrides
+
+	// Hooks controls the events sent by Client.
+	Hooks *Hooks
 }
 
 // ConfigCache is a cache API used to make custom cache implementations.
@@ -292,5 +309,5 @@ func (client *Client) Snapshot(user User) *Snapshot {
 			})
 		}
 	}
-	return newSnapshot(client.fetcher.current(), user, client.logger)
+	return newSnapshot(client.fetcher.current(), user, client.logger, client.cfg.Hooks)
 }

@@ -9,13 +9,6 @@ import (
 	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 )
 
-type valueDetails struct {
-	value          interface{}
-	variationId    string
-	rolloutRule    *wireconfig.RolloutRule
-	percentageRule *wireconfig.PercentageRule
-}
-
 type config struct {
 	jsonBody []byte
 	etag     string
@@ -28,7 +21,7 @@ type config struct {
 	fetchTime  time.Time
 	// values holds all the values and eval details that can be returned from the
 	// configuration, keyed by valueID-1.
-	values []valueDetails
+	values []interface{}
 
 	// precalc holds value IDs for keys that we know
 	// the values of ahead of time because they're not
@@ -57,7 +50,7 @@ type config struct {
 // than the index into the config.values or Snapshot.values slice.
 type valueID = int32
 
-func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger, defaultUser User, overrides *FlagOverrides) (*config, error) {
+func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger, defaultUser User, overrides *FlagOverrides, hooks *Hooks) (*config, error) {
 	var root wireconfig.RootNode
 	// Note: jsonBody can be nil when we've got overrides only.
 	if jsonBody != nil {
@@ -79,7 +72,7 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leve
 	}
 	conf.fixup(make(map[interface{}]valueID))
 	conf.precalculate()
-	conf.defaultUserSnapshot = _newSnapshot(conf, defaultUser, logger)
+	conf.defaultUserSnapshot = _newSnapshot(conf, defaultUser, logger, hooks)
 	return conf, nil
 }
 
@@ -150,19 +143,19 @@ func (conf *config) keys() []string {
 func (conf *config) fixup(valueMap map[interface{}]valueID) {
 	for _, entry := range conf.root.Entries {
 		entry.Value = fixValue(entry.Value, entry.Type)
-		entry.ValueID = conf.idForValue(entry.Value, entry.VariationID, nil, nil, valueMap)
+		entry.ValueID = conf.idForValue(entry.Value, valueMap)
 		for _, rule := range entry.RolloutRules {
 			rule.Value = fixValue(rule.Value, entry.Type)
-			rule.ValueID = conf.idForValue(rule.Value, rule.VariationID, rule, nil, valueMap)
+			rule.ValueID = conf.idForValue(rule.Value, valueMap)
 		}
 		for _, rule := range entry.PercentageRules {
 			rule.Value = fixValue(rule.Value, entry.Type)
-			rule.ValueID = conf.idForValue(rule.Value, rule.VariationID, nil, rule, valueMap)
+			rule.ValueID = conf.idForValue(rule.Value, valueMap)
 		}
 	}
 }
 
-func (conf *config) idForValue(v interface{}, varId string, rule *wireconfig.RolloutRule, percRule *wireconfig.PercentageRule, valueMap map[interface{}]valueID) valueID {
+func (conf *config) idForValue(v interface{}, valueMap map[interface{}]valueID) valueID {
 	if id, ok := valueMap[v]; ok {
 		return id
 	}
@@ -170,7 +163,7 @@ func (conf *config) idForValue(v interface{}, varId string, rule *wireconfig.Rol
 	// so we can rely on zero-initialization of the evaluation context.
 	id := valueID(len(conf.values) + 1)
 	valueMap[v] = id
-	conf.values = append(conf.values, valueDetails{value: v, variationId: varId, rolloutRule: rule, percentageRule: percRule})
+	conf.values = append(conf.values, v)
 	return id
 }
 

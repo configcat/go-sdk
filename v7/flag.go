@@ -1,7 +1,6 @@
 package configcat
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 )
@@ -86,7 +85,7 @@ func (f BoolFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
 			Value: f.defaultValue,
 			Meta: EvaluationDetailsMeta{
 				Key:            f.key,
-				Error:          errors.New(fmt.Sprintf("could not convert %s to bool", details.Value)),
+				Error:          fmt.Errorf("could not convert %s to bool", details.Value),
 				User:           snap.originalUser,
 				FetchTime:      snap.FetchTime(),
 				IsDefaultValue: true,
@@ -152,7 +151,7 @@ func (f IntFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
 			Value: f.defaultValue,
 			Meta: EvaluationDetailsMeta{
 				Key:            f.key,
-				Error:          errors.New(fmt.Sprintf("could not convert %s to int", details.Value)),
+				Error:          fmt.Errorf("could not convert %s to int", details.Value),
 				User:           snap.originalUser,
 				FetchTime:      snap.FetchTime(),
 				IsDefaultValue: true,
@@ -218,7 +217,7 @@ func (f StringFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
 			Value: f.defaultValue,
 			Meta: EvaluationDetailsMeta{
 				Key:            f.key,
-				Error:          errors.New(fmt.Sprintf("could not convert %s to string", details.Value)),
+				Error:          fmt.Errorf("could not convert %s to string", details.Value),
 				User:           snap.originalUser,
 				FetchTime:      snap.FetchTime(),
 				IsDefaultValue: true,
@@ -284,7 +283,7 @@ func (f FloatFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
 			Value: f.defaultValue,
 			Meta: EvaluationDetailsMeta{
 				Key:            f.key,
-				Error:          errors.New(fmt.Sprintf("could not convert %s to float64", details.Value)),
+				Error:          fmt.Errorf("could not convert %s to float64", details.Value),
 				User:           snap.originalUser,
 				FetchTime:      snap.FetchTime(),
 				IsDefaultValue: true,

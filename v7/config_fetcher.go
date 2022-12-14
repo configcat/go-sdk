@@ -31,6 +31,7 @@ type configFetcher struct {
 	defaultUser       User
 	pollingIdentifier string
 	overrides         *FlagOverrides
+	hooks             *Hooks
 
 	ctx       context.Context
 	ctxCancel func()
@@ -61,6 +62,7 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *conf
 		cacheKey:     sdkKeyToCacheKey(cfg.SDKKey),
 		overrides:    cfg.FlagOverrides,
 		changeNotify: cfg.ChangeNotify,
+		hooks:        cfg.Hooks,
 		logger:       logger,
 		client: &http.Client{
 			Timeout:   cfg.HTTPTimeout,
@@ -184,6 +186,9 @@ func (f *configFetcher) fetcher(prevConfig *config, logError bool) {
 		if f.changeNotify != nil && !config.equalContent(prevConfig) {
 			go f.changeNotify()
 		}
+		if f.hooks != nil && f.hooks.OnConfigChanged != nil && !config.equalContent(prevConfig) {
+			go f.hooks.OnConfigChanged(config.root.Entries)
+		}
 	}
 	// Unblock any Client.getValue call that's waiting for the first configuration to be retrieved.
 	f.doneGetOnce.Do(func() {
@@ -196,7 +201,7 @@ func (f *configFetcher) fetcher(prevConfig *config, logError bool) {
 func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevConfig *config) (_ *config, _newURL string, _err error) {
 	if f.overrides != nil && f.overrides.Behavior == LocalOnly {
 		// TODO could potentially refresh f.overrides if it's come from a file.
-		cfg, err := parseConfig(nil, "", time.Now(), f.logger, f.defaultUser, f.overrides)
+		cfg, err := parseConfig(nil, "", time.Now(), f.logger, f.defaultUser, f.overrides, f.hooks)
 		if err != nil {
 			return nil, "", err
 		}
@@ -220,7 +225,7 @@ func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevCon
 		f.logger.Debugf("empty config text in cache")
 		return nil, "", err
 	}
-	cfg, cacheErr = parseConfig(configText, "", time.Time{}, f.logger, f.defaultUser, f.overrides)
+	cfg, cacheErr = parseConfig(configText, "", time.Time{}, f.logger, f.defaultUser, f.overrides, f.hooks)
 	if cacheErr != nil {
 		f.logger.Errorf("cache contained invalid config: %v", err)
 		return nil, "", err
@@ -301,7 +306,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 	if f.sdkKey == "" {
 		return nil, fmt.Errorf("empty SDK key in configcat configuration")
 	}
-	request, err := http.NewRequest("GET", baseURL+"/configuration-files/"+f.sdkKey+"/"+configJSONName+".json", nil)
+	request, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/configuration-files/"+f.sdkKey+"/"+configJSONName+".json", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +332,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 		if err != nil {
 			return nil, fmt.Errorf("config fetch read failed: %v", err)
 		}
-		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now(), f.logger, f.defaultUser, f.overrides)
+		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now(), f.logger, f.defaultUser, f.overrides, f.hooks)
 		if err != nil {
 			return nil, fmt.Errorf("config fetch returned invalid body: %v", err)
 		}

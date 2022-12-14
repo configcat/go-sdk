@@ -13,8 +13,8 @@ type EvaluationDetailsMeta struct {
 	IsDefaultValue                  bool
 	Error                           error
 	FetchTime                       time.Time
-	MatchedEvaluationRule           wireconfig.RolloutRule
-	MatchedEvaluationPercentageRule wireconfig.PercentageRule
+	MatchedEvaluationRule           *wireconfig.RolloutRule
+	MatchedEvaluationPercentageRule *wireconfig.PercentageRule
 }
 
 // EvaluationDetails holds the additional evaluation information along with the value of a feature flag or setting.

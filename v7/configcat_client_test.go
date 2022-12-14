@@ -545,6 +545,150 @@ func TestSnapshot_Get(t *testing.T) {
 	c.Check(client.Snapshot(nil).FetchTime().After(snap.FetchTime()), qt.IsTrue)
 }
 
+func TestClient_GetBoolDetails(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
+
+	details := client.GetBoolValueDetails("bool30TrueAdvancedRules", true, user)
+	c.Assert(details.Value, qt.IsFalse)
+	c.Assert(details.Meta.IsDefaultValue, qt.IsFalse)
+	c.Assert(details.Meta.Error, qt.IsNil)
+	c.Assert(details.Meta.Key, qt.Equals, "bool30TrueAdvancedRules")
+	c.Assert(details.Meta.User, qt.Equals, user)
+	c.Assert(details.Meta.VariationId, qt.Equals, "385d9803")
+	c.Assert(details.Meta.MatchedEvaluationPercentageRule, qt.IsNil)
+	c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, wireconfig.OpOneOf)
+	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
+	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonValue, qt.Equals, "a@configcat.com, b@configcat.com")
+}
+
+func TestClient_GetStringDetails(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
+
+	details := client.GetStringValueDetails("stringContainsDogDefaultCat", "", user)
+	c.Assert(details.Value, qt.Equals, "Dog")
+	c.Assert(details.Meta.IsDefaultValue, qt.IsFalse)
+	c.Assert(details.Meta.Error, qt.IsNil)
+	c.Assert(details.Meta.Key, qt.Equals, "stringContainsDogDefaultCat")
+	c.Assert(details.Meta.User, qt.Equals, user)
+	c.Assert(details.Meta.VariationId, qt.Equals, "d0cd8f06")
+	c.Assert(details.Meta.MatchedEvaluationPercentageRule, qt.IsNil)
+	c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, wireconfig.OpContains)
+	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
+	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
+}
+
+func TestClient_GetIntDetails(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	user := &UserData{Identifier: "a@configcat.com"}
+
+	details := client.GetIntValueDetails("integer25One25Two25Three25FourAdvancedRules", 0, user)
+	c.Assert(details.Value, qt.Equals, 1)
+	c.Assert(details.Meta.IsDefaultValue, qt.IsFalse)
+	c.Assert(details.Meta.Error, qt.IsNil)
+	c.Assert(details.Meta.Key, qt.Equals, "integer25One25Two25Three25FourAdvancedRules")
+	c.Assert(details.Meta.User, qt.Equals, user)
+	c.Assert(details.Meta.VariationId, qt.Equals, "11634414")
+	c.Assert(details.Meta.MatchedEvaluationPercentageRule.Percentage, qt.Equals, int64(25))
+}
+
+func TestClient_GetFloatDetails(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
+
+	details := client.GetFloatValueDetails("double25Pi25E25Gr25Zero", 0.0, user)
+	c.Assert(details.Value, qt.Equals, 5.561)
+	c.Assert(details.Meta.IsDefaultValue, qt.IsFalse)
+	c.Assert(details.Meta.Error, qt.IsNil)
+	c.Assert(details.Meta.Key, qt.Equals, "double25Pi25E25Gr25Zero")
+	c.Assert(details.Meta.User, qt.Equals, user)
+	c.Assert(details.Meta.VariationId, qt.Equals, "3f7826de")
+	c.Assert(details.Meta.MatchedEvaluationPercentageRule, qt.IsNil)
+	c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, wireconfig.OpContains)
+	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
+	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
+}
+
+func TestClient_GetDetails_Reflected_User(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	user := &struct{ attr string }{"a"}
+
+	details := client.GetFloatValueDetails("double25Pi25E25Gr25Zero", 0.0, user)
+	c.Assert(details.Meta.User, qt.Equals, user)
+}
+
+func TestClient_Hooks_OnFlagEvaluated(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+
+	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
+
+	called := make(chan struct{})
+	cfg := srv.config()
+	cfg.Hooks = &Hooks{OnFlagEvaluated: func(details *EvaluationDetails) {
+		c.Assert(details.Value, qt.Equals, 5.561)
+		c.Assert(details.Meta.IsDefaultValue, qt.IsFalse)
+		c.Assert(details.Meta.Error, qt.IsNil)
+		c.Assert(details.Meta.Key, qt.Equals, "double25Pi25E25Gr25Zero")
+		c.Assert(details.Meta.User, qt.Equals, user)
+		c.Assert(details.Meta.VariationId, qt.Equals, "3f7826de")
+		c.Assert(details.Meta.MatchedEvaluationPercentageRule, qt.IsNil)
+		c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, wireconfig.OpContains)
+		c.Assert(details.Meta.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
+		c.Assert(details.Meta.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
+		called <- struct{}{}
+	}}
+	client := NewCustomClient(cfg)
+	client.Refresh(context.Background())
+
+	_ = client.GetFloatValue("double25Pi25E25Gr25Zero", 0.0, user)
+
+	select {
+	case <-called:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out")
+	}
+}
+
 type failingCache struct{}
 
 // get reads the configuration from the cache.
