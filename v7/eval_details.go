@@ -8,7 +8,7 @@ import (
 // EvaluationDetailsMeta holds the additional evaluation information of a feature flag or setting.
 type EvaluationDetailsMeta struct {
 	Key                             string
-	VariationId                     string
+	VariationID                     string
 	User                            User
 	IsDefaultValue                  bool
 	Error                           error

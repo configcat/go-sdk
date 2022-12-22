@@ -11,13 +11,6 @@ import (
 	"time"
 )
 
-type valueDetails struct {
-	value          interface{}
-	variationId    string
-	rolloutRule    *wireconfig.RolloutRule
-	percentageRule *wireconfig.PercentageRule
-}
-
 // Snapshot holds a snapshot of the Configcat configuration.
 // A snapshot is immutable once taken.
 //
@@ -202,15 +195,15 @@ func (snap *Snapshot) initCache() {
 }
 
 func (snap *Snapshot) valueFromDetails(id keyID, key string) interface{} {
-	if details, _ := snap.details(id, key); details != nil {
-		return details.value
+	if value, _, _, _, err := snap.details(id, key); err == nil {
+		return value
 	}
 	return nil
 }
 
-func (snap *Snapshot) details(id keyID, key string) (*valueDetails, error) {
+func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *wireconfig.RolloutRule, *wireconfig.PercentageRule, error) {
 	if snap == nil {
-		return nil, errors.New("snapshot is nil")
+		return nil, "", nil, nil, errors.New("snapshot is nil")
 	}
 	var eval entryEvalFunc
 	if int(id) < len(snap.evaluators) {
@@ -220,7 +213,7 @@ func (snap *Snapshot) details(id keyID, key string) (*valueDetails, error) {
 		err := fmt.Errorf("error getting value: value not found for key %s."+
 			" Here are the available keys: %s", key, strings.Join(snap.GetAllKeys(), ","))
 		snap.logger.Errorf("%v", err)
-		return nil, err
+		return nil, "", nil, nil, err
 	}
 	valID, varID, rollout, percentage := eval(id, snap.logger, snap.user)
 	val := snap.valueForID(valID)
@@ -237,7 +230,7 @@ func (snap *Snapshot) details(id keyID, key string) (*valueDetails, error) {
 			Value: val,
 			Meta: EvaluationDetailsMeta{
 				Key:                             key,
-				VariationId:                     varID,
+				VariationID:                     varID,
 				User:                            snap.originalUser,
 				FetchTime:                       snap.FetchTime(),
 				MatchedEvaluationRule:           newPublicRolloutRuleOrNil(rollout),
@@ -245,11 +238,11 @@ func (snap *Snapshot) details(id keyID, key string) (*valueDetails, error) {
 			},
 		})
 	}
-	return &valueDetails{value: val, variationId: varID, rolloutRule: rollout, percentageRule: percentage}, nil
+	return val, varID, rollout, percentage, nil
 }
 
 func (snap *Snapshot) evalDetailsForKeyId(id keyID, key string) EvaluationDetails {
-	details, err := snap.details(id, key)
+	value, varID, rollout, percentage, err := snap.details(id, key)
 	if err != nil {
 		return EvaluationDetails{Value: nil, Meta: EvaluationDetailsMeta{
 			Key:            key,
@@ -260,13 +253,13 @@ func (snap *Snapshot) evalDetailsForKeyId(id keyID, key string) EvaluationDetail
 		}}
 	}
 
-	return EvaluationDetails{Value: details.value, Meta: EvaluationDetailsMeta{
+	return EvaluationDetails{Value: value, Meta: EvaluationDetailsMeta{
 		Key:                             key,
-		VariationId:                     details.variationId,
+		VariationID:                     varID,
 		User:                            snap.originalUser,
 		FetchTime:                       snap.config.fetchTime,
-		MatchedEvaluationRule:           newPublicRolloutRuleOrNil(details.rolloutRule),
-		MatchedEvaluationPercentageRule: newPublicPercentageRuleOrNil(details.percentageRule),
+		MatchedEvaluationRule:           newPublicRolloutRuleOrNil(rollout),
+		MatchedEvaluationPercentageRule: newPublicPercentageRuleOrNil(percentage),
 	}}
 }
 
@@ -324,8 +317,8 @@ func (snap *Snapshot) GetKeyValueForVariationID(id string) (string, interface{})
 // with respect to the current user, or the empty string if none is found.
 // Deprecated: This method is obsolete and will be removed in a future major version. Please use GetValueDetails instead.
 func (snap *Snapshot) GetVariationID(key string) string {
-	if details, err := snap.details(idForKey(key, false), key); err == nil {
-		return details.variationId
+	if _, varID, _, _, err := snap.details(idForKey(key, false), key); err == nil {
+		return varID
 	}
 	return ""
 }
