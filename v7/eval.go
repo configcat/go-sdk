@@ -62,7 +62,7 @@ func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) ent
 	noUser := func(_ keyID, logger *leveledLogger, user reflect.Value) (valueID, string, *wireconfig.RolloutRule, *wireconfig.PercentageRule) {
 		if logger.enabled(LogLevelWarn) && (len(rules) > 0 || len(node.PercentageRules) > 0) {
 			logger.Warnf("Evaluating GetValue(%s). UserObject missing! You should pass a "+
-				"UserObject to GetValueForUser() in order to make targeting work properly. "+
+				"UserObject to GetValue() in order to make targeting work properly. "+
 				"Read more: https://configcat.com/docs/advanced/user-object.", key)
 		}
 		return node.ValueID, node.VariationID, nil, nil
