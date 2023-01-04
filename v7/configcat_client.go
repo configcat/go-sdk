@@ -15,10 +15,10 @@ type Hooks struct {
 	// OnFlagEvaluated is called each time when the SDK evaluates a feature flag or setting.
 	OnFlagEvaluated func(details *EvaluationDetails)
 
-	// OnError is called when an error occurs within the ConfigCat SDK.
+	// OnError is called when an error occurs inside the ConfigCat SDK.
 	OnError func(err error)
 
-	// OnConfigChanged is called, when the settings configuration has changed.
+	// OnConfigChanged is called, when a new config.json has downloaded.
 	OnConfigChanged func()
 }
 

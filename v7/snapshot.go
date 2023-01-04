@@ -24,8 +24,7 @@ type Snapshot struct {
 	user         reflect.Value
 	allKeys      []string
 
-	// values holds the value and eval details for each
-	// possible value ID, as stored in config.values.
+	// values holds the value for each possible value ID, as stored in config.values.
 	values []interface{}
 
 	// precalc holds precalculated value IDs as stored in config.precalc.

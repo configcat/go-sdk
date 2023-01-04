@@ -19,7 +19,7 @@ type config struct {
 	allKeys    []string
 	keyValues  map[string]keyValue
 	fetchTime  time.Time
-	// values holds all the values and eval details that can be returned from the
+	// values holds all the values that can be returned from the
 	// configuration, keyed by valueID-1.
 	values []interface{}
 
