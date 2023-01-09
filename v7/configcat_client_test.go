@@ -724,6 +724,7 @@ func TestClient_OfflineMode(t *testing.T) {
 	details := client.GetAllValueDetails(user)
 	c.Assert(len(details), qt.Equals, 16)
 	c.Assert(srv.requestCount, qt.Equals, 0)
+	c.Assert(client.IsOffline(), qt.IsTrue)
 }
 
 type failingCache struct{}
