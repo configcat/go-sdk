@@ -539,10 +539,191 @@ func TestSnapshot_Get(t *testing.T) {
 	c.Check(snap.GetValue("key"), qt.Equals, 99)
 	c.Check(snap.FetchTime(), qt.Not(qt.Equals), time.Time{})
 	srv.setResponseJSON(rootNodeWithKeyValue("key", 101, wireconfig.IntEntry))
+	time.Sleep(1 * time.Millisecond) // wait a bit to ensure fetch times don't collide
 	client.Refresh(context.Background())
 	c.Check(snap.GetValue("key"), qt.Equals, 99)
 	c.Check(client.Snapshot(nil).GetValue("key"), qt.Equals, 101)
 	c.Check(client.Snapshot(nil).FetchTime().After(snap.FetchTime()), qt.IsTrue)
+}
+
+func TestClient_GetBoolDetails(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
+
+	details := client.GetBoolValueDetails("bool30TrueAdvancedRules", true, user)
+	c.Assert(details.Value, qt.IsFalse)
+	c.Assert(details.Data.IsDefaultValue, qt.IsFalse)
+	c.Assert(details.Data.Error, qt.IsNil)
+	c.Assert(details.Data.Key, qt.Equals, "bool30TrueAdvancedRules")
+	c.Assert(details.Data.User, qt.Equals, user)
+	c.Assert(details.Data.VariationID, qt.Equals, "385d9803")
+	c.Assert(details.Data.MatchedEvaluationPercentageRule, qt.IsNil)
+	c.Assert(details.Data.MatchedEvaluationRule.Comparator, qt.Equals, 0)
+	c.Assert(details.Data.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
+	c.Assert(details.Data.MatchedEvaluationRule.ComparisonValue, qt.Equals, "a@configcat.com, b@configcat.com")
+}
+
+func TestClient_GetStringDetails(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
+
+	details := client.GetStringValueDetails("stringContainsDogDefaultCat", "", user)
+	c.Assert(details.Value, qt.Equals, "Dog")
+	c.Assert(details.Data.IsDefaultValue, qt.IsFalse)
+	c.Assert(details.Data.Error, qt.IsNil)
+	c.Assert(details.Data.Key, qt.Equals, "stringContainsDogDefaultCat")
+	c.Assert(details.Data.User, qt.Equals, user)
+	c.Assert(details.Data.VariationID, qt.Equals, "d0cd8f06")
+	c.Assert(details.Data.MatchedEvaluationPercentageRule, qt.IsNil)
+	c.Assert(details.Data.MatchedEvaluationRule.Comparator, qt.Equals, 2)
+	c.Assert(details.Data.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
+	c.Assert(details.Data.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
+}
+
+func TestClient_GetIntDetails(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	user := &UserData{Identifier: "a@configcat.com"}
+
+	details := client.GetIntValueDetails("integer25One25Two25Three25FourAdvancedRules", 0, user)
+	c.Assert(details.Value, qt.Equals, 1)
+	c.Assert(details.Data.IsDefaultValue, qt.IsFalse)
+	c.Assert(details.Data.Error, qt.IsNil)
+	c.Assert(details.Data.Key, qt.Equals, "integer25One25Two25Three25FourAdvancedRules")
+	c.Assert(details.Data.User, qt.Equals, user)
+	c.Assert(details.Data.VariationID, qt.Equals, "11634414")
+	c.Assert(details.Data.MatchedEvaluationPercentageRule.Percentage, qt.Equals, int64(25))
+}
+
+func TestClient_GetFloatDetails(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
+
+	details := client.GetFloatValueDetails("double25Pi25E25Gr25Zero", 0.0, user)
+	c.Assert(details.Value, qt.Equals, 5.561)
+	c.Assert(details.Data.IsDefaultValue, qt.IsFalse)
+	c.Assert(details.Data.Error, qt.IsNil)
+	c.Assert(details.Data.Key, qt.Equals, "double25Pi25E25Gr25Zero")
+	c.Assert(details.Data.User, qt.Equals, user)
+	c.Assert(details.Data.VariationID, qt.Equals, "3f7826de")
+	c.Assert(details.Data.MatchedEvaluationPercentageRule, qt.IsNil)
+	c.Assert(details.Data.MatchedEvaluationRule.Comparator, qt.Equals, 2)
+	c.Assert(details.Data.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
+	c.Assert(details.Data.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
+}
+
+func TestClient_GetAllDetails(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
+
+	keys := client.GetAllKeys()
+	details := client.GetAllValueDetails(user)
+	c.Assert(len(details), qt.Equals, len(keys))
+}
+
+func TestClient_GetDetails_Reflected_User(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	user := &struct{ attr string }{"a"}
+
+	details := client.GetFloatValueDetails("double25Pi25E25Gr25Zero", 0.0, user)
+	c.Assert(details.Data.User, qt.Equals, user)
+	c.Assert(srv.requestCount, qt.Equals, 1)
+}
+
+func TestClient_Hooks_OnFlagEvaluated(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+
+	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
+
+	called := make(chan struct{})
+	cfg := srv.config()
+	cfg.Hooks = &Hooks{OnFlagEvaluated: func(details *EvaluationDetails) {
+		c.Assert(details.Value, qt.Equals, 5.561)
+		c.Assert(details.Data.IsDefaultValue, qt.IsFalse)
+		c.Assert(details.Data.Error, qt.IsNil)
+		c.Assert(details.Data.Key, qt.Equals, "double25Pi25E25Gr25Zero")
+		c.Assert(details.Data.User, qt.Equals, user)
+		c.Assert(details.Data.VariationID, qt.Equals, "3f7826de")
+		c.Assert(details.Data.MatchedEvaluationPercentageRule, qt.IsNil)
+		c.Assert(details.Data.MatchedEvaluationRule.Comparator, qt.Equals, 2)
+		c.Assert(details.Data.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
+		c.Assert(details.Data.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
+		called <- struct{}{}
+	}}
+	client := NewCustomClient(cfg)
+	client.Refresh(context.Background())
+
+	_ = client.GetFloatValue("double25Pi25E25Gr25Zero", 0.0, user)
+
+	select {
+	case <-called:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out")
+	}
+}
+
+func TestClient_OfflineMode(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	config := srv.config()
+	config.Offline = true
+	config.Cache = newCacheForSdkKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A")
+	client := NewCustomClient(config)
+	client.Refresh(context.Background())
+
+	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
+
+	details := client.GetAllValueDetails(user)
+	c.Assert(len(details), qt.Equals, 16)
+	c.Assert(srv.requestCount, qt.Equals, 0)
 }
 
 type failingCache struct{}
@@ -555,6 +736,23 @@ func (cache failingCache) Get(ctx context.Context, key string) ([]byte, error) {
 // set writes the configuration into the cache.
 func (cache failingCache) Set(ctx context.Context, key string, value []byte) error {
 	return errors.New("fake failing cache fails to set")
+}
+
+type preConfCache struct {
+	initial []byte
+}
+
+func newCacheForSdkKey(sdkKey string) *preConfCache {
+	data := []byte(contentForIntegrationTestKey(sdkKey))
+	return &preConfCache{initial: data}
+}
+
+func (cache *preConfCache) Get(ctx context.Context, key string) ([]byte, error) {
+	return cache.initial, nil
+}
+
+func (cache *preConfCache) Set(ctx context.Context, key string, value []byte) error {
+	return nil
 }
 
 func getTestClients(t *testing.T) (*configServer, *Client) {

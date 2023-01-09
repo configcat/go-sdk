@@ -61,7 +61,7 @@ var loggingTests = []struct {
 	key:         "key",
 	expectValue: "defaultValue",
 	expectLogs: []string{
-		"WARN: Evaluating GetValue(key). UserObject missing! You should pass a UserObject to GetValueForUser() in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object.",
+		"WARN: Evaluating GetValue(key). UserObject missing! You should pass a UserObject to GetValue() in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object.",
 		"INFO: Returning key=defaultValue.",
 	},
 }, {
@@ -115,7 +115,7 @@ var loggingTests = []struct {
 	key:         "key",
 	expectValue: "defaultValue",
 	expectLogs: []string{
-		"WARN: Evaluating GetValue(key). UserObject missing! You should pass a UserObject to GetValueForUser() in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object.",
+		"WARN: Evaluating GetValue(key). UserObject missing! You should pass a UserObject to GetValue() in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object.",
 		"INFO: Returning key=defaultValue.",
 	},
 }, {

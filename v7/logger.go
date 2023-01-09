@@ -1,6 +1,7 @@
 package configcat
 
 import (
+	"fmt"
 	"github.com/sirupsen/logrus"
 )
 
@@ -35,13 +36,14 @@ func DefaultLogger(level LogLevel) Logger {
 	return logger
 }
 
-func newLeveledLogger(logger Logger) *leveledLogger {
+func newLeveledLogger(logger Logger, hooks *Hooks) *leveledLogger {
 	if logger == nil {
 		logger = DefaultLogger(LogLevelWarn)
 	}
 	return &leveledLogger{
 		level:  logger.GetLevel(),
 		Logger: logger,
+		hooks:  hooks,
 	}
 }
 
@@ -50,9 +52,17 @@ func newLeveledLogger(logger Logger) *leveledLogger {
 // and thus avoid the allocation for the arguments.
 type leveledLogger struct {
 	level LogLevel
+	hooks *Hooks
 	Logger
 }
 
 func (log *leveledLogger) enabled(level LogLevel) bool {
 	return level <= log.level
+}
+
+func (log *leveledLogger) Errorf(format string, args ...interface{}) {
+	if log.hooks != nil && log.hooks.OnError != nil {
+		go log.hooks.OnError(fmt.Errorf(format, args...))
+	}
+	log.Logger.Errorf(format, args...)
 }

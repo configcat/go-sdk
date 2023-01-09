@@ -50,7 +50,7 @@ type config struct {
 // than the index into the config.values or Snapshot.values slice.
 type valueID = int32
 
-func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger, defaultUser User, overrides *FlagOverrides) (*config, error) {
+func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger, defaultUser User, overrides *FlagOverrides, hooks *Hooks) (*config, error) {
 	var root wireconfig.RootNode
 	// Note: jsonBody can be nil when we've got overrides only.
 	if jsonBody != nil {
@@ -72,7 +72,7 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leve
 	}
 	conf.fixup(make(map[interface{}]valueID))
 	conf.precalculate()
-	conf.defaultUserSnapshot = _newSnapshot(conf, defaultUser, logger)
+	conf.defaultUserSnapshot = _newSnapshot(conf, defaultUser, logger, hooks)
 	return conf, nil
 }
 

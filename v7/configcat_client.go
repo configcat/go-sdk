@@ -10,6 +10,18 @@ import (
 
 const DefaultPollInterval = 60 * time.Second
 
+// Hooks describes the events sent by Client.
+type Hooks struct {
+	// OnFlagEvaluated is called each time when the SDK evaluates a feature flag or setting.
+	OnFlagEvaluated func(details *EvaluationDetails)
+
+	// OnError is called when an error occurs inside the ConfigCat SDK.
+	OnError func(err error)
+
+	// OnConfigChanged is called, when a new config.json has downloaded.
+	OnConfigChanged func()
+}
+
 // Config describes configuration options for the Client.
 type Config struct {
 	// SDKKey holds the key for the SDK. This parameter
@@ -64,6 +76,7 @@ type Config struct {
 
 	// ChangeNotify is called, if not nil, when the settings configuration
 	// has changed.
+	// Deprecated: Use Hooks instead.
 	ChangeNotify func()
 
 	// DataGovernance specifies the data governance mode.
@@ -85,6 +98,12 @@ type Config struct {
 
 	// FlagOverrides holds the feature flag and setting overrides.
 	FlagOverrides *FlagOverrides
+
+	// Hooks controls the events sent by Client.
+	Hooks *Hooks
+
+	// Offline indicates whether the SDK should be initialized in offline mode or not.
+	Offline bool
 }
 
 // ConfigCache is a cache API used to make custom cache implementations.
@@ -153,7 +172,7 @@ func NewCustomClient(cfg Config) *Client {
 	if cfg.PollInterval < 1 {
 		cfg.PollInterval = DefaultPollInterval
 	}
-	logger := newLeveledLogger(cfg.Logger)
+	logger := newLeveledLogger(cfg.Logger, cfg.Hooks)
 	if cfg.FlagOverrides != nil {
 		cfg.FlagOverrides.loadEntries(logger)
 	}
@@ -183,6 +202,11 @@ func (client *Client) RefreshIfOlder(ctx context.Context, age time.Duration) err
 	return client.fetcher.refreshIfOlder(ctx, time.Now().Add(-age), true)
 }
 
+// IsOffline returns true when the SDK is configured not to initiate HTTP requests, otherwise false.
+func (client *Client) IsOffline() bool {
+	return client.cfg.Offline
+}
+
 // Close shuts down the client. After closing, it shouldn't be used.
 func (client *Client) Close() {
 	client.fetcher.close()
@@ -200,9 +224,25 @@ func (client *Client) GetBoolValue(key string, defaultValue bool, user User) boo
 	return Bool(key, defaultValue).Get(client.Snapshot(user))
 }
 
+// GetBoolValueDetails returns the value and evaluation details of a boolean-typed feature flag.
+// If user is non-nil, it will be used to choose the value (see the User documentation for details).
+// If user is nil and Config.DefaultUser was non-nil, that will be used instead.
+//
+// In Lazy refresh mode, this can block indefinitely while the configuration
+// is fetched. Use RefreshIfOlder explicitly if explicit control of timeouts
+// is needed.
+func (client *Client) GetBoolValueDetails(key string, defaultValue bool, user User) BoolEvaluationDetails {
+	return Bool(key, defaultValue).GetWithDetails(client.Snapshot(user))
+}
+
 // GetIntValue is like GetBoolValue except for int-typed (whole number) feature flags.
 func (client *Client) GetIntValue(key string, defaultValue int, user User) int {
 	return Int(key, defaultValue).Get(client.Snapshot(user))
+}
+
+// GetIntValueDetails is like GetBoolValueDetails except for int-typed (whole number) feature flags.
+func (client *Client) GetIntValueDetails(key string, defaultValue int, user User) IntEvaluationDetails {
+	return Int(key, defaultValue).GetWithDetails(client.Snapshot(user))
 }
 
 // GetFloatValue is like GetBoolValue except for float-typed (decimal number) feature flags.
@@ -210,13 +250,29 @@ func (client *Client) GetFloatValue(key string, defaultValue float64, user User)
 	return Float(key, defaultValue).Get(client.Snapshot(user))
 }
 
+// GetFloatValueDetails is like GetBoolValueDetails except for float-typed (decimal number) feature flags.
+func (client *Client) GetFloatValueDetails(key string, defaultValue float64, user User) FloatEvaluationDetails {
+	return Float(key, defaultValue).GetWithDetails(client.Snapshot(user))
+}
+
 // GetStringValue is like GetBoolValue except for string-typed (text) feature flags.
 func (client *Client) GetStringValue(key string, defaultValue string, user User) string {
 	return String(key, defaultValue).Get(client.Snapshot(user))
 }
 
+// GetStringValueDetails is like GetBoolValueDetails except for string-typed (text) feature flags.
+func (client *Client) GetStringValueDetails(key string, defaultValue string, user User) StringEvaluationDetails {
+	return String(key, defaultValue).GetWithDetails(client.Snapshot(user))
+}
+
+// GetAllValueDetails returns values along with evaluation details of all feature flags and settings.
+func (client *Client) GetAllValueDetails(user User) []EvaluationDetails {
+	return client.Snapshot(user).GetAllValueDetails()
+}
+
 // GetVariationID returns the variation ID (analytics) that will be used for the given key
 // with respect to the given user, or the default value if none is found.
+// Deprecated: This method is obsolete and will be removed in a future major version. Please use GetBoolValueDetails / GetIntValueDetails / GetFloatValueDetails / GetStringValueDetails instead.
 func (client *Client) GetVariationID(key string, defaultVariationId string, user User) string {
 	if result := client.Snapshot(user).GetVariationID(key); result != "" {
 		return result
@@ -226,6 +282,7 @@ func (client *Client) GetVariationID(key string, defaultVariationId string, user
 
 // GetVariationIDs returns all variation IDs (analytics) in the current configuration
 // that apply to the given user, or Config.DefaultUser if user is nil.
+// Deprecated: This method is obsolete and will be removed in a future major version. Please use GetAllValueDetails instead.
 func (client *Client) GetVariationIDs(user User) []string {
 	return client.Snapshot(user).GetVariationIDs()
 }
@@ -266,5 +323,5 @@ func (client *Client) Snapshot(user User) *Snapshot {
 			})
 		}
 	}
-	return newSnapshot(client.fetcher.current(), user, client.logger)
+	return newSnapshot(client.fetcher.current(), user, client.logger, client.cfg.Hooks)
 }

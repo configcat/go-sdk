@@ -31,6 +31,8 @@ type configFetcher struct {
 	defaultUser       User
 	pollingIdentifier string
 	overrides         *FlagOverrides
+	hooks             *Hooks
+	offline           bool
 
 	ctx       context.Context
 	ctxCancel func()
@@ -61,7 +63,9 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *conf
 		cacheKey:     sdkKeyToCacheKey(cfg.SDKKey),
 		overrides:    cfg.FlagOverrides,
 		changeNotify: cfg.ChangeNotify,
+		hooks:        cfg.Hooks,
 		logger:       logger,
+		offline:      cfg.Offline,
 		client: &http.Client{
 			Timeout:   cfg.HTTPTimeout,
 			Transport: cfg.Transport,
@@ -184,6 +188,9 @@ func (f *configFetcher) fetcher(prevConfig *config, logError bool) {
 		if f.changeNotify != nil && !config.equalContent(prevConfig) {
 			go f.changeNotify()
 		}
+		if f.hooks != nil && f.hooks.OnConfigChanged != nil && !config.equalContent(prevConfig) {
+			go f.hooks.OnConfigChanged()
+		}
 	}
 	// Unblock any Client.getValue call that's waiting for the first configuration to be retrieved.
 	f.doneGetOnce.Do(func() {
@@ -196,41 +203,63 @@ func (f *configFetcher) fetcher(prevConfig *config, logError bool) {
 func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevConfig *config) (_ *config, _newURL string, _err error) {
 	if f.overrides != nil && f.overrides.Behavior == LocalOnly {
 		// TODO could potentially refresh f.overrides if it's come from a file.
-		cfg, err := parseConfig(nil, "", time.Now(), f.logger, f.defaultUser, f.overrides)
+		cfg, err := parseConfig(nil, "", time.Now(), f.logger, f.defaultUser, f.overrides, f.hooks)
 		if err != nil {
 			return nil, "", err
 		}
 		return cfg, "", nil
 	}
+
+	// If we are in offline mode skip HTTP completely and fall back to cache every time.
+	if f.offline {
+		if f.cache == nil {
+			return nil, "", fmt.Errorf("the SDK is in offline mode and no cache is configured")
+		}
+		cfg := f.readCache(ctx, prevConfig)
+		if cfg == nil {
+			return nil, "", fmt.Errorf("the SDK is in offline mode and wasn't able to read a valid configuration from the cache")
+		}
+		return cfg, baseURL, nil
+	}
+
+	// We are online, use HTTP
 	cfg, newBaseURL, err := f.fetchHTTP(ctx, baseURL, prevConfig)
 	if err == nil {
 		return cfg, newBaseURL, nil
 	}
-	if f.cache == nil {
+	f.logger.Infof("falling back to cache after config fetch error: %v", err)
+	cfg = f.readCache(ctx, prevConfig)
+	if cfg == nil {
 		return nil, "", err
 	}
-	f.logger.Infof("falling back to cache after config fetch error: %v", err)
+	return cfg, baseURL, nil
+}
+
+func (f *configFetcher) readCache(ctx context.Context, prevConfig *config) (_ *config) {
+	if f.cache == nil {
+		return nil
+	}
 	// Fall back to the cache
 	configText, cacheErr := f.cache.Get(ctx, f.cacheKey)
 	if cacheErr != nil {
 		f.logger.Errorf("cache get failed: %v", cacheErr)
-		return nil, "", err
+		return nil
 	}
 	if len(configText) == 0 {
 		f.logger.Debugf("empty config text in cache")
-		return nil, "", err
+		return nil
 	}
-	cfg, cacheErr = parseConfig(configText, "", time.Time{}, f.logger, f.defaultUser, f.overrides)
-	if cacheErr != nil {
-		f.logger.Errorf("cache contained invalid config: %v", err)
-		return nil, "", err
+	cfg, parseErr := parseConfig(configText, "", time.Time{}, f.logger, f.defaultUser, f.overrides, f.hooks)
+	if parseErr != nil {
+		f.logger.Errorf("cache contained invalid config: %v", parseErr)
+		return nil
 	}
 	if prevConfig == nil || !cfg.fetchTime.Before(prevConfig.fetchTime) {
 		f.logger.Debugf("returning cached config %v", cfg.body())
-		return cfg, baseURL, nil
+		return cfg
 	}
 	// The cached config is older than the one we already had.
-	return nil, "", err
+	return nil
 }
 
 // fetchHTTP fetches the configuration while respecting redirects.
@@ -301,7 +330,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 	if f.sdkKey == "" {
 		return nil, fmt.Errorf("empty SDK key in configcat configuration")
 	}
-	request, err := http.NewRequest("GET", baseURL+"/configuration-files/"+f.sdkKey+"/"+configJSONName+".json", nil)
+	request, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/configuration-files/"+f.sdkKey+"/"+configJSONName+".json", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +356,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 		if err != nil {
 			return nil, fmt.Errorf("config fetch read failed: %v", err)
 		}
-		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now(), f.logger, f.defaultUser, f.overrides)
+		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now(), f.logger, f.defaultUser, f.overrides, f.hooks)
 		if err != nil {
 			return nil, fmt.Errorf("config fetch returned invalid body: %v", err)
 		}

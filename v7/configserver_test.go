@@ -18,9 +18,10 @@ type configServer struct {
 	key string
 	t   testing.TB
 
-	mu        sync.Mutex
-	resp      *configResponse
-	responses []configResponse
+	mu           sync.Mutex
+	resp         *configResponse
+	responses    []configResponse
+	requestCount int
 }
 
 type configResponse struct {
@@ -89,6 +90,7 @@ func (srv *configServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	srv.mu.Lock()
+	srv.requestCount++
 	resp0 := srv.resp
 	defer srv.mu.Unlock()
 	if resp0 == nil {
