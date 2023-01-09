@@ -227,7 +227,7 @@ func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *wirec
 	if snap.hooks != nil && snap.hooks.OnFlagEvaluated != nil {
 		go snap.hooks.OnFlagEvaluated(&EvaluationDetails{
 			Value: val,
-			Meta: EvaluationDetailsMeta{
+			Data: EvaluationDetailsData{
 				Key:                             key,
 				VariationID:                     varID,
 				User:                            snap.originalUser,
@@ -243,7 +243,7 @@ func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *wirec
 func (snap *Snapshot) evalDetailsForKeyId(id keyID, key string) EvaluationDetails {
 	value, varID, rollout, percentage, err := snap.details(id, key)
 	if err != nil {
-		return EvaluationDetails{Value: nil, Meta: EvaluationDetailsMeta{
+		return EvaluationDetails{Value: nil, Data: EvaluationDetailsData{
 			Key:            key,
 			User:           snap.originalUser,
 			IsDefaultValue: true,
@@ -252,7 +252,7 @@ func (snap *Snapshot) evalDetailsForKeyId(id keyID, key string) EvaluationDetail
 		}}
 	}
 
-	return EvaluationDetails{Value: value, Meta: EvaluationDetailsMeta{
+	return EvaluationDetails{Value: value, Data: EvaluationDetailsData{
 		Key:                             key,
 		VariationID:                     varID,
 		User:                            snap.originalUser,

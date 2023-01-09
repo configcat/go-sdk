@@ -559,15 +559,15 @@ func TestClient_GetBoolDetails(t *testing.T) {
 
 	details := client.GetBoolValueDetails("bool30TrueAdvancedRules", true, user)
 	c.Assert(details.Value, qt.IsFalse)
-	c.Assert(details.Meta.IsDefaultValue, qt.IsFalse)
-	c.Assert(details.Meta.Error, qt.IsNil)
-	c.Assert(details.Meta.Key, qt.Equals, "bool30TrueAdvancedRules")
-	c.Assert(details.Meta.User, qt.Equals, user)
-	c.Assert(details.Meta.VariationID, qt.Equals, "385d9803")
-	c.Assert(details.Meta.MatchedEvaluationPercentageRule, qt.IsNil)
-	c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, 0)
-	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
-	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonValue, qt.Equals, "a@configcat.com, b@configcat.com")
+	c.Assert(details.Data.IsDefaultValue, qt.IsFalse)
+	c.Assert(details.Data.Error, qt.IsNil)
+	c.Assert(details.Data.Key, qt.Equals, "bool30TrueAdvancedRules")
+	c.Assert(details.Data.User, qt.Equals, user)
+	c.Assert(details.Data.VariationID, qt.Equals, "385d9803")
+	c.Assert(details.Data.MatchedEvaluationPercentageRule, qt.IsNil)
+	c.Assert(details.Data.MatchedEvaluationRule.Comparator, qt.Equals, 0)
+	c.Assert(details.Data.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
+	c.Assert(details.Data.MatchedEvaluationRule.ComparisonValue, qt.Equals, "a@configcat.com, b@configcat.com")
 }
 
 func TestClient_GetStringDetails(t *testing.T) {
@@ -583,15 +583,15 @@ func TestClient_GetStringDetails(t *testing.T) {
 
 	details := client.GetStringValueDetails("stringContainsDogDefaultCat", "", user)
 	c.Assert(details.Value, qt.Equals, "Dog")
-	c.Assert(details.Meta.IsDefaultValue, qt.IsFalse)
-	c.Assert(details.Meta.Error, qt.IsNil)
-	c.Assert(details.Meta.Key, qt.Equals, "stringContainsDogDefaultCat")
-	c.Assert(details.Meta.User, qt.Equals, user)
-	c.Assert(details.Meta.VariationID, qt.Equals, "d0cd8f06")
-	c.Assert(details.Meta.MatchedEvaluationPercentageRule, qt.IsNil)
-	c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, 2)
-	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
-	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
+	c.Assert(details.Data.IsDefaultValue, qt.IsFalse)
+	c.Assert(details.Data.Error, qt.IsNil)
+	c.Assert(details.Data.Key, qt.Equals, "stringContainsDogDefaultCat")
+	c.Assert(details.Data.User, qt.Equals, user)
+	c.Assert(details.Data.VariationID, qt.Equals, "d0cd8f06")
+	c.Assert(details.Data.MatchedEvaluationPercentageRule, qt.IsNil)
+	c.Assert(details.Data.MatchedEvaluationRule.Comparator, qt.Equals, 2)
+	c.Assert(details.Data.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
+	c.Assert(details.Data.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
 }
 
 func TestClient_GetIntDetails(t *testing.T) {
@@ -607,12 +607,12 @@ func TestClient_GetIntDetails(t *testing.T) {
 
 	details := client.GetIntValueDetails("integer25One25Two25Three25FourAdvancedRules", 0, user)
 	c.Assert(details.Value, qt.Equals, 1)
-	c.Assert(details.Meta.IsDefaultValue, qt.IsFalse)
-	c.Assert(details.Meta.Error, qt.IsNil)
-	c.Assert(details.Meta.Key, qt.Equals, "integer25One25Two25Three25FourAdvancedRules")
-	c.Assert(details.Meta.User, qt.Equals, user)
-	c.Assert(details.Meta.VariationID, qt.Equals, "11634414")
-	c.Assert(details.Meta.MatchedEvaluationPercentageRule.Percentage, qt.Equals, int64(25))
+	c.Assert(details.Data.IsDefaultValue, qt.IsFalse)
+	c.Assert(details.Data.Error, qt.IsNil)
+	c.Assert(details.Data.Key, qt.Equals, "integer25One25Two25Three25FourAdvancedRules")
+	c.Assert(details.Data.User, qt.Equals, user)
+	c.Assert(details.Data.VariationID, qt.Equals, "11634414")
+	c.Assert(details.Data.MatchedEvaluationPercentageRule.Percentage, qt.Equals, int64(25))
 }
 
 func TestClient_GetFloatDetails(t *testing.T) {
@@ -628,15 +628,15 @@ func TestClient_GetFloatDetails(t *testing.T) {
 
 	details := client.GetFloatValueDetails("double25Pi25E25Gr25Zero", 0.0, user)
 	c.Assert(details.Value, qt.Equals, 5.561)
-	c.Assert(details.Meta.IsDefaultValue, qt.IsFalse)
-	c.Assert(details.Meta.Error, qt.IsNil)
-	c.Assert(details.Meta.Key, qt.Equals, "double25Pi25E25Gr25Zero")
-	c.Assert(details.Meta.User, qt.Equals, user)
-	c.Assert(details.Meta.VariationID, qt.Equals, "3f7826de")
-	c.Assert(details.Meta.MatchedEvaluationPercentageRule, qt.IsNil)
-	c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, 2)
-	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
-	c.Assert(details.Meta.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
+	c.Assert(details.Data.IsDefaultValue, qt.IsFalse)
+	c.Assert(details.Data.Error, qt.IsNil)
+	c.Assert(details.Data.Key, qt.Equals, "double25Pi25E25Gr25Zero")
+	c.Assert(details.Data.User, qt.Equals, user)
+	c.Assert(details.Data.VariationID, qt.Equals, "3f7826de")
+	c.Assert(details.Data.MatchedEvaluationPercentageRule, qt.IsNil)
+	c.Assert(details.Data.MatchedEvaluationRule.Comparator, qt.Equals, 2)
+	c.Assert(details.Data.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
+	c.Assert(details.Data.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
 }
 
 func TestClient_GetAllDetails(t *testing.T) {
@@ -667,7 +667,7 @@ func TestClient_GetDetails_Reflected_User(t *testing.T) {
 	user := &struct{ attr string }{"a"}
 
 	details := client.GetFloatValueDetails("double25Pi25E25Gr25Zero", 0.0, user)
-	c.Assert(details.Meta.User, qt.Equals, user)
+	c.Assert(details.Data.User, qt.Equals, user)
 	c.Assert(srv.requestCount, qt.Equals, 1)
 }
 
@@ -684,15 +684,15 @@ func TestClient_Hooks_OnFlagEvaluated(t *testing.T) {
 	cfg := srv.config()
 	cfg.Hooks = &Hooks{OnFlagEvaluated: func(details *EvaluationDetails) {
 		c.Assert(details.Value, qt.Equals, 5.561)
-		c.Assert(details.Meta.IsDefaultValue, qt.IsFalse)
-		c.Assert(details.Meta.Error, qt.IsNil)
-		c.Assert(details.Meta.Key, qt.Equals, "double25Pi25E25Gr25Zero")
-		c.Assert(details.Meta.User, qt.Equals, user)
-		c.Assert(details.Meta.VariationID, qt.Equals, "3f7826de")
-		c.Assert(details.Meta.MatchedEvaluationPercentageRule, qt.IsNil)
-		c.Assert(details.Meta.MatchedEvaluationRule.Comparator, qt.Equals, 2)
-		c.Assert(details.Meta.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
-		c.Assert(details.Meta.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
+		c.Assert(details.Data.IsDefaultValue, qt.IsFalse)
+		c.Assert(details.Data.Error, qt.IsNil)
+		c.Assert(details.Data.Key, qt.Equals, "double25Pi25E25Gr25Zero")
+		c.Assert(details.Data.User, qt.Equals, user)
+		c.Assert(details.Data.VariationID, qt.Equals, "3f7826de")
+		c.Assert(details.Data.MatchedEvaluationPercentageRule, qt.IsNil)
+		c.Assert(details.Data.MatchedEvaluationRule.Comparator, qt.Equals, 2)
+		c.Assert(details.Data.MatchedEvaluationRule.ComparisonAttribute, qt.Equals, "Email")
+		c.Assert(details.Data.MatchedEvaluationRule.ComparisonValue, qt.Equals, "@configcat.com")
 		called <- struct{}{}
 	}}
 	client := NewCustomClient(cfg)
