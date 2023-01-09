@@ -64,7 +64,7 @@ func (f BoolFlag) Get(snap *Snapshot) bool {
 // or the key isn't in the configuration.
 func (f BoolFlag) GetWithDetails(snap *Snapshot) BoolEvaluationDetails {
 	details := f.GetValueDetails(snap)
-	return BoolEvaluationDetails{Meta: details.Meta, Value: details.Value.(bool)}
+	return BoolEvaluationDetails{Data: details.Data, Value: details.Value.(bool)}
 }
 
 // GetValue implements Flag.GetValue.
@@ -83,7 +83,7 @@ func (f BoolFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
 	if !ok {
 		return EvaluationDetails{
 			Value: f.defaultValue,
-			Meta: EvaluationDetailsMeta{
+			Data: EvaluationDetailsData{
 				Key:            f.key,
 				Error:          fmt.Errorf("could not convert %s to bool", details.Value),
 				User:           snap.originalUser,
@@ -130,7 +130,7 @@ func (f IntFlag) Get(snap *Snapshot) int {
 // or the key isn't in the configuration.
 func (f IntFlag) GetWithDetails(snap *Snapshot) IntEvaluationDetails {
 	details := f.GetValueDetails(snap)
-	return IntEvaluationDetails{Meta: details.Meta, Value: details.Value.(int)}
+	return IntEvaluationDetails{Data: details.Data, Value: details.Value.(int)}
 }
 
 // GetValue implements Flag.GetValue.
@@ -149,7 +149,7 @@ func (f IntFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
 	if !ok {
 		return EvaluationDetails{
 			Value: f.defaultValue,
-			Meta: EvaluationDetailsMeta{
+			Data: EvaluationDetailsData{
 				Key:            f.key,
 				Error:          fmt.Errorf("could not convert %s to int", details.Value),
 				User:           snap.originalUser,
@@ -196,7 +196,7 @@ func (f StringFlag) Get(snap *Snapshot) string {
 // or the key isn't in the configuration.
 func (f StringFlag) GetWithDetails(snap *Snapshot) StringEvaluationDetails {
 	details := f.GetValueDetails(snap)
-	return StringEvaluationDetails{Meta: details.Meta, Value: details.Value.(string)}
+	return StringEvaluationDetails{Data: details.Data, Value: details.Value.(string)}
 }
 
 // GetValue implements Flag.GetValue.
@@ -215,7 +215,7 @@ func (f StringFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
 	if !ok {
 		return EvaluationDetails{
 			Value: f.defaultValue,
-			Meta: EvaluationDetailsMeta{
+			Data: EvaluationDetailsData{
 				Key:            f.key,
 				Error:          fmt.Errorf("could not convert %s to string", details.Value),
 				User:           snap.originalUser,
@@ -262,7 +262,7 @@ func (f FloatFlag) Get(snap *Snapshot) float64 {
 // or the key isn't in the configuration.
 func (f FloatFlag) GetWithDetails(snap *Snapshot) FloatEvaluationDetails {
 	details := f.GetValueDetails(snap)
-	return FloatEvaluationDetails{Meta: details.Meta, Value: details.Value.(float64)}
+	return FloatEvaluationDetails{Data: details.Data, Value: details.Value.(float64)}
 }
 
 // GetValue implements Flag.GetValue.
@@ -281,7 +281,7 @@ func (f FloatFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
 	if !ok {
 		return EvaluationDetails{
 			Value: f.defaultValue,
-			Meta: EvaluationDetailsMeta{
+			Data: EvaluationDetailsData{
 				Key:            f.key,
 				Error:          fmt.Errorf("could not convert %s to float64", details.Value),
 				User:           snap.originalUser,
