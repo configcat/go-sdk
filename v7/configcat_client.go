@@ -3,6 +3,7 @@ package configcat
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -199,12 +200,25 @@ func (client *Client) Refresh(ctx context.Context) error {
 // if the most recently fetched configuration is older than the given
 // age.
 func (client *Client) RefreshIfOlder(ctx context.Context, age time.Duration) error {
+	if client.fetcher.isOffline() {
+		return fmt.Errorf("the SDK is in offline mode, it can't initiate HTTP calls")
+	}
 	return client.fetcher.refreshIfOlder(ctx, time.Now().Add(-age), true)
+}
+
+// SetOffline configures the SDK to not initiate HTTP requests.
+func (client *Client) SetOffline() {
+	client.fetcher.setMode(true)
+}
+
+// SetOnline configures the SDK to allow HTTP requests.
+func (client *Client) SetOnline() {
+	client.fetcher.setMode(false)
 }
 
 // IsOffline returns true when the SDK is configured not to initiate HTTP requests, otherwise false.
 func (client *Client) IsOffline() bool {
-	return client.cfg.Offline
+	return client.fetcher.isOffline()
 }
 
 // Close shuts down the client. After closing, it shouldn't be used.
