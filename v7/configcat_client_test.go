@@ -707,7 +707,7 @@ func TestClient_Hooks_OnFlagEvaluated(t *testing.T) {
 	}
 }
 
-func TestClient_OfflineMode(t *testing.T) {
+func TestClient_InitOffline(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
 	srv.setResponse(configResponse{
@@ -715,16 +715,48 @@ func TestClient_OfflineMode(t *testing.T) {
 	})
 	config := srv.config()
 	config.Offline = true
-	config.Cache = newCacheForSdkKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A")
 	client := NewCustomClient(config)
 	client.Refresh(context.Background())
 
-	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
-
-	details := client.GetAllValueDetails(user)
-	c.Assert(len(details), qt.Equals, 16)
-	c.Assert(srv.requestCount, qt.Equals, 0)
 	c.Assert(client.IsOffline(), qt.IsTrue)
+
+	client.Refresh(context.Background())
+
+	c.Assert(srv.requestCount, qt.Equals, 0)
+
+	client.SetOnline()
+	c.Assert(client.IsOffline(), qt.IsFalse)
+
+	client.Refresh(context.Background())
+
+	c.Assert(srv.requestCount, qt.Equals, 1)
+}
+
+func TestClient_OfflineOnlineMode(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	c.Assert(srv.requestCount, qt.Equals, 1)
+	c.Assert(client.IsOffline(), qt.IsFalse)
+
+	client.SetOffline()
+	c.Assert(client.IsOffline(), qt.IsTrue)
+
+	client.Refresh(context.Background())
+
+	c.Assert(srv.requestCount, qt.Equals, 1)
+
+	client.SetOnline()
+	c.Assert(client.IsOffline(), qt.IsFalse)
+
+	client.Refresh(context.Background())
+
+	c.Assert(srv.requestCount, qt.Equals, 2)
 }
 
 type failingCache struct{}

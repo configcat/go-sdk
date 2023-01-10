@@ -32,7 +32,7 @@ type configFetcher struct {
 	pollingIdentifier string
 	overrides         *FlagOverrides
 	hooks             *Hooks
-	offline           bool
+	offline           uint32
 
 	ctx       context.Context
 	ctxCancel func()
@@ -65,7 +65,6 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *conf
 		changeNotify: cfg.ChangeNotify,
 		hooks:        cfg.Hooks,
 		logger:       logger,
-		offline:      cfg.Offline,
 		client: &http.Client{
 			Timeout:   cfg.HTTPTimeout,
 			Transport: cfg.Transport,
@@ -75,6 +74,9 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *conf
 		pollingIdentifier: pollingModeToIdentifier(cfg.PollingMode),
 	}
 	f.ctx, f.ctxCancel = context.WithCancel(context.Background())
+	if cfg.Offline {
+		f.offline = 1
+	}
 	if cfg.BaseURL == "" {
 		if cfg.DataGovernance == Global {
 			f.baseURL = globalBaseURL
@@ -95,6 +97,20 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *conf
 		go f.runPoller(cfg.PollInterval)
 	}
 	return f
+}
+
+func (f *configFetcher) isOffline() bool {
+	return atomic.LoadUint32(&f.offline) == 1
+}
+
+func (f *configFetcher) setMode(offline bool) {
+	if offline {
+		atomic.StoreUint32(&f.offline, 1)
+		f.logger.Debugf("switched to OFFLINE mode")
+	} else {
+		atomic.StoreUint32(&f.offline, 0)
+		f.logger.Debugf("switched to ONLINE  mode")
+	}
 }
 
 func (f *configFetcher) close() {
@@ -211,7 +227,7 @@ func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevCon
 	}
 
 	// If we are in offline mode skip HTTP completely and fall back to cache every time.
-	if f.offline {
+	if f.isOffline() {
 		if f.cache == nil {
 			return nil, "", fmt.Errorf("the SDK is in offline mode and no cache is configured")
 		}
