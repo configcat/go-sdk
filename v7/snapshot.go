@@ -248,7 +248,7 @@ func (snap *Snapshot) evalDetailsForKeyId(id keyID, key string) EvaluationDetail
 			User:           snap.originalUser,
 			IsDefaultValue: true,
 			Error:          err,
-			FetchTime:      snap.config.fetchTime,
+			FetchTime:      snap.FetchTime(),
 		}}
 	}
 
@@ -256,7 +256,7 @@ func (snap *Snapshot) evalDetailsForKeyId(id keyID, key string) EvaluationDetail
 		Key:                             key,
 		VariationID:                     varID,
 		User:                            snap.originalUser,
-		FetchTime:                       snap.config.fetchTime,
+		FetchTime:                       snap.FetchTime(),
 		MatchedEvaluationRule:           newPublicRolloutRuleOrNil(rollout),
 		MatchedEvaluationPercentageRule: newPublicPercentageRuleOrNil(percentage),
 	}}
