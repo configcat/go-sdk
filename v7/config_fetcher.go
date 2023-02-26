@@ -196,15 +196,16 @@ func (f *configFetcher) fetcher(prevConfig *config, logError bool) {
 	} else if config != nil && !config.equal(prevConfig) {
 		f.baseURL = newURL
 		f.config.Store(config)
-		if f.cache != nil {
+		contentEquals := config.equalContent(prevConfig)
+		if f.cache != nil && !contentEquals {
 			if err := f.cache.Set(f.ctx, f.cacheKey, config.jsonBody); err != nil {
 				f.logger.Errorf("failed to save configuration to cache: %v", err)
 			}
 		}
-		if f.changeNotify != nil && !config.equalContent(prevConfig) {
+		if f.changeNotify != nil && !contentEquals {
 			go f.changeNotify()
 		}
-		if f.hooks != nil && f.hooks.OnConfigChanged != nil && !config.equalContent(prevConfig) {
+		if f.hooks != nil && f.hooks.OnConfigChanged != nil && !contentEquals {
 			go f.hooks.OnConfigChanged()
 		}
 	}
