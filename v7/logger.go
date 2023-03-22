@@ -2,6 +2,7 @@ package configcat
 
 import (
 	"fmt"
+	"strconv"
 	"github.com/sirupsen/logrus"
 )
 
@@ -60,9 +61,21 @@ func (log *leveledLogger) enabled(level LogLevel) bool {
 	return level <= log.level
 }
 
-func (log *leveledLogger) Errorf(format string, args ...interface{}) {
+func (log *leveledLogger) Debugf(format string, args ...interface{}) {
+	log.Logger.Debugf("[0] " + format, args...)
+}
+
+func (log *leveledLogger) Infof(eventId int, format string, args ...interface{}) {
+	log.Logger.Infof("[" + strconv.Itoa(eventId) + "] " + format, args...)
+}
+
+func (log *leveledLogger) Warnf(eventId int, format string, args ...interface{}) {
+	log.Logger.Warnf("[" + strconv.Itoa(eventId) + "] " + format, args...)
+}
+
+func (log *leveledLogger) Errorf(eventId int, format string, args ...interface{}) {
 	if log.hooks != nil && log.hooks.OnError != nil {
 		go log.hooks.OnError(fmt.Errorf(format, args...))
 	}
-	log.Logger.Errorf(format, args...)
+	log.Logger.Errorf("[" + strconv.Itoa(eventId) + "] " + format, args...)
 }

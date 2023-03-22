@@ -126,7 +126,7 @@ func _newSnapshot(cfg *config, user User, logger *leveledLogger, hooks *Hooks) *
 	}
 	evaluators, err := cfg.evaluatorsForUserType(userType)
 	if err != nil {
-		logger.Errorf("%v", err)
+		logger.Errorf(0, "%v", err)
 		return snap
 	}
 	snap.evaluators = evaluators
@@ -209,15 +209,15 @@ func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *wirec
 		eval = snap.evaluators[id]
 	}
 	if eval == nil {
-		err := fmt.Errorf("error getting value: value not found for key %s."+
-			" Here are the available keys: %s", key, strings.Join(snap.GetAllKeys(), ","))
-		snap.logger.Errorf("%v", err)
-		return nil, "", nil, nil, err
+		var message = "Failed to evaluate setting '%s' (the key was not found in config JSON). Available keys: %s."
+		var availableKeys = strings.Join(snap.GetAllKeys(), ", ")
+		snap.logger.Errorf(1001, message, key, availableKeys)
+		return nil, "", nil, nil, fmt.Errorf(message, key, availableKeys)
 	}
 	valID, varID, rollout, percentage := eval(id, snap.logger, snap.user)
 	val := snap.valueForID(valID)
 	if snap.logger.enabled(LogLevelInfo) {
-		snap.logger.Infof("Returning %v=%v.", key, val)
+		snap.logger.Infof(5000, "Returning %v=%v.", key, val)
 	}
 	if v := snap.precalc[id]; v < 0 {
 		snap.initCache()
@@ -306,7 +306,7 @@ func (snap *Snapshot) GetKeyValueForVariationID(id string) (string, interface{})
 	}
 	key, value := snap.config.getKeyAndValueForVariation(id)
 	if key == "" {
-		snap.logger.Errorf("Evaluating GetKeyAndValue(%s) failed. Returning nil. Variation ID not found.", id)
+		snap.logger.Errorf(2011, "Could not find the setting for the specified variation ID: '%s'. Returning nil.", id)
 		return "", nil
 	}
 	return key, value
