@@ -209,7 +209,7 @@ func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *wirec
 		eval = snap.evaluators[id]
 	}
 	if eval == nil {
-		var message = "Failed to evaluate setting '%s' (the key was not found in config JSON). Available keys: %s."
+		var message = "Failed to evaluate setting '%s' (the key was not found in config JSON). Available keys: [%s]."
 		var availableKeys = strings.Join(snap.GetAllKeys(), ", ")
 		snap.logger.Errorf(1001, message, key, availableKeys)
 		return nil, "", nil, nil, fmt.Errorf(message, key, availableKeys)

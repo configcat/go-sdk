@@ -210,7 +210,7 @@ var loggingTests = []struct {
 	key:         "unknownKey",
 	expectValue: nil,
 	expectLogs: []string{
-		"ERROR: [1001] Failed to evaluate setting 'unknownKey' (the key was not found in config JSON). Available keys: key1, key2.",
+		"ERROR: [1001] Failed to evaluate setting 'unknownKey' (the key was not found in config JSON). Available keys: [key1, key2].",
 	},
 }}
 
