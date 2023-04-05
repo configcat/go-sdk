@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/blang/semver"
+	"github.com/blang/semver/v4"
 	"github.com/configcat/go-sdk/v7/internal/wireconfig"
 )
 
