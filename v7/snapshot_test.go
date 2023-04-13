@@ -40,7 +40,7 @@ var loggingTests = []struct {
 	key:         "key",
 	expectValue: "value",
 	expectLogs: []string{
-		"INFO: [5000] Returning key=value.",
+		"INFO: [5000] returning key=value",
 	},
 }, {
 	testName: "RolloutRulesButNoUser",
@@ -61,8 +61,8 @@ var loggingTests = []struct {
 	key:         "key",
 	expectValue: "defaultValue",
 	expectLogs: []string{
-		"WARN: [3001] Cannot evaluate targeting rules and % options for setting 'key' (User Object is missing). You should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/",
-		"INFO: [5000] Returning key=defaultValue.",
+		"WARN: [3001] cannot evaluate targeting rules and % options for setting 'key' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/",
+		"INFO: [5000] returning key=defaultValue",
 	},
 }, {
 	testName: "RolloutRulesWithUser",
@@ -91,9 +91,9 @@ var loggingTests = []struct {
 	},
 	expectValue: "v2",
 	expectLogs: []string{
-		"INFO: [5000] Evaluating rule: [Identifier:y] [CONTAINS] [x] => no match",
-		"INFO: [5000] Evaluating rule: [Identifier:y] [CONTAINS] [y] => match",
-		"INFO: [5000] Returning key=v2.",
+		"INFO: [5000] evaluating rule: [Identifier:y] [CONTAINS] [x] => no match",
+		"INFO: [5000] evaluating rule: [Identifier:y] [CONTAINS] [y] => match",
+		"INFO: [5000] returning key=v2",
 	},
 }, {
 	testName: "PercentageRulesButNoUser",
@@ -115,8 +115,8 @@ var loggingTests = []struct {
 	key:         "key",
 	expectValue: "defaultValue",
 	expectLogs: []string{
-		"WARN: [3001] Cannot evaluate targeting rules and % options for setting 'key' (User Object is missing). You should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object/",
-		"INFO: [5000] Returning key=defaultValue.",
+		"WARN: [3001] cannot evaluate targeting rules and % options for setting 'key' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/",
+		"INFO: [5000] returning key=defaultValue",
 	},
 }, {
 	testName: "PercentageRulesWithUser",
@@ -141,7 +141,7 @@ var loggingTests = []struct {
 	},
 	expectValue: "high-percent",
 	expectLogs: []string{
-		"INFO: [5000] Returning key=high-percent.",
+		"INFO: [5000] returning key=high-percent",
 	},
 }, {
 	testName: "MatchErrorInUser",
@@ -165,8 +165,8 @@ var loggingTests = []struct {
 		Identifier: "bogus",
 	},
 	expectLogs: []string{
-		"INFO: [5000] Evaluating rule: [Identifier:bogus] [< (SemVer)] [1.2.3] => SKIP rule. Validation error: No Major.Minor.Patch elements found",
-		"INFO: [5000] Returning key=defaultValue.",
+		"INFO: [5000] evaluating rule: [Identifier:bogus] [< (SemVer)] [1.2.3] => SKIP rule; validation error: No Major.Minor.Patch elements found",
+		"INFO: [5000] returning key=defaultValue",
 	},
 }, {
 	testName: "MatchErrorRules",
@@ -190,8 +190,8 @@ var loggingTests = []struct {
 		Identifier: "1.2.3",
 	},
 	expectLogs: []string{
-		"INFO: [5000] Evaluating rule: [Identifier:1.2.3] [< (SemVer)] [bogus] => SKIP rule. Validation error: No Major.Minor.Patch elements found",
-		"INFO: [5000] Returning key=defaultValue.",
+		"INFO: [5000] evaluating rule: [Identifier:1.2.3] [< (SemVer)] [bogus] => SKIP rule; validation error: No Major.Minor.Patch elements found",
+		"INFO: [5000] returning key=defaultValue",
 	},
 }, {
 	testName: "UnknownKey",
@@ -210,7 +210,7 @@ var loggingTests = []struct {
 	key:         "unknownKey",
 	expectValue: nil,
 	expectLogs: []string{
-		"ERROR: [1001] Failed to evaluate setting 'unknownKey' (the key was not found in config JSON). Available keys: [key1, key2].",
+		"ERROR: [1001] failed to evaluate setting 'unknownKey' (the key was not found in config JSON); available keys: [key1, key2]",
 	},
 }}
 

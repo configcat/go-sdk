@@ -62,9 +62,9 @@ func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) ent
 	noUser := func(_ keyID, logger *leveledLogger, user reflect.Value) (valueID, string, *wireconfig.RolloutRule, *wireconfig.PercentageRule) {
 		if logger.enabled(LogLevelWarn) && (len(rules) > 0 || len(node.PercentageRules) > 0) {
 			logger.Warnf(3001,
-				"Cannot evaluate targeting rules and %% options for setting '%s' (User Object is missing). " +
-				"You should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly. " +
-				"Read more: https://configcat.com/docs/advanced/user-object/",
+				"cannot evaluate targeting rules and %% options for setting '%s' (User Object is missing); " +
+				"you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; " +
+				"read more: https://configcat.com/docs/advanced/user-object/",
 				key)
 		}
 		return node.ValueID, node.VariationID, nil, nil
@@ -95,7 +95,7 @@ func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) ent
 			matched, err := matcher(userv)
 			if matched {
 				if logger.enabled(LogLevelInfo) {
-					logger.Infof(5000, "Evaluating rule: [%s:%s] [%s] [%s] => match",
+					logger.Infof(5000, "evaluating rule: [%s:%s] [%s] [%s] => match",
 						rule.ComparisonAttribute,
 						attrInfos[i].asString(userv),
 						rule.Comparator,
@@ -106,7 +106,7 @@ func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) ent
 			}
 			if err != nil {
 				if logger.enabled(LogLevelInfo) {
-					logger.Infof(5000, "Evaluating rule: [%s:%s] [%s] [%s] => SKIP rule. Validation error: %v",
+					logger.Infof(5000, "evaluating rule: [%s:%s] [%s] [%s] => SKIP rule; validation error: %v",
 						rule.ComparisonAttribute,
 						attrInfos[i].asString(userv),
 						rule.Comparator,
@@ -115,7 +115,7 @@ func entryEvaluator(key string, node *wireconfig.Entry, tinfo *userTypeInfo) ent
 					)
 				}
 			} else if logger.enabled(LogLevelInfo) {
-				logger.Infof(5000, "Evaluating rule: [%s:%s] [%s] [%s] => no match",
+				logger.Infof(5000, "evaluating rule: [%s:%s] [%s] [%s] => no match",
 					rule.ComparisonAttribute,
 					attrInfos[i].asString(userv),
 					rule.Comparator,

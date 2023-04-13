@@ -201,7 +201,7 @@ func (client *Client) Refresh(ctx context.Context) error {
 // age.
 func (client *Client) RefreshIfOlder(ctx context.Context, age time.Duration) error {
 	if client.fetcher.isOffline() {
-		var message = "Client is in offline mode, it cannot initiate HTTP calls."
+		var message = "client is in offline mode, it cannot initiate HTTP calls"
 		client.logger.Warnf(3200, message)
 		return fmt.Errorf(message)
 	}
