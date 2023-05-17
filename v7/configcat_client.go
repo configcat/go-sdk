@@ -201,7 +201,9 @@ func (client *Client) Refresh(ctx context.Context) error {
 // age.
 func (client *Client) RefreshIfOlder(ctx context.Context, age time.Duration) error {
 	if client.fetcher.isOffline() {
-		return fmt.Errorf("the SDK is in offline mode, it can't initiate HTTP calls")
+		var message = "client is in offline mode, it cannot initiate HTTP calls"
+		client.logger.Warnf(3200, message)
+		return fmt.Errorf(message)
 	}
 	return client.fetcher.refreshIfOlder(ctx, time.Now().Add(-age), true)
 }
@@ -326,7 +328,7 @@ func (client *Client) Snapshot(user User) *Snapshot {
 		switch client.cfg.PollingMode {
 		case Lazy:
 			if err := client.fetcher.refreshIfOlder(client.fetcher.ctx, time.Now().Add(-client.cfg.PollInterval), !client.cfg.NoWaitForRefresh); err != nil {
-				client.logger.Errorf("lazy refresh failed: %v", err)
+				client.logger.Errorf(0, "lazy refresh failed: %v", err)
 			}
 		case AutoPoll:
 			client.firstFetchWait.Do(func() {

@@ -52,11 +52,11 @@ type FlagOverrides struct {
 
 func (f *FlagOverrides) loadEntries(logger *leveledLogger) {
 	if f.Behavior != LocalOnly && f.Behavior != LocalOverRemote && f.Behavior != RemoteOverLocal {
-		logger.Errorf("flag overrides behavior configuration is invalid. 'Behavior' is %v.", f.Behavior)
+		logger.Errorf(0, "flag overrides behavior configuration is invalid; 'Behavior' is %v", f.Behavior)
 		return
 	}
 	if f.Values == nil && f.FilePath == "" {
-		logger.Errorf("flag overrides configuration is invalid. 'Values' or 'FilePath' must be set.")
+		logger.Errorf(0, "flag overrides configuration is invalid; 'Values' or 'FilePath' must be set")
 		return
 	}
 	if f.Values == nil {
@@ -75,7 +75,7 @@ func (f *FlagOverrides) loadEntries(logger *leveledLogger) {
 func (f *FlagOverrides) loadEntriesFromFile(logger *leveledLogger) {
 	data, err := ioutil.ReadFile(f.FilePath)
 	if err != nil {
-		logger.Errorf("unable to read local JSON file: %v", err)
+		logger.Errorf(1302, "failed to read the local config file '%s': %v", f.FilePath, err)
 		return
 	}
 	// Try the simplified configuration first.
@@ -92,7 +92,7 @@ func (f *FlagOverrides) loadEntriesFromFile(logger *leveledLogger) {
 	// Fall back to using the full wire configuration.
 	var root wireconfig.RootNode
 	if err := json.Unmarshal(data, &root); err != nil {
-		logger.Errorf("error reading local JSON file %q: %v", f.FilePath, err)
+		logger.Errorf(2302, "failed to decode JSON from the local config file '%s': %v", f.FilePath, err)
 		return
 	}
 	f.entries = root.Entries
@@ -119,7 +119,7 @@ func (f *FlagOverrides) setEntryTypes(logger *leveledLogger) {
 		case int:
 			entry.Type = wireconfig.IntEntry
 		default:
-			logger.Errorf("ignoring override value for flag %q with unexpected type %T (%#v); must be bool, int, float64 or string", key, value, value)
+			logger.Errorf(0, "ignoring override value for flag %q with unexpected type %T (%#v); must be bool, int, float64 or string", key, value, value)
 			delete(f.entries, key)
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,6 +21,15 @@ const (
 	euOnlyBaseURL = "https://cdn-eu.configcat.com"
 )
 
+type fetcherError struct {
+	Err     error
+	EventId int
+}
+
+func (f *fetcherError) Error() string {
+	return f.Err.Error()
+}
+
 type configFetcher struct {
 	sdkKey            string
 	cacheKey          string
@@ -33,6 +43,7 @@ type configFetcher struct {
 	overrides         *FlagOverrides
 	hooks             *Hooks
 	offline           uint32
+	timeout           time.Duration
 
 	ctx       context.Context
 	ctxCancel func()
@@ -65,6 +76,7 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *conf
 		changeNotify: cfg.ChangeNotify,
 		hooks:        cfg.Hooks,
 		logger:       logger,
+		timeout:      cfg.HTTPTimeout,
 		client: &http.Client{
 			Timeout:   cfg.HTTPTimeout,
 			Transport: cfg.Transport,
@@ -92,7 +104,7 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *conf
 		// to avoid a potential double fetch
 		// when someone calls Refresh immediately
 		// after creating the client.
-		f.refreshIfOlder(f.ctx, time.Time{}, false)
+		_ = f.refreshIfOlder(f.ctx, time.Time{}, false)
 		f.wg.Add(1)
 		go f.runPoller(cfg.PollInterval)
 	}
@@ -106,10 +118,10 @@ func (f *configFetcher) isOffline() bool {
 func (f *configFetcher) setMode(offline bool) {
 	if offline {
 		atomic.StoreUint32(&f.offline, 1)
-		f.logger.Debugf("switched to OFFLINE mode")
+		f.logger.Infof(5200, "switched to OFFLINE mode")
 	} else {
 		atomic.StoreUint32(&f.offline, 0)
-		f.logger.Debugf("switched to ONLINE  mode")
+		f.logger.Infof(5200, "switched to ONLINE mode")
 	}
 }
 
@@ -128,9 +140,7 @@ func (f *configFetcher) runPoller(pollInterval time.Duration) {
 		case <-f.ctx.Done():
 			return
 		}
-		if err := f.refreshIfOlder(f.ctx, time.Now().Add(-pollInterval/2), true); err != nil {
-			f.logger.Errorf("cannot refresh configcat configuration: %v", err)
-		}
+		_ = f.refreshIfOlder(f.ctx, time.Now().Add(-pollInterval/2), true)
 	}
 }
 
@@ -159,8 +169,7 @@ func (f *configFetcher) refreshIfOlder(ctx context.Context, before time.Time, wa
 		fetchDone = make(chan error, 1)
 		f.fetchDone = fetchDone
 		f.wg.Add(1)
-		logError := !wait
-		go f.fetcher(prevConfig, logError)
+		go f.fetcher(prevConfig)
 	}
 	f.mu.Unlock()
 	if !wait {
@@ -183,22 +192,24 @@ func (f *configFetcher) refreshIfOlder(ctx context.Context, before time.Time, wa
 // Note: although this is started asynchronously, the configFetcher
 // logic guarantees that there's never more than one goroutine
 // at a time running f.fetcher.
-func (f *configFetcher) fetcher(prevConfig *config, logError bool) {
+func (f *configFetcher) fetcher(prevConfig *config) {
 	defer f.wg.Done()
 	config, newURL, err := f.fetchConfig(f.ctx, f.baseURL, prevConfig)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err != nil {
-		err = fmt.Errorf("config fetch failed: %v", err)
-		if logError {
-			f.logger.Errorf("%v", err)
+		if fErr, ok := err.(*fetcherError); ok {
+			f.logger.Errorf(fErr.EventId, "config fetch failed: %v", fErr.Err)
+		} else {
+			f.logger.Errorf(0, "config fetch failed: %v", err)
 		}
+		err = fmt.Errorf("config fetch failed: %v", err)
 	} else if config != nil && !config.equal(prevConfig) {
 		f.baseURL = newURL
 		f.config.Store(config)
 		if f.cache != nil {
 			if err := f.cache.Set(f.ctx, f.cacheKey, config.jsonBody); err != nil {
-				f.logger.Errorf("failed to save configuration to cache: %v", err)
+				f.logger.Errorf(2201, "error occurred while writing the cache: %v", err)
 			}
 		}
 		contentEquals := config.equalContent(prevConfig)
@@ -230,11 +241,11 @@ func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevCon
 	// If we are in offline mode skip HTTP completely and fall back to cache every time.
 	if f.isOffline() {
 		if f.cache == nil {
-			return nil, "", fmt.Errorf("the SDK is in offline mode and no cache is configured")
+			return nil, "", &fetcherError{EventId: 0, Err: fmt.Errorf("the SDK is in offline mode and no cache is configured")}
 		}
 		cfg := f.readCache(ctx, prevConfig)
 		if cfg == nil {
-			return nil, "", fmt.Errorf("the SDK is in offline mode and wasn't able to read a valid configuration from the cache")
+			return nil, "", &fetcherError{EventId: 0, Err: fmt.Errorf("the SDK is in offline mode and wasn't able to read a valid configuration from the cache")}
 		}
 		return cfg, baseURL, nil
 	}
@@ -244,7 +255,6 @@ func (f *configFetcher) fetchConfig(ctx context.Context, baseURL string, prevCon
 	if err == nil {
 		return cfg, newBaseURL, nil
 	}
-	f.logger.Infof("falling back to cache after config fetch error: %v", err)
 	cfg = f.readCache(ctx, prevConfig)
 	if cfg == nil {
 		return nil, "", err
@@ -259,7 +269,7 @@ func (f *configFetcher) readCache(ctx context.Context, prevConfig *config) (_ *c
 	// Fall back to the cache
 	configText, cacheErr := f.cache.Get(ctx, f.cacheKey)
 	if cacheErr != nil {
-		f.logger.Errorf("cache get failed: %v", cacheErr)
+		f.logger.Errorf(2200, "error occurred while reading the cache: %v", cacheErr)
 		return nil
 	}
 	if len(configText) == 0 {
@@ -268,7 +278,7 @@ func (f *configFetcher) readCache(ctx context.Context, prevConfig *config) (_ *c
 	}
 	cfg, parseErr := parseConfig(configText, "", time.Time{}, f.logger, f.defaultUser, f.overrides, f.hooks)
 	if parseErr != nil {
-		f.logger.Errorf("cache contained invalid config: %v", parseErr)
+		f.logger.Errorf(2200, "error occurred while reading the cache; cache contained invalid config: %v", parseErr)
 		return nil
 	}
 	if prevConfig == nil || !cfg.fetchTime.Before(prevConfig.fetchTime) {
@@ -287,7 +297,7 @@ func (f *configFetcher) readCache(ctx context.Context, prevConfig *config) (_ *c
 // It returns the newly fetched configuration and the new base URL
 // (empty if it hasn't changed).
 func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfig *config) (newConfig *config, newBaseURL string, err error) {
-	f.logger.Infof("fetching from %v", baseURL)
+	f.logger.Infof(0, "fetching from %v", baseURL)
 	for i := 0; i < 3; i++ {
 		config, err := f.fetchHTTPWithoutRedirect(ctx, baseURL, prevConfig)
 		if err != nil {
@@ -302,7 +312,7 @@ func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfi
 		}
 		redirect := *preferences.Redirect
 		if redirect == wireconfig.ForceRedirect {
-			f.logger.Infof("forced redirect to %v (count %d)", preferences.URL, i+1)
+			f.logger.Infof(0, "forced redirect to %v (count %d)", preferences.URL, i+1)
 			baseURL = preferences.URL
 			continue
 		}
@@ -310,46 +320,44 @@ func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfi
 			if redirect == wireconfig.Nodirect {
 				// The config is available, but we won't respect the redirection
 				// request for a custom URL.
-				f.logger.Infof("config fetched but refusing to redirect from custom URL without forced redirection")
+				f.logger.Infof(0, "config fetched but refusing to redirect from custom URL without forced redirection")
 				return config, baseURL, nil
 			}
 			// With shouldRedirect, there is no configuration available
 			// other than the redirection information itself, so error.
-			return nil, "", fmt.Errorf("refusing to redirect from custom URL without forced redirection")
+			return nil, "", &fetcherError{EventId: 0, Err: fmt.Errorf("refusing to redirect from custom URL without forced redirection")}
 		}
 		if preferences.URL == "" {
-			return nil, "", fmt.Errorf("refusing to redirect to empty URL")
+			return nil, "", &fetcherError{EventId: 0, Err: fmt.Errorf("refusing to redirect to empty URL")}
 		}
 		baseURL = preferences.URL
 
-		f.logger.Warnf(
-			"Your config.DataGovernance parameter at ConfigCatClient " +
-				"initialization is not in sync with your preferences on the ConfigCat " +
-				"Dashboard: https://app.configcat.com/organization/data-governance. " +
-				"Only Organization Admins can access this preference.",
+		f.logger.Warnf(3002,
+			"the `config.DataGovernance` parameter specified at the client initialization is not in sync with the preferences on the ConfigCat Dashboard; "+
+				"read more: https://configcat.com/docs/advanced/data-governance/",
 		)
 		if redirect == wireconfig.Nodirect {
 			// We've already got the configuration data, we'll just fetch
 			// from the redirected URL next time.
-			f.logger.Infof("redirection on next fetch to %v", baseURL)
+			f.logger.Infof(0, "redirection on next fetch to %v", baseURL)
 			return config, baseURL, nil
 		}
 		if redirect != wireconfig.ShouldRedirect {
-			return nil, "", fmt.Errorf("unknown redirection kind %d in response", redirect)
+			return nil, "", &fetcherError{EventId: 0, Err: fmt.Errorf("unknown redirection kind %d in response", redirect)}
 		}
-		f.logger.Infof("redirecting to %v", baseURL)
+		f.logger.Infof(0, "redirecting to %v", baseURL)
 	}
-	return nil, "", fmt.Errorf("redirect loop during config.json fetch. Please contact support@configcat.com")
+	return nil, "", &fetcherError{EventId: 1104, Err: fmt.Errorf("redirection loop encountered while trying to fetch config JSON; please contact us at https://configcat.com/support/")}
 }
 
 // fetchHTTPWithoutRedirect does the actual HTTP fetch of the config.
 func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL string, prevConfig *config) (*config, error) {
 	if f.sdkKey == "" {
-		return nil, fmt.Errorf("empty SDK key in configcat configuration")
+		return nil, &fetcherError{EventId: 0, Err: fmt.Errorf("empty SDK key in configcat configuration")}
 	}
 	request, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/configuration-files/"+f.sdkKey+"/"+configJSONName+".json", nil)
 	if err != nil {
-		return nil, err
+		return nil, &fetcherError{EventId: 0, Err: err}
 	}
 	request.Header.Set("X-ConfigCat-UserAgent", "ConfigCat-Go/"+f.pollingIdentifier+"-"+version)
 
@@ -359,34 +367,35 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 	request = request.WithContext(f.ctx)
 	response, err := f.client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("config fetch request failed: %v", err)
+		if os.IsTimeout(err) {
+			return nil, &fetcherError{EventId: 1102, Err: fmt.Errorf("request timed out while trying to fetch config JSON. (timeout value: %dms) %v", f.timeout.Milliseconds(), err)}
+		} else {
+			return nil, &fetcherError{EventId: 1103, Err: fmt.Errorf("unexpected error occurred while trying to fetch config JSON: %v", err)}
+		}
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode == 304 {
-		f.logger.Debugf("Config fetch succeeded: not modified.")
+		f.logger.Debugf("config fetch succeeded: not modified")
 		return prevConfig.withFetchTime(time.Now()), nil
 	}
 
 	if response.StatusCode >= 200 && response.StatusCode < 300 {
 		body, err := ioutil.ReadAll(response.Body)
 		if err != nil {
-			return nil, fmt.Errorf("config fetch read failed: %v", err)
+			return nil, &fetcherError{EventId: 1103, Err: fmt.Errorf("unexpected error occurred while trying to fetch config JSON; read failed: %v", err)}
 		}
 		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now(), f.logger, f.defaultUser, f.overrides, f.hooks)
 		if err != nil {
-			return nil, fmt.Errorf("config fetch returned invalid body: %v", err)
+			return nil, &fetcherError{EventId: 1105, Err: fmt.Errorf("fetching config JSON was successful but the HTTP response content was invalid: %v", err)}
 		}
-		f.logger.Debugf("Config fetch succeeded: new config fetched.")
+		f.logger.Debugf("config fetch succeeded: new config fetched")
 		return config, nil
 	}
 	if response.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf(
-			"configuration not found. " +
-				"Double-check your SDK KEY at https://app.configcat.com/sdkkey",
-		)
+		return nil, &fetcherError{EventId: 1100, Err: fmt.Errorf("your SDK Key seems to be wrong; you can find the valid SDK Key at https://app.configcat.com/sdkkey")}
 	}
-	return nil, fmt.Errorf("received unexpected response %v", response.Status)
+	return nil, &fetcherError{EventId: 1101, Err: fmt.Errorf("unexpected HTTP response was received while trying to fetch config JSON: %v", response.Status)}
 }
 
 func sdkKeyToCacheKey(sdkKey string) string {

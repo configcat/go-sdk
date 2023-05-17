@@ -40,7 +40,7 @@ var loggingTests = []struct {
 	key:         "key",
 	expectValue: "value",
 	expectLogs: []string{
-		"INFO: Returning key=value.",
+		"INFO: [5000] returning key=value",
 	},
 }, {
 	testName: "RolloutRulesButNoUser",
@@ -61,8 +61,8 @@ var loggingTests = []struct {
 	key:         "key",
 	expectValue: "defaultValue",
 	expectLogs: []string{
-		"WARN: Evaluating GetValue(key). UserObject missing! You should pass a UserObject to GetValue() in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object.",
-		"INFO: Returning key=defaultValue.",
+		"WARN: [3001] cannot evaluate targeting rules and % options for setting 'key' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/",
+		"INFO: [5000] returning key=defaultValue",
 	},
 }, {
 	testName: "RolloutRulesWithUser",
@@ -91,9 +91,9 @@ var loggingTests = []struct {
 	},
 	expectValue: "v2",
 	expectLogs: []string{
-		"INFO: Evaluating rule: [Identifier:y] [CONTAINS] [x] => no match",
-		"INFO: Evaluating rule: [Identifier:y] [CONTAINS] [y] => match",
-		"INFO: Returning key=v2.",
+		"INFO: [5000] evaluating rule: [Identifier:y] [CONTAINS] [x] => no match",
+		"INFO: [5000] evaluating rule: [Identifier:y] [CONTAINS] [y] => match",
+		"INFO: [5000] returning key=v2",
 	},
 }, {
 	testName: "PercentageRulesButNoUser",
@@ -115,8 +115,8 @@ var loggingTests = []struct {
 	key:         "key",
 	expectValue: "defaultValue",
 	expectLogs: []string{
-		"WARN: Evaluating GetValue(key). UserObject missing! You should pass a UserObject to GetValue() in order to make targeting work properly. Read more: https://configcat.com/docs/advanced/user-object.",
-		"INFO: Returning key=defaultValue.",
+		"WARN: [3001] cannot evaluate targeting rules and % options for setting 'key' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/",
+		"INFO: [5000] returning key=defaultValue",
 	},
 }, {
 	testName: "PercentageRulesWithUser",
@@ -141,7 +141,7 @@ var loggingTests = []struct {
 	},
 	expectValue: "high-percent",
 	expectLogs: []string{
-		"INFO: Returning key=high-percent.",
+		"INFO: [5000] returning key=high-percent",
 	},
 }, {
 	testName: "MatchErrorInUser",
@@ -165,8 +165,8 @@ var loggingTests = []struct {
 		Identifier: "bogus",
 	},
 	expectLogs: []string{
-		"INFO: Evaluating rule: [Identifier:bogus] [< (SemVer)] [1.2.3] => SKIP rule. Validation error: No Major.Minor.Patch elements found",
-		"INFO: Returning key=defaultValue.",
+		"INFO: [5000] evaluating rule: [Identifier:bogus] [< (SemVer)] [1.2.3] => SKIP rule; validation error: No Major.Minor.Patch elements found",
+		"INFO: [5000] returning key=defaultValue",
 	},
 }, {
 	testName: "MatchErrorRules",
@@ -190,8 +190,8 @@ var loggingTests = []struct {
 		Identifier: "1.2.3",
 	},
 	expectLogs: []string{
-		"INFO: Evaluating rule: [Identifier:1.2.3] [< (SemVer)] [bogus] => SKIP rule. Validation error: No Major.Minor.Patch elements found",
-		"INFO: Returning key=defaultValue.",
+		"INFO: [5000] evaluating rule: [Identifier:1.2.3] [< (SemVer)] [bogus] => SKIP rule; validation error: No Major.Minor.Patch elements found",
+		"INFO: [5000] returning key=defaultValue",
 	},
 }, {
 	testName: "UnknownKey",
@@ -210,7 +210,7 @@ var loggingTests = []struct {
 	key:         "unknownKey",
 	expectValue: nil,
 	expectLogs: []string{
-		"ERROR: error getting value: value not found for key unknownKey. Here are the available keys: key1,key2",
+		"ERROR: [1001] failed to evaluate setting 'unknownKey' (the key was not found in config JSON); available keys: ['key1', 'key2']",
 	},
 }}
 
@@ -237,7 +237,7 @@ func TestLogging(t *testing.T) {
 			client.Refresh(context.Background())
 
 			// We'll always get a "fetching from" message at the start.
-			c.Check(logs, qt.DeepEquals, []string{"INFO: fetching from " + cfg.BaseURL})
+			c.Check(logs, qt.DeepEquals, []string{"INFO: [0] fetching from " + cfg.BaseURL})
 			logs = nil
 
 			snap := client.Snapshot(test.user)

@@ -48,7 +48,7 @@ func TestClient_Refresh(t *testing.T) {
 	}
 }
 
-func TestClient_Refresh_Timeout(t *testing.T) {
+func TestClient_Refresh_Canceled(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
 	cfg := srv.config()
@@ -74,6 +74,24 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 	}
 	result = client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value")
+}
+
+func TestClient_Refresh_Timeout(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	cfg := srv.config()
+	cfg.PollingMode = Manual
+	cfg.HTTPTimeout = 10 * time.Millisecond
+	client := NewCustomClient(cfg)
+	defer client.Close()
+
+	srv.setResponse(configResponse{
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value", wireconfig.StringEntry)),
+		sleep: 20 * time.Millisecond,
+	})
+	client.Refresh(context.Background())
+	result := client.GetStringValue("key", "default", nil)
+	c.Assert(result, qt.Equals, "default")
 }
 
 func TestClient_Float(t *testing.T) {

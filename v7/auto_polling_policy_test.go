@@ -42,7 +42,7 @@ func TestAutoPollingPolicy_FetchFail(t *testing.T) {
 	client := NewCustomClient(cfg)
 	defer client.Close()
 	err := client.Refresh(context.Background())
-	c.Assert(err, qt.ErrorMatches, `config fetch failed: received unexpected response 500 Internal Server Error`)
+	c.Assert(err, qt.ErrorMatches, `config fetch failed: unexpected HTTP response was received while trying to fetch config JSON: 500 Internal Server Error`)
 
 	conf := client.Snapshot(nil).config
 	c.Assert(conf, qt.IsNil)
