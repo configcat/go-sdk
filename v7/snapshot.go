@@ -11,6 +11,24 @@ import (
 	"time"
 )
 
+// ErrKeyNotFound is returned when a key is not found in the configuration.
+type ErrKeyNotFound struct {
+	Key           string
+	AvailableKeys []string
+}
+
+func (e ErrKeyNotFound) Error() string {
+	var availableKeys = ""
+	if len(e.AvailableKeys) > 0 {
+		availableKeys = "'" + strings.Join(e.AvailableKeys, "', '") + "'"
+	}
+	return fmt.Sprintf(
+		"failed to evaluate setting '%s' (the key was not found in config JSON); available keys: [%s]",
+		e.Key,
+		availableKeys,
+	)
+}
+
 // Snapshot holds a snapshot of the Configcat configuration.
 // A snapshot is immutable once taken.
 //
@@ -209,14 +227,9 @@ func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *wirec
 		eval = snap.evaluators[id]
 	}
 	if eval == nil {
-		var message = "failed to evaluate setting '%s' (the key was not found in config JSON); available keys: [%s]"
-		var availableKeys = ""
-		keys := snap.GetAllKeys()
-		if len(keys) > 0 {
-			availableKeys = "'" + strings.Join(keys, "', '") + "'"
-		}
-		snap.logger.Errorf(1001, message, key, availableKeys)
-		return nil, "", nil, nil, fmt.Errorf(message, key, availableKeys)
+		err := ErrKeyNotFound{Key: key, AvailableKeys: snap.GetAllKeys()}
+		snap.logger.Errorf(1001, err.Error())
+		return nil, "", nil, nil, err
 	}
 	valID, varID, rollout, percentage := eval(id, snap.logger, snap.user)
 	val := snap.valueForID(valID)
