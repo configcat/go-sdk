@@ -673,6 +673,66 @@ func TestClient_GetAllDetails(t *testing.T) {
 	c.Assert(len(details), qt.Equals, len(keys))
 }
 
+func TestClient_GetBoolDetails_NotExist(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	details := client.GetBoolValueDetails("non-existent", false, nil)
+	_, ok := details.Data.Error.(ErrKeyNotFound)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(details.Value, qt.IsFalse)
+}
+
+func TestClient_GetStringDetails_NotExist(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	details := client.GetStringValueDetails("non-existent", "", nil)
+	_, ok := details.Data.Error.(ErrKeyNotFound)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(details.Value, qt.Equals, "")
+}
+
+func TestClient_GetIntDetails_NotExist(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	details := client.GetIntValueDetails("non-existent", 0, nil)
+	_, ok := details.Data.Error.(ErrKeyNotFound)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(details.Value, qt.Equals, 0)
+}
+
+func TestClient_GetFloatDetails_NotExist(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	details := client.GetFloatValueDetails("non-existent", 0, nil)
+	_, ok := details.Data.Error.(ErrKeyNotFound)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(details.Value, qt.Equals, float64(0))
+}
+
 func TestClient_GetDetails_Reflected_User(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)

@@ -29,7 +29,7 @@ func (e ErrKeyNotFound) Error() string {
 	)
 }
 
-// Snapshot holds a snapshot of the Configcat configuration.
+// Snapshot holds a snapshot of the ConfigCat configuration.
 // A snapshot is immutable once taken.
 //
 // A nil snapshot is OK to use and acts like a configuration
@@ -257,10 +257,10 @@ func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *wirec
 	return val, varID, rollout, percentage, nil
 }
 
-func (snap *Snapshot) evalDetailsForKeyId(id keyID, key string) EvaluationDetails {
+func (snap *Snapshot) evalDetailsForKeyId(id keyID, key string, defaultValue interface{}) EvaluationDetails {
 	value, varID, rollout, percentage, err := snap.details(id, key)
 	if err != nil {
-		return EvaluationDetails{Value: nil, Data: EvaluationDetailsData{
+		return EvaluationDetails{Value: defaultValue, Data: EvaluationDetailsData{
 			Key:            key,
 			User:           snap.originalUser,
 			IsDefaultValue: true,
@@ -301,7 +301,7 @@ func (snap *Snapshot) GetValue(key string) interface{} {
 // GetValueDetails returns the value and evaluation details of a feature flag or setting
 // with respect to the current user, or nil if none is found.
 func (snap *Snapshot) GetValueDetails(key string) EvaluationDetails {
-	return snap.evalDetailsForKeyId(idForKey(key, false), key)
+	return snap.evalDetailsForKeyId(idForKey(key, false), key, nil)
 }
 
 // GetAllValueDetails returns values along with evaluation details of all feature flags and settings.

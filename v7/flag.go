@@ -78,19 +78,13 @@ func (f BoolFlag) GetValue(snap *Snapshot) interface{} {
 
 // GetValueDetails implements Flag.GetValueDetails.
 func (f BoolFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
-	details := snap.evalDetailsForKeyId(f.id, f.key)
+	details := snap.evalDetailsForKeyId(f.id, f.key, f.defaultValue)
+	if details.Data.Error != nil {
+		return details
+	}
 	boolVal, ok := details.Value.(bool)
 	if !ok {
-		return EvaluationDetails{
-			Value: f.defaultValue,
-			Data: EvaluationDetailsData{
-				Key:            f.key,
-				Error:          fmt.Errorf("could not convert %s to bool", details.Value),
-				User:           snap.originalUser,
-				FetchTime:      snap.FetchTime(),
-				IsDefaultValue: true,
-			},
-		}
+		return produceDetailsWithError(f.key, f.defaultValue, snap, fmt.Errorf("could not convert %s to bool", details.Value))
 	}
 	details.Value = boolVal
 	return details
@@ -144,19 +138,13 @@ func (f IntFlag) GetValue(snap *Snapshot) interface{} {
 
 // GetValueDetails implements Flag.GetValueDetails.
 func (f IntFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
-	details := snap.evalDetailsForKeyId(f.id, f.key)
+	details := snap.evalDetailsForKeyId(f.id, f.key, f.defaultValue)
+	if details.Data.Error != nil {
+		return details
+	}
 	intVal, ok := convertInt(details.Value)
 	if !ok {
-		return EvaluationDetails{
-			Value: f.defaultValue,
-			Data: EvaluationDetailsData{
-				Key:            f.key,
-				Error:          fmt.Errorf("could not convert %s to int", details.Value),
-				User:           snap.originalUser,
-				FetchTime:      snap.FetchTime(),
-				IsDefaultValue: true,
-			},
-		}
+		return produceDetailsWithError(f.key, f.defaultValue, snap, fmt.Errorf("could not convert %s to int", details.Value))
 	}
 	details.Value = intVal
 	return details
@@ -210,19 +198,13 @@ func (f StringFlag) GetValue(snap *Snapshot) interface{} {
 
 // GetValueDetails implements Flag.GetValueDetails.
 func (f StringFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
-	details := snap.evalDetailsForKeyId(f.id, f.key)
+	details := snap.evalDetailsForKeyId(f.id, f.key, f.defaultValue)
+	if details.Data.Error != nil {
+		return details
+	}
 	stringVal, ok := details.Value.(string)
 	if !ok {
-		return EvaluationDetails{
-			Value: f.defaultValue,
-			Data: EvaluationDetailsData{
-				Key:            f.key,
-				Error:          fmt.Errorf("could not convert %s to string", details.Value),
-				User:           snap.originalUser,
-				FetchTime:      snap.FetchTime(),
-				IsDefaultValue: true,
-			},
-		}
+		return produceDetailsWithError(f.key, f.defaultValue, snap, fmt.Errorf("could not convert %s to string", details.Value))
 	}
 	details.Value = stringVal
 	return details
@@ -276,22 +258,29 @@ func (f FloatFlag) GetValue(snap *Snapshot) interface{} {
 
 // GetValueDetails implements Flag.GetValueDetails.
 func (f FloatFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
-	details := snap.evalDetailsForKeyId(f.id, f.key)
+	details := snap.evalDetailsForKeyId(f.id, f.key, f.defaultValue)
+	if details.Data.Error != nil {
+		return details
+	}
 	floatVal, ok := details.Value.(float64)
 	if !ok {
-		return EvaluationDetails{
-			Value: f.defaultValue,
-			Data: EvaluationDetailsData{
-				Key:            f.key,
-				Error:          fmt.Errorf("could not convert %s to float64", details.Value),
-				User:           snap.originalUser,
-				FetchTime:      snap.FetchTime(),
-				IsDefaultValue: true,
-			},
-		}
+		return produceDetailsWithError(f.key, f.defaultValue, snap, fmt.Errorf("could not convert %s to float64", details.Value))
 	}
 	details.Value = floatVal
 	return details
+}
+
+func produceDetailsWithError(key string, defaultValue interface{}, snap *Snapshot, err error) EvaluationDetails {
+	return EvaluationDetails{
+		Value: defaultValue,
+		Data: EvaluationDetailsData{
+			Key:            key,
+			Error:          err,
+			User:           snap.originalUser,
+			FetchTime:      snap.FetchTime(),
+			IsDefaultValue: true,
+		},
+	}
 }
 
 type keyID uint32
