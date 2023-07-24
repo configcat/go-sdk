@@ -31,11 +31,11 @@ func GetCacheSegments(cacheBytes []byte) (fetchTime time.Time, eTag string, conf
 
 	configBytes := cacheBytes[eTagIndex+1+fetchTimeIndex+1:]
 
-	return time.Unix(fetchTimeMs/1000, 0), string(eTagBytes), configBytes, nil
+	return time.UnixMilli(fetchTimeMs), string(eTagBytes), configBytes, nil
 }
 
-func SegmentsToByte(fetchTime time.Time, eTag string, config []byte) []byte {
-	toCache := []byte(strconv.FormatInt(fetchTime.Unix()*1000, 10))
+func CacheSegmentsToByte(fetchTime time.Time, eTag string, config []byte) []byte {
+	toCache := []byte(strconv.FormatInt(fetchTime.UnixMilli(), 10))
 	toCache = append(toCache, newLineByte)
 	toCache = append(toCache, eTag...)
 	toCache = append(toCache, newLineByte)

@@ -300,7 +300,7 @@ func (f *configFetcher) saveToCache(ctx context.Context, fetchTime time.Time, eT
 		return nil
 	}
 
-	toCache := SegmentsToByte(fetchTime, eTag, config)
+	toCache := CacheSegmentsToByte(fetchTime, eTag, config)
 	return f.cache.Set(ctx, f.cacheKey, toCache)
 }
 
