@@ -1,5 +1,4 @@
 package configcat
 
-const (
-	version = "5.0.0"
-)
+// TODO read this from runtime.BuildInfo?
+const version = "7.10.1"

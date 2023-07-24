@@ -1,87 +1,114 @@
 package configcat
 
 import (
+	"net/http"
 	"testing"
 	"time"
+
+	"github.com/configcat/go-sdk/v8/internal/wireconfig"
+	qt "github.com/frankban/quicktest"
+	"github.com/google/go-cmp/cmp"
 )
 
-func TestLazyLoadingPolicy_GetConfigurationAsync_DoNotUseAsync(t *testing.T) {
-	fetcher := newFakeConfigProvider()
+func TestLazyLoadingPolicy_NoAsync(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1", wireconfig.StringEntry))
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
-	logger := DefaultLogger()
-	policy := newLazyLoadingPolicy(
-		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
-		logger,
-		lazyLoadConfig{time.Second * 2, false})
-	config := policy.getConfigurationAsync().get().(string)
+	cfg := srv.config()
+	cfg.PollingMode = Lazy
+	cfg.PollInterval = 50 * time.Millisecond
+	client := NewCustomClient(cfg)
+	defer client.Close()
 
-	if config != "test" {
-		t.Error("Expecting test as result")
-	}
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test2"})
-	config = policy.getConfigurationAsync().get().(string)
+	srv.setResponse(configResponse{
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value2", wireconfig.StringEntry)),
+		sleep: 40 * time.Millisecond,
+	})
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
 
-	if config != "test" {
-		t.Error("Expecting test as result")
-	}
-
-	time.Sleep(time.Second * 2)
-	config = policy.getConfigurationAsync().get().(string)
-
-	if config != "test2" {
-		t.Error("Expecting test2 as result")
-	}
+	time.Sleep(100 * time.Millisecond)
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value2")
 }
 
-func TestLazyLoadingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
-	fetcher := newFakeConfigProvider()
+func TestLazyLoadingPolicy_FetchFail(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		status: http.StatusInternalServerError,
+		body:   `something failed`,
+	})
 
-	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
-	logger := DefaultLogger()
-	policy := newLazyLoadingPolicy(
-		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
-		logger,
-		lazyLoadConfig{time.Second * 2, false})
-	config := policy.getConfigurationAsync().get().(string)
+	cfg := srv.config()
+	cfg.PollingMode = Lazy
+	cfg.PollInterval = 50 * time.Millisecond
+	client := NewCustomClient(cfg)
+	defer client.Close()
 
-	if config != "" {
-		t.Error("Expecting default")
-	}
+	c.Assert(client.fetcher.current(), qt.IsNil)
 }
 
-func TestLazyLoadingPolicy_GetConfigurationAsync_UseAsync(t *testing.T) {
-	fetcher := newFakeConfigProvider()
+func TestLazyLoadingPolicy_Async(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1", wireconfig.StringEntry))
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
-	logger := DefaultLogger()
-	policy := newLazyLoadingPolicy(
-		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
-		logger,
-		lazyLoadConfig{time.Second * 2, true})
-	config := policy.getConfigurationAsync().get().(string)
+	cfg := srv.config()
+	cfg.PollingMode = Lazy
+	cfg.PollInterval = 50 * time.Millisecond
+	cfg.NoWaitForRefresh = true
+	client := NewCustomClient(cfg)
+	defer client.Close()
 
-	if config != "test" {
-		t.Error("Expecting test as result")
-	}
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "")
+	// Wait for the response to arrive.
+	time.Sleep(10 * time.Millisecond)
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
 
-	time.Sleep(time.Second * 2)
+	srv.setResponse(configResponse{
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value2", wireconfig.StringEntry)),
+		sleep: 40 * time.Millisecond,
+	})
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
 
-	fetcher.SetResponseWithDelay(fetchResponse{status: Fetched, body: "test2"}, time.Second*1)
-	config = policy.getConfigurationAsync().get().(string)
+	time.Sleep(100 * time.Millisecond)
+	// The config is fetched lazily and takes at least 40ms, so
+	// we'll still see the old value.
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
 
-	if config != "test" {
-		t.Error("Expecting test as result")
-	}
-
-	time.Sleep(time.Second * 2)
-	config = policy.getConfigurationAsync().get().(string)
-
-	if config != "test2" {
-		t.Error("Expecting test2 as result")
-	}
+	time.Sleep(50 * time.Millisecond)
+	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value2")
 }
+
+func TestLazyLoadingPolicy_NotModified(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body:  `{"test":1}`,
+		sleep: time.Millisecond,
+	})
+
+	cfg := srv.config()
+	cfg.PollingMode = Lazy
+	cfg.PollInterval = 10 * time.Millisecond
+	client := NewCustomClient(cfg)
+	defer client.Close()
+
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
+	time.Sleep(20 * time.Millisecond)
+
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
+
+	c.Assert(srv.allResponses(), deepEquals, []configResponse{{
+		status: http.StatusOK,
+		body:   `{"test":1}`,
+		sleep:  time.Millisecond,
+	}, {
+		status: http.StatusNotModified,
+		sleep:  time.Millisecond,
+	}})
+}
+
+var deepEquals = qt.CmpEquals(cmp.AllowUnexported(configResponse{}))

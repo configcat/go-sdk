@@ -1,50 +1,50 @@
 package configcat
 
-import "strings"
+// The User interface represents the user-specific data that can influence
+// configcat rule evaluation. All Users are expected to provide an Identifier
+// attribute. A User value is assumed to be immutable once it's been
+// provided to configcat - if it changes between feature flag evaluations,
+// there's no guarantee that the feature flag results will change accordingly
+// (use WithUser instead of mutating the value).
+//
+// The configcat client uses reflection to determine
+// what attributes are available:
+//
+// If the User value implements UserAttributes, then that
+// method will be used to retrieve attributes.
+//
+// Otherwise the implementation is expected to be a pointer to a struct
+// type. Each public field in the struct is treated as a possible comparison
+// attribute.
+//
+// If a field's type implements a `String() string` method, the
+// field will be treated as a textual and the String method will
+// be called to determine the value.
+//
+// If a field's type is map[string] string, the map value is used to look
+// up any custom attribute not found directly in the struct.
+// There should be at most one of these fields.
+//
+// Otherwise, a field type must be a numeric type, a string type, a []byte type
+// or a github.com/blang/semver.Version.
+//
+// If a rule uses an attribute that isn't available, that rule will be treated
+// as non-matching.
+type User interface{}
 
-// User is an object containing attributes to properly identify a given user for rollout evaluation.
-type User struct {
-	identifier string
-	attributes map[string]string
+// UserAttributes can be implemented by a User value to implement
+// support for getting arbitrary attributes.
+type UserAttributes interface {
+	GetAttribute(attr string) string
 }
 
-// NewUser creates a new user object. The identifier argument is mandatory.
-func NewUser(identifier string) *User {
-	return NewUserWithAdditionalAttributes(identifier, "", "", map[string]string{})
-}
-
-// NewUserWithAdditionalAttributes creates a new user object with additional attributes. The identifier argument is mandatory.
-func NewUserWithAdditionalAttributes(identifier string, email string, country string, custom map[string]string) *User {
-	if len(identifier) == 0 {
-		panic("identifier cannot be empty")
-	}
-
-	user := &User{identifier: identifier, attributes: map[string]string{}}
-	user.attributes["identifier"] = identifier
-
-	if len(email) > 0 {
-		user.attributes["email"] = email
-	}
-
-	if len(country) > 0 {
-		user.attributes["country"] = country
-	}
-
-	if len(custom) > 0 {
-		for k, v := range custom {
-			user.attributes[strings.ToLower(k)] = v
-		}
-	}
-
-	return user
-}
-
-// GetAttribute retrieves a user attribute identified by a key.
-func (user *User) GetAttribute(key string) string {
-	val := user.attributes[strings.ToLower(key)]
-	if len(val) > 0 {
-		return val
-	}
-
-	return ""
+// UserData implements the User interface with the basic
+// set of attributes. For an efficient way to use your own
+// domain object as a User, see the documentation for the User
+// interface.
+type UserData struct {
+	Identifier string
+	Email      string
+	Country    string
+	Custom     map[string]string
 }

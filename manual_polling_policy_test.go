@@ -1,47 +1,51 @@
 package configcat
 
 import (
+	"context"
+	"net/http"
 	"testing"
+
+	qt "github.com/frankban/quicktest"
 )
 
-func TestManualPollingPolicy_GetConfigurationAsync(t *testing.T) {
-	fetcher := newFakeConfigProvider()
-	logger := DefaultLogger()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
-	policy := newManualPollingPolicy(
-		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
-		logger,
-	)
+func TestManualPollingPolicy_Refresh(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	// Note: don't set a response on the server - the test will
+	// fail if we get a request.
 
-	policy.refreshAsync().wait()
-	config := policy.getConfigurationAsync().get().(string)
+	cfg := srv.config()
+	cfg.PollingMode = Manual
+	client := NewCustomClient(cfg)
+	defer client.Close()
 
-	if config != "test" {
-		t.Error("Expecting test as result")
-	}
+	c.Assert(client.fetcher.current(), qt.IsNil)
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test2"})
-	policy.refreshAsync().wait()
-	config = policy.getConfigurationAsync().get().(string)
+	srv.setResponse(configResponse{body: `{"test":1}`})
+	client.Refresh(context.Background())
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":1}`)
 
-	if config != "test2" {
-		t.Error("Expecting test2 as result")
-	}
+	srv.setResponse(configResponse{body: `{"test":2}`})
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":1}`)
+	client.Refresh(context.Background())
+	srv.setResponse(configResponse{body: `{"test":2}`})
 }
 
-func TestManualPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
-	fetcher := newFakeConfigProvider()
-	logger := DefaultLogger()
-	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
-	policy := newManualPollingPolicy(
-		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
-		logger,
-	)
-	config := policy.getConfigurationAsync().get().(string)
+func TestManualPollingPolicy_FetchFail(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
 
-	if config != "" {
-		t.Error("Expecting default")
-	}
+	cfg := srv.config()
+	cfg.PollingMode = Manual
+	client := NewCustomClient(cfg)
+	defer client.Close()
+
+	c.Assert(client.fetcher.current(), qt.IsNil)
+
+	srv.setResponse(configResponse{
+		status: http.StatusInternalServerError,
+		body:   `something failed`,
+	})
+	client.Refresh(context.Background())
+	c.Assert(client.fetcher.current(), qt.IsNil)
 }

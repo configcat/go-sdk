@@ -10,14 +10,14 @@ ConfigCat is a <a target="_blank" href="https://configcat.com">hosted feature fl
 [![Build Status](https://github.com/configcat/go-sdk/actions/workflows/go-ci.yml/badge.svg?branch=master)](https://github.com/configcat/go-sdk/actions/workflows/go-ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/configcat/go-sdk)](https://goreportcard.com/report/github.com/configcat/go-sdk)
 [![codecov](https://codecov.io/gh/configcat/go-sdk/branch/master/graph/badge.svg)](https://codecov.io/gh/configcat/go-sdk)
-[![GoDoc](https://godoc.org/github.com/configcat/go-sdk?status.svg)](https://pkg.go.dev/github.com/configcat/go-sdk/v7)
+[![GoDoc](https://godoc.org/github.com/configcat/go-sdk?status.svg)](https://pkg.go.dev/github.com/configcat/go-sdk/v8)
 ![License](https://img.shields.io/github/license/configcat/go-sdk.svg)
 
 ## Getting started
 
 ### 1. Install the package with `go`
 ```bash
-go get github.com/configcat/go-sdk/v7
+go get github.com/configcat/go-sdk/v8
 ```
 
 ### 2. Go to the <a href="https://app.configcat.com/sdkkey" target="_blank">ConfigCat Dashboard</a> to get your *SDK Key*:
@@ -26,7 +26,7 @@ go get github.com/configcat/go-sdk/v7
 
 ### 3. Import the *ConfigCat* client package to your application
 ```go
-import "github.com/configcat/go-sdk/v7"
+import "github.com/configcat/go-sdk/v8"
 ```
 
 ### 4. Create a *ConfigCat* client instance:

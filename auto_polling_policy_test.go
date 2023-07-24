@@ -1,83 +1,93 @@
 package configcat
 
 import (
+	"context"
+	"net/http"
 	"testing"
 	"time"
+
+	qt "github.com/frankban/quicktest"
 )
 
-func TestAutoPollingPolicy_GetConfigurationAsync(t *testing.T) {
-	fetcher := newFakeConfigProvider()
+func TestAutoPollingPolicy_PollChange(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{body: `{"test":1}`})
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
-	logger := DefaultLogger()
-	policy := newAutoPollingPolicy(
-		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
-		logger,
-		autoPollConfig{time.Second * 2, nil},
-	)
-	defer policy.close()
+	cfg := srv.config()
+	cfg.PollInterval = 10 * time.Millisecond
+	client := NewCustomClient(cfg)
+	defer client.Close()
+	err := client.Refresh(context.Background())
+	c.Assert(err, qt.Equals, nil)
 
-	config := policy.getConfigurationAsync().get().(string)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
 
-	if config != "test" {
-		t.Error("Expecting test as result")
-	}
+	srv.setResponse(configResponse{body: `{"test":2}`})
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
 
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test2"})
-	config = policy.getConfigurationAsync().get().(string)
-
-	if config != "test" {
-		t.Error("Expecting test as result")
-	}
-
-	time.Sleep(time.Second * 4)
-	config = policy.getConfigurationAsync().get().(string)
-
-	if config != "test2" {
-		t.Error("Expecting test2 as result")
-	}
+	time.Sleep(40 * time.Millisecond)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":2}`)
 }
 
-func TestAutoPollingPolicy_GetConfigurationAsync_Fail(t *testing.T) {
-	fetcher := newFakeConfigProvider()
+func TestAutoPollingPolicy_FetchFail(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		status: http.StatusInternalServerError,
+		body:   `something wrong`,
+	})
+	cfg := srv.config()
+	cfg.PollInterval = 2 * time.Second
+	client := NewCustomClient(cfg)
+	defer client.Close()
+	err := client.Refresh(context.Background())
+	c.Assert(err, qt.ErrorMatches, `config fetch failed: unexpected HTTP response was received while trying to fetch config JSON: 500 Internal Server Error`)
 
-	fetcher.SetResponse(fetchResponse{status: Failure, body: ""})
-	logger := DefaultLogger()
-	policy := newAutoPollingPolicy(
-		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
-		logger,
-		autoPollConfig{time.Second * 2, nil},
-	)
-	defer policy.close()
-
-	config := policy.getConfigurationAsync().get().(string)
-
-	if config != "" {
-		t.Error("Expecting default")
-	}
+	conf := client.Snapshot(nil).config
+	c.Assert(conf, qt.IsNil)
 }
 
-func TestAutoPollingPolicy_GetConfigurationAsync_WithListener(t *testing.T) {
-	fetcher := newFakeConfigProvider()
-	logger := DefaultLogger()
-	fetcher.SetResponse(fetchResponse{status: Fetched, body: "test"})
-	c := make(chan bool, 1)
-	defer close(c)
-	policy := newAutoPollingPolicy(
-		fetcher,
-		newConfigStore(logger, newInMemoryConfigCache()),
-		logger,
-		AutoPollWithChangeListener(
-			time.Second*2,
-			func() { c <- true },
-		).(autoPollConfig),
-	)
-	defer policy.close()
-	called := <-c
+func TestAutoPollingPolicy_DoubleClose(t *testing.T) {
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{body: `{"test":1}`})
+	cfg := srv.config()
+	cfg.PollInterval = time.Millisecond
+	client := NewCustomClient(cfg)
+	client.Close()
+	client.Close()
+}
 
-	if !called {
-		t.Error("Expecting test as result")
+func TestAutoPollingPolicy_WithNotify(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{body: `{"test":1}`})
+	cfg := srv.config()
+	notifyc := make(chan struct{})
+	cfg.PollInterval = time.Millisecond
+	cfg.Hooks = &Hooks{OnConfigChanged: func() { notifyc <- struct{}{} }}
+	client := NewCustomClient(cfg)
+	defer client.Close()
+	select {
+	case <-notifyc:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for notification")
+	}
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
+
+	// Change the content and we should see another notification.
+	srv.setResponse(configResponse{body: `{"test":2}`})
+	select {
+	case <-notifyc:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for notification")
+	}
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":2}`)
+
+	// Check that we don't see any more notifications.
+	select {
+	case <-notifyc:
+		t.Fatalf("unexpected notification received")
+	case <-time.After(20 * time.Millisecond):
 	}
 }
