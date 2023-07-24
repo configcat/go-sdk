@@ -2,7 +2,6 @@ package configcat
 
 import (
 	"context"
-	"crypto/sha1"
 	"fmt"
 	"github.com/configcat/go-sdk/v8/internal/wireconfig"
 	"io/ioutil"
@@ -12,9 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 )
-
-const configJSONCacheVersion = "v2"
-const configJSONName = "config_v5"
 
 const (
 	globalBaseURL = "https://cdn-global.configcat.com"
@@ -71,7 +67,7 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *conf
 	f := &configFetcher{
 		sdkKey:    cfg.SDKKey,
 		cache:     cfg.Cache,
-		cacheKey:  sdkKeyToCacheKey(cfg.SDKKey),
+		cacheKey:  ProduceCacheKey(cfg.SDKKey),
 		overrides: cfg.FlagOverrides,
 		hooks:     cfg.Hooks,
 		logger:    logger,
@@ -292,7 +288,7 @@ func (f *configFetcher) parseFromCache(ctx context.Context) (fetchTime time.Time
 		return time.Time{}, "", nil, fmt.Errorf("empty config text in cache")
 	}
 
-	return GetCacheSegments(cacheText)
+	return CacheSegmentsFromBytes(cacheText)
 }
 
 func (f *configFetcher) saveToCache(ctx context.Context, fetchTime time.Time, eTag string, config []byte) (err error) {
@@ -300,7 +296,7 @@ func (f *configFetcher) saveToCache(ctx context.Context, fetchTime time.Time, eT
 		return nil
 	}
 
-	toCache := CacheSegmentsToByte(fetchTime, eTag, config)
+	toCache := CacheSegmentsToBytes(fetchTime, eTag, config)
 	return f.cache.Set(ctx, f.cacheKey, toCache)
 }
 
@@ -370,7 +366,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 	if f.sdkKey == "" {
 		return nil, &fetcherError{EventId: 0, Err: fmt.Errorf("empty SDK key in configcat configuration")}
 	}
-	request, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/configuration-files/"+f.sdkKey+"/"+configJSONName+".json", nil)
+	request, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/configuration-files/"+f.sdkKey+"/"+configJSONName, nil)
 	if err != nil {
 		return nil, &fetcherError{EventId: 0, Err: err}
 	}
@@ -411,10 +407,6 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 		return nil, &fetcherError{EventId: 1100, Err: fmt.Errorf("your SDK Key seems to be wrong; you can find the valid SDK Key at https://app.configcat.com/sdkkey")}
 	}
 	return nil, &fetcherError{EventId: 1101, Err: fmt.Errorf("unexpected HTTP response was received while trying to fetch config JSON: %v", response.Status)}
-}
-
-func sdkKeyToCacheKey(sdkKey string) string {
-	return fmt.Sprintf("%x", sha1.Sum([]byte(sdkKey+"_"+configJSONName+"_"+configJSONCacheVersion)))
 }
 
 func pollingModeToIdentifier(pollingMode PollingMode) string {

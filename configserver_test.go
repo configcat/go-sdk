@@ -79,7 +79,7 @@ func (srv *configServer) allResponses() []configResponse {
 }
 
 func (srv *configServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if req.URL.Path != "/configuration-files/"+srv.key+"/"+configJSONName+".json" {
+	if req.URL.Path != "/configuration-files/"+srv.key+"/"+configJSONName {
 		srv.t.Errorf("unexpected HTTP call: %s %s", req.Method, req.URL)
 		http.NotFound(w, req)
 		return

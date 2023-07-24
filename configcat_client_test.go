@@ -933,6 +933,11 @@ func TestClient_OfflineOnlineMode(t *testing.T) {
 	c.Assert(srv.requestCount, qt.Equals, 2)
 }
 
+func TestCacheKey(t *testing.T) {
+	c := qt.New(t)
+	c.Assert(ProduceCacheKey("PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA"), qt.Equals, "035341fa857a2a0fb82014468f7a0dd61d5b8a38")
+}
+
 type failingCache struct{}
 
 // get reads the configuration from the cache.
