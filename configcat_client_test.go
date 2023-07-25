@@ -3,6 +3,7 @@ package configcat
 import (
 	"context"
 	"errors"
+	"github.com/configcat/go-sdk/v8/internal/cacheutils"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -935,7 +936,7 @@ func TestClient_OfflineOnlineMode(t *testing.T) {
 
 func TestCacheKey(t *testing.T) {
 	c := qt.New(t)
-	c.Assert(ProduceCacheKey("PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA"), qt.Equals, "035341fa857a2a0fb82014468f7a0dd61d5b8a38")
+	c.Assert(cacheutils.ProduceCacheKey("PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA"), qt.Equals, "035341fa857a2a0fb82014468f7a0dd61d5b8a38")
 }
 
 type failingCache struct{}

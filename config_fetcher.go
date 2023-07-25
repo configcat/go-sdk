@@ -3,6 +3,7 @@ package configcat
 import (
 	"context"
 	"fmt"
+	"github.com/configcat/go-sdk/v8/internal/cacheutils"
 	"github.com/configcat/go-sdk/v8/internal/wireconfig"
 	"io/ioutil"
 	"net/http"
@@ -67,7 +68,7 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *conf
 	f := &configFetcher{
 		sdkKey:    cfg.SDKKey,
 		cache:     cfg.Cache,
-		cacheKey:  ProduceCacheKey(cfg.SDKKey),
+		cacheKey:  cacheutils.ProduceCacheKey(cfg.SDKKey),
 		overrides: cfg.FlagOverrides,
 		hooks:     cfg.Hooks,
 		logger:    logger,
@@ -288,7 +289,7 @@ func (f *configFetcher) parseFromCache(ctx context.Context) (fetchTime time.Time
 		return time.Time{}, "", nil, fmt.Errorf("empty config text in cache")
 	}
 
-	return CacheSegmentsFromBytes(cacheText)
+	return cacheutils.CacheSegmentsFromBytes(cacheText)
 }
 
 func (f *configFetcher) saveToCache(ctx context.Context, fetchTime time.Time, eTag string, config []byte) (err error) {
@@ -296,7 +297,7 @@ func (f *configFetcher) saveToCache(ctx context.Context, fetchTime time.Time, eT
 		return nil
 	}
 
-	toCache := CacheSegmentsToBytes(fetchTime, eTag, config)
+	toCache := cacheutils.CacheSegmentsToBytes(fetchTime, eTag, config)
 	return f.cache.Set(ctx, f.cacheKey, toCache)
 }
 
@@ -366,7 +367,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 	if f.sdkKey == "" {
 		return nil, &fetcherError{EventId: 0, Err: fmt.Errorf("empty SDK key in configcat configuration")}
 	}
-	request, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/configuration-files/"+f.sdkKey+"/"+configJSONName, nil)
+	request, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/configuration-files/"+f.sdkKey+"/"+cacheutils.ConfigJSONName, nil)
 	if err != nil {
 		return nil, &fetcherError{EventId: 0, Err: err}
 	}

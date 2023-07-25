@@ -1,4 +1,5 @@
-package configcat
+// Package cacheutils holds utility functions for the SDK's caching.
+package cacheutils
 
 import (
 	"bytes"
@@ -47,12 +48,12 @@ func CacheSegmentsToBytes(fetchTime time.Time, eTag string, config []byte) []byt
 	return toCache
 }
 
-const configJSONCacheVersion = "v2"
-const configJSONName = "config_v5.json"
+const ConfigJSONCacheVersion = "v2"
+const ConfigJSONName = "config_v5.json"
 
 // ProduceCacheKey constructs a cache key from an SDK key used to identify a cache entry.
 func ProduceCacheKey(sdkKey string) string {
 	h := sha1.New()
-	h.Write([]byte(sdkKey + "_" + configJSONName + "_" + configJSONCacheVersion))
+	h.Write([]byte(sdkKey + "_" + ConfigJSONName + "_" + ConfigJSONCacheVersion))
 	return hex.EncodeToString(h.Sum(nil))
 }
