@@ -3,7 +3,7 @@ package configcat
 import (
 	"context"
 	"fmt"
-	"github.com/configcat/go-sdk/v8/internal/cacheutils"
+	"github.com/configcat/go-sdk/v8/configcatcache"
 	"net/http"
 	"sync"
 	"testing"
@@ -34,7 +34,7 @@ func TestFetchFailWithCacheFallback(t *testing.T) {
 	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":1}`)
 	for key := range cache.allItems() {
 		cached, _ := cache.Get(context.Background(), key)
-		_, _, b, _ := cacheutils.CacheSegmentsFromBytes(cached)
+		_, _, b, _ := configcatcache.CacheSegmentsFromBytes(cached)
 		c.Assert(string(b), qt.Equals, `{"test":1}`)
 	}
 
@@ -57,7 +57,7 @@ func TestFetchFailWithCacheFallback(t *testing.T) {
 	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":1}`)
 	for key := range cache.allItems() {
 		cached, _ := cache.Get(context.Background(), key)
-		_, _, b, _ := cacheutils.CacheSegmentsFromBytes(cached)
+		_, _, b, _ := configcatcache.CacheSegmentsFromBytes(cached)
 		c.Assert(string(b), qt.Equals, `{"test":1}`)
 	}
 
@@ -71,13 +71,13 @@ func TestFetchFailWithCacheFallback(t *testing.T) {
 	// Check that if the cache value changes, it's still consulted.
 	cache.setGetError(nil)
 	for key := range cache.allItems() {
-		cache.Set(context.Background(), key, cacheutils.CacheSegmentsToBytes(time.Now(), "etag", []byte(`{"test":2}`)))
+		cache.Set(context.Background(), key, configcatcache.CacheSegmentsToBytes(time.Now(), "etag", []byte(`{"test":2}`)))
 	}
 	time.Sleep(20 * time.Millisecond)
 	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":2}`)
 	for key := range cache.allItems() {
 		cached, _ := cache.Get(context.Background(), key)
-		_, _, b, _ := cacheutils.CacheSegmentsFromBytes(cached)
+		_, _, b, _ := configcatcache.CacheSegmentsFromBytes(cached)
 		c.Assert(string(b), qt.Equals, `{"test":2}`)
 	}
 
@@ -87,7 +87,7 @@ func TestFetchFailWithCacheFallback(t *testing.T) {
 	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":99}`)
 	for key := range cache.allItems() {
 		cached, _ := cache.Get(context.Background(), key)
-		_, _, b, _ := cacheutils.CacheSegmentsFromBytes(cached)
+		_, _, b, _ := configcatcache.CacheSegmentsFromBytes(cached)
 		c.Assert(string(b), qt.Equals, `{"test":99}`)
 	}
 }
@@ -115,7 +115,7 @@ func Test_Consistent_Cache(t *testing.T) {
 	c.Assert(details.Data.FetchTime.UnixMilli(), qt.Equals, int64(1690219337289))
 	c.Assert(details.Value, qt.IsTrue)
 	cached, _ := cache.Get(context.Background(), "")
-	ft, etag, _, _ := cacheutils.CacheSegmentsFromBytes(cached)
+	ft, etag, _, _ := configcatcache.CacheSegmentsFromBytes(cached)
 	c.Assert(ft.UnixMilli(), qt.Equals, int64(1690219337289))
 	c.Assert(etag, qt.Equals, "6458130e-993")
 }

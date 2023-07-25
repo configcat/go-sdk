@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/configcat/go-sdk/v8/internal/cacheutils"
+	"github.com/configcat/go-sdk/v8/configcatcache"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -80,7 +80,7 @@ func (srv *configServer) allResponses() []configResponse {
 }
 
 func (srv *configServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if req.URL.Path != "/configuration-files/"+srv.key+"/"+cacheutils.ConfigJSONName {
+	if req.URL.Path != "/configuration-files/"+srv.key+"/"+configcatcache.ConfigJSONName {
 		srv.t.Errorf("unexpected HTTP call: %s %s", req.Method, req.URL)
 		http.NotFound(w, req)
 		return

@@ -1,5 +1,5 @@
-// Package cacheutils holds utility functions for the SDK's caching.
-package cacheutils
+// Package configcatcache holds utility functions for the SDK's caching.
+package configcatcache
 
 import (
 	"bytes"
