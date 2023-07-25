@@ -28,8 +28,14 @@ func CacheSegmentsFromBytes(cacheBytes []byte) (fetchTime time.Time, eTag string
 	}
 
 	eTagBytes := cacheBytes[fetchTimeIndex+1 : fetchTimeIndex+eTagIndex+1]
+	if len(eTagBytes) == 0 {
+		return time.Time{}, "", nil, fmt.Errorf("empty eTag value")
+	}
 
 	configBytes := cacheBytes[eTagIndex+1+fetchTimeIndex+1:]
+	if len(configBytes) == 0 {
+		return time.Time{}, "", nil, fmt.Errorf("empty config JSON")
+	}
 
 	return time.UnixMilli(fetchTimeMs), string(eTagBytes), configBytes, nil
 }

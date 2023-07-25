@@ -263,10 +263,6 @@ func (f *configFetcher) readCache(ctx context.Context, prevConfig *config) (_ *c
 		f.logger.Errorf(2200, "error occurred while reading the cache: %v", cacheErr)
 		return nil
 	}
-	if len(configBytes) == 0 {
-		f.logger.Debugf("empty config text in cache")
-		return nil
-	}
 	cfg, parseErr := parseConfig(configBytes, eTag, fetchTime, f.logger, f.defaultUser, f.overrides, f.hooks)
 	if parseErr != nil {
 		f.logger.Errorf(2200, "error occurred while reading the cache; cache contained invalid config: %v", parseErr)
@@ -284,9 +280,6 @@ func (f *configFetcher) parseFromCache(ctx context.Context) (fetchTime time.Time
 	cacheText, cacheErr := f.cache.Get(ctx, f.cacheKey)
 	if cacheErr != nil {
 		return time.Time{}, "", nil, cacheErr
-	}
-	if len(cacheText) == 0 {
-		return time.Time{}, "", nil, fmt.Errorf("empty config text in cache")
 	}
 
 	return configcatcache.CacheSegmentsFromBytes(cacheText)

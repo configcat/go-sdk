@@ -936,7 +936,8 @@ func TestClient_OfflineOnlineMode(t *testing.T) {
 
 func TestCacheKey(t *testing.T) {
 	c := qt.New(t)
-	c.Assert(configcatcache.ProduceCacheKey("PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA"), qt.Equals, "035341fa857a2a0fb82014468f7a0dd61d5b8a38")
+	c.Assert(configcatcache.ProduceCacheKey("test1"), qt.Equals, "147c5b4c2b2d7c77e1605b1a4309f0ea6684a0c6")
+	c.Assert(configcatcache.ProduceCacheKey("test2"), qt.Equals, "c09513b1756de9e4bc48815ec7a142b2441ed4d5")
 }
 
 type failingCache struct{}
