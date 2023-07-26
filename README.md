@@ -7,9 +7,9 @@ ConfigCat is a feature flag and configuration management service that lets you s
 
 ConfigCat is a <a target="_blank" href="https://configcat.com">hosted feature flag service</a>. Manage feature toggles across frontend, backend, mobile, desktop apps. <a target="_blank" href="https://configcat.com">Alternative to LaunchDarkly</a>. Management app + feature flag SDKs.
 
-[![Build Status](https://github.com/configcat/go-sdk/actions/workflows/go-ci.yml/badge.svg?branch=master)](https://github.com/configcat/go-sdk/actions/workflows/go-ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/configcat/go-sdk)](https://goreportcard.com/report/github.com/configcat/go-sdk)
-[![codecov](https://codecov.io/gh/configcat/go-sdk/branch/master/graph/badge.svg)](https://codecov.io/gh/configcat/go-sdk)
+[![Build Status](https://github.com/configcat/go-sdk/actions/workflows/go-ci.yml/badge.svg?branch=v8)](https://github.com/configcat/go-sdk/actions/workflows/go-ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/configcat/go-sdk/v8)](https://goreportcard.com/report/github.com/configcat/go-sdk/v8)
+[![codecov](https://codecov.io/gh/configcat/go-sdk/branch/v8/graph/badge.svg)](https://codecov.io/gh/configcat/go-sdk)
 [![GoDoc](https://godoc.org/github.com/configcat/go-sdk?status.svg)](https://pkg.go.dev/github.com/configcat/go-sdk/v8)
 ![License](https://img.shields.io/github/license/configcat/go-sdk.svg)
 
