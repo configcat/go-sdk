@@ -8,7 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/configcat/go-sdk/v8/internal/wireconfig"
+	configcat "github.com/configcat/go-sdk/v8"
 	"net/http"
 	"sync"
 )
@@ -56,20 +56,20 @@ func (h *Handler) SetFlags(sdkKey string, flags map[string]*Flag) error {
 	if h.contents == nil {
 		h.contents = make(map[string][]byte)
 	}
-	h.contents["/configuration-files/"+sdkKey+"/config_v5.json"] = data
+	h.contents["/configuration-files/"+sdkKey+"/config_v6.json"] = data
 	return nil
 }
 
 func makeContent(flags map[string]*Flag) ([]byte, error) {
-	root := &wireconfig.RootNode{
-		Entries: make(map[string]*wireconfig.Entry, len(flags)),
+	root := &configcat.ConfigJson{
+		Settings: make(map[string]*configcat.Setting, len(flags)),
 	}
 	for name, flag := range flags {
 		e, err := flag.entry(name)
 		if err != nil {
 			return nil, fmt.Errorf("invalid flag %q: %v", name, err)
 		}
-		root.Entries[name] = e
+		root.Settings[name] = e
 	}
 	data, err := json.Marshal(root)
 	if err != nil {

@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/configcat/go-sdk/v8/internal/wireconfig"
 	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp"
 )
@@ -13,7 +12,7 @@ import (
 func TestLazyLoadingPolicy_NoAsync(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1", wireconfig.StringEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1", StringSetting))
 
 	cfg := srv.config()
 	cfg.PollingMode = Lazy
@@ -24,7 +23,7 @@ func TestLazyLoadingPolicy_NoAsync(t *testing.T) {
 	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
 
 	srv.setResponse(configResponse{
-		body:  marshalJSON(rootNodeWithKeyValue("key", "value2", wireconfig.StringEntry)),
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value2", StringSetting)),
 		sleep: 40 * time.Millisecond,
 	})
 	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
@@ -53,7 +52,7 @@ func TestLazyLoadingPolicy_FetchFail(t *testing.T) {
 func TestLazyLoadingPolicy_Async(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1", wireconfig.StringEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value1", StringSetting))
 
 	cfg := srv.config()
 	cfg.PollingMode = Lazy
@@ -68,7 +67,7 @@ func TestLazyLoadingPolicy_Async(t *testing.T) {
 	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")
 
 	srv.setResponse(configResponse{
-		body:  marshalJSON(rootNodeWithKeyValue("key", "value2", wireconfig.StringEntry)),
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value2", StringSetting)),
 		sleep: 40 * time.Millisecond,
 	})
 	c.Assert(client.GetStringValue("key", "", nil), qt.Equals, "value1")

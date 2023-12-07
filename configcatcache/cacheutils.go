@@ -51,11 +51,11 @@ func CacheSegmentsToBytes(fetchTime time.Time, eTag string, config []byte) []byt
 }
 
 const ConfigJSONCacheVersion = "v2"
-const ConfigJSONName = "config_v5.json"
+const ConfigJSONName = "config_v6.json"
 
 // ProduceCacheKey constructs a cache key from an SDK key used to identify a cache entry.
-func ProduceCacheKey(sdkKey string) string {
+func ProduceCacheKey(sdkKey string, configJSONName string, cacheVersion string) string {
 	h := sha1.New()
-	h.Write([]byte(sdkKey + "_" + ConfigJSONName + "_" + ConfigJSONCacheVersion))
+	h.Write([]byte(sdkKey + "_" + configJSONName + "_" + cacheVersion))
 	return hex.EncodeToString(h.Sum(nil))
 }

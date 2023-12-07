@@ -3,7 +3,6 @@ package configcat
 import (
 	"errors"
 	"fmt"
-	"github.com/configcat/go-sdk/v8/internal/wireconfig"
 	"reflect"
 	"strings"
 	"sync"
@@ -40,13 +39,14 @@ type Snapshot struct {
 	hooks        *Hooks
 	originalUser User
 	user         reflect.Value
+	userTypeInfo *userTypeInfo
 	allKeys      []string
 
 	// values holds the value for each possible value ID, as stored in config.values.
 	values []interface{}
 
-	// precalc holds precalculated value IDs as stored in config.precalc.
-	precalc []valueID
+	// valueIds holds precalculated value IDs as stored in config.valueIds.
+	valueIds []valueID
 
 	// cache records the value IDs that have been
 	// recorded for values that are not known ahead
@@ -62,7 +62,7 @@ type Snapshot struct {
 	makeCache sync.Once
 
 	// evaluators maps keyID to the evaluator for that key.
-	evaluators []entryEvalFunc
+	evaluators []settingEvalFunc
 }
 
 // NewSnapshot returns a snapshot that always returns the given values.
@@ -99,21 +99,21 @@ func NewSnapshot(logger Logger, values map[string]interface{}) (*Snapshot, error
 		keys = append(keys, name)
 	}
 	// Save some allocations by using the same closure for every key.
-	eval := func(id keyID, logger *leveledLogger, userv reflect.Value) (valueID, string, *wireconfig.RolloutRule, *wireconfig.PercentageRule) {
+	eval := func(id keyID, userv reflect.Value, info *userTypeInfo) (valueID, string, *TargetingRule, *PercentageOption) {
 		return valueID(id) + 1, "", nil, nil
 	}
-	evaluators := make([]entryEvalFunc, len(valuesSlice))
-	precalc := make([]valueID, len(valuesSlice))
+	evaluators := make([]settingEvalFunc, len(valuesSlice))
+	valueIds := make([]valueID, len(valuesSlice))
 	for i := range evaluators {
 		evaluators[i] = eval
-		precalc[i] = valueID(i) + 1
+		valueIds[i] = valueID(i) + 1
 	}
 	return &Snapshot{
-		logger:     newLeveledLogger(logger, nil),
+		logger:     newLeveledLogger(logger, LogLevelNone, nil),
 		evaluators: evaluators,
 		allKeys:    keys,
 		values:     valuesSlice,
-		precalc:    precalc,
+		valueIds:   valueIds,
 	}, nil
 }
 
@@ -135,22 +135,24 @@ func _newSnapshot(cfg *config, user User, logger *leveledLogger, hooks *Hooks) *
 		originalUser: user,
 		hooks:        hooks,
 	}
-	var userType reflect.Type
-	if user != nil {
-		userType = snap.user.Type()
+	if user != nil && !snap.user.IsNil() {
+		userInfo, err := newUserTypeInfo(snap.user.Type())
+		if err != nil {
+			logger.Errorf(0, "%v", err)
+			return snap
+		}
+		snap.userTypeInfo = userInfo
+		if userInfo.deref {
+			snap.user = snap.user.Elem()
+		}
 	}
 	if cfg == nil {
 		return snap
 	}
-	evaluators, err := cfg.evaluatorsForUserType(userType)
-	if err != nil {
-		logger.Errorf(0, "%v", err)
-		return snap
-	}
-	snap.evaluators = evaluators
+	snap.evaluators = cfg.evaluators
 	snap.values = cfg.values
 	snap.allKeys = cfg.allKeys
-	snap.precalc = cfg.precalc
+	snap.valueIds = cfg.valueIds
 	return snap
 }
 
@@ -174,11 +176,11 @@ func (snap *Snapshot) value(id keyID, key string) interface{} {
 	if snap == nil {
 		return nil
 	}
-	if snap.logger.enabled(LogLevelInfo) || int(id) >= len(snap.precalc) || (snap.hooks != nil && snap.hooks.OnFlagEvaluated != nil) {
+	if snap.logger.enabled(LogLevelInfo) || int(id) >= len(snap.valueIds) || (snap.hooks != nil && snap.hooks.OnFlagEvaluated != nil) {
 		// We want to see logs, or we don't know about the key so use the slow path.
 		return snap.valueFromDetails(id, key)
 	}
-	valID := snap.precalc[id]
+	valID := snap.valueIds[id]
 	if valID > 0 {
 		// We've got a precalculated value for the key.
 		return snap.valueForID(valID)
@@ -218,11 +220,11 @@ func (snap *Snapshot) valueFromDetails(id keyID, key string) interface{} {
 	return nil
 }
 
-func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *wireconfig.RolloutRule, *wireconfig.PercentageRule, error) {
+func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *TargetingRule, *PercentageOption, error) {
 	if snap == nil {
 		return nil, "", nil, nil, errors.New("snapshot is nil")
 	}
-	var eval entryEvalFunc
+	var eval settingEvalFunc
 	if int(id) < len(snap.evaluators) {
 		eval = snap.evaluators[id]
 	}
@@ -231,12 +233,12 @@ func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *wirec
 		snap.logger.Errorf(1001, err.Error())
 		return nil, "", nil, nil, err
 	}
-	valID, varID, rollout, percentage := eval(id, snap.logger, snap.user)
+	valID, varID, targeting, percentage := eval(id, snap.user, snap.userTypeInfo)
 	val := snap.valueForID(valID)
 	if snap.logger.enabled(LogLevelInfo) {
 		snap.logger.Infof(5000, "returning %v=%v", key, val)
 	}
-	if v := snap.precalc[id]; v < 0 {
+	if v := snap.valueIds[id]; v < 0 {
 		snap.initCache()
 		cacheIndex := -v - 1
 		atomic.StoreInt32(&snap.cache[cacheIndex], valID)
@@ -245,23 +247,23 @@ func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *wirec
 		go snap.hooks.OnFlagEvaluated(&EvaluationDetails{
 			Value: val,
 			Data: EvaluationDetailsData{
-				Key:                             key,
-				VariationID:                     varID,
-				User:                            snap.originalUser,
-				FetchTime:                       snap.FetchTime(),
-				MatchedEvaluationRule:           newPublicRolloutRuleOrNil(rollout),
-				MatchedEvaluationPercentageRule: newPublicPercentageRuleOrNil(percentage),
+				Key:                     key,
+				VariationID:             varID,
+				User:                    snap.originalUser,
+				FetchTime:               snap.FetchTime(),
+				MatchedTargetingRule:    targeting,
+				MatchedPercentageOption: percentage,
 			},
 		})
 	}
-	return val, varID, rollout, percentage, nil
+	return val, varID, targeting, percentage, nil
 }
 
 func (snap *Snapshot) evalDetailsForKeyId(id keyID, key string, defaultValue interface{}) EvaluationDetails {
 	if snap == nil {
 		return EvaluationDetails{}
 	}
-	value, varID, rollout, percentage, err := snap.details(id, key)
+	value, varID, targeting, percentage, err := snap.details(id, key)
 	if err != nil {
 		return EvaluationDetails{Value: defaultValue, Data: EvaluationDetailsData{
 			Key:            key,
@@ -273,12 +275,12 @@ func (snap *Snapshot) evalDetailsForKeyId(id keyID, key string, defaultValue int
 	}
 
 	return EvaluationDetails{Value: value, Data: EvaluationDetailsData{
-		Key:                             key,
-		VariationID:                     varID,
-		User:                            snap.originalUser,
-		FetchTime:                       snap.FetchTime(),
-		MatchedEvaluationRule:           newPublicRolloutRuleOrNil(rollout),
-		MatchedEvaluationPercentageRule: newPublicPercentageRuleOrNil(percentage),
+		Key:                     key,
+		VariationID:             varID,
+		User:                    snap.originalUser,
+		FetchTime:               snap.FetchTime(),
+		MatchedTargetingRule:    targeting,
+		MatchedPercentageOption: percentage,
 	}}
 }
 

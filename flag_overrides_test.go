@@ -2,7 +2,6 @@ package configcat
 
 import (
 	"context"
-	"github.com/configcat/go-sdk/v8/internal/wireconfig"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -38,10 +37,7 @@ func TestFlagOverrides_File_Complex(t *testing.T) {
 	c.Assert(client.GetBoolValue("enabledFeature", false, nil), qt.IsTrue)
 	c.Assert(client.GetBoolValue("disabledFeature", false, nil), qt.IsFalse)
 	c.Assert(client.GetIntValue("intSetting", 0, nil), qt.Equals, 5)
-	// This is unfortunate but unavoidable. We can't tell the difference between
-	// a float and an int value in JSON, so when asking for a flag without
-	// knowing its type, we'll default to float.
-	c.Assert(client.Snapshot(nil).GetValue("intSetting"), qt.Equals, 5.0)
+	c.Assert(client.Snapshot(nil).GetValue("intSetting"), qt.Equals, 5)
 	c.Assert(client.GetFloatValue("doubleSetting", 0.0, nil), qt.Equals, 3.14)
 	c.Assert(client.GetStringValue("stringSetting", "", nil), qt.Equals, "test")
 }
@@ -126,7 +122,7 @@ func TestFlagOverrides_Values_Ignored_On_Wrong_Behavior(t *testing.T) {
 func TestFlagOverrides_Values_LocalOverRemote(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, wireconfig.BoolEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, BoolSetting))
 	cfg := srv.config()
 
 	cfg.FlagOverrides = &FlagOverrides{
@@ -149,7 +145,7 @@ func TestFlagOverrides_Values_LocalOverRemote(t *testing.T) {
 func TestFlagOverrides_Values_LocalOverRemoteRespectsRemoteIntType(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("intKey", 5, wireconfig.IntEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("intKey", 5, IntSetting))
 	cfg := srv.config()
 
 	// Even though the value has been specified as float locally,
@@ -175,7 +171,7 @@ func TestFlagOverrides_Values_LocalOverRemoteRespectsRemoteIntType(t *testing.T)
 func TestFlagOverrides_Values_RemoteOverLocal(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, wireconfig.BoolEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, BoolSetting))
 	cfg := srv.config()
 
 	cfg.FlagOverrides = &FlagOverrides{
@@ -198,7 +194,7 @@ func TestFlagOverrides_Values_RemoteOverLocal(t *testing.T) {
 func TestFlagOverrides_Values_Remote_Invalid(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, wireconfig.BoolEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, BoolSetting))
 	cfg := srv.config()
 
 	cfg.FlagOverrides = &FlagOverrides{
@@ -221,7 +217,7 @@ func TestFlagOverrides_Values_Remote_Invalid(t *testing.T) {
 func TestFlagOverrides_Values_Local_Invalid(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, wireconfig.BoolEntry))
+	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, BoolSetting))
 	cfg := srv.config()
 
 	cfg.FlagOverrides = &FlagOverrides{

@@ -4,14 +4,15 @@ import (
 	"bufio"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 
@@ -31,36 +32,94 @@ type integrationTestSuite struct {
 	kind     testKind
 }
 
-var integrationTestSuites = []integrationTestSuite{{
-	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A",
-	fileName: "testmatrix.csv",
-	kind:     valueKind,
-}, {
-	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA",
-	fileName: "testmatrix_semantic.csv",
-	kind:     valueKind,
-}, {
-	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw",
-	fileName: "testmatrix_number.csv",
-	kind:     valueKind,
-}, {
-	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w",
-	fileName: "testmatrix_semantic_2.csv",
-	kind:     valueKind,
-}, {
-	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/qX3TP2dTj06ZpCCT1h_SPA",
-	fileName: "testmatrix_sensitive.csv",
-	kind:     valueKind,
-}, {
-	sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/nQ5qkhRAUEa6beEyyrVLBA",
-	fileName: "testmatrix_variationId.csv",
-	kind:     variationKind,
-}}
+var integrationTestSuites = []integrationTestSuite{
+	{
+		sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A",
+		fileName: "testmatrix.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/BAr3KgLTP0ObzKnBTo5nhA",
+		fileName: "testmatrix_semantic.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/uGyK3q9_ckmdxRyI7vjwCw",
+		fileName: "testmatrix_number.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/q6jMCFIp-EmuAfnmZhPY7w",
+		fileName: "testmatrix_semantic_2.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/qX3TP2dTj06ZpCCT1h_SPA",
+		fileName: "testmatrix_sensitive.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/LcYz135LE0qbcacz2mgXnA",
+		fileName: "testmatrix_segments_old.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/nQ5qkhRAUEa6beEyyrVLBA",
+		fileName: "testmatrix_variationId.csv",
+		kind:     variationKind,
+	},
+}
+
+var integrationTestSuitesV2 = []integrationTestSuite{
+	{
+		sdkKey:   "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/AG6C1ngVb0CvM07un6JisQ",
+		fileName: "testmatrix.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/iV8vH2MBakKxkFZylxHmTg",
+		fileName: "testmatrix_semantic.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/FCWN-k1dV0iBf8QZrDgjdw",
+		fileName: "testmatrix_number.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/U8nt3zEhDEO5S2ulubCopA",
+		fileName: "testmatrix_semantic_2.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/-0YmVOUNgEGKkgRF-rU65g",
+		fileName: "testmatrix_sensitive.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/y_ZB7o-Xb0Swxth-ZlMSeA",
+		fileName: "testmatrix_segments_old.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/ByMO9yZNn02kXcm72lnY1A",
+		fileName: "testmatrix_and_or.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/OfQqcTjfFUGBwMKqtyEOrQ",
+		fileName: "testmatrix_comparators_v6.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/JoGwdqJZQ0K2xDy7LnbyOg",
+		fileName: "testmatrix_prerequisite_flag.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/h99HYXWWNE2bH8eWyLAVMA",
+		fileName: "testmatrix_segments.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/Da6w8dBbmUeMUBhh0iEeQQ",
+		fileName: "testmatrix_unicode.csv",
+		kind:     valueKind,
+	}, {
+		sdkKey:   "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/spQnkRTIPEWVivZkWM84lQ",
+		fileName: "testmatrix_variationId.csv",
+		kind:     variationKind,
+	},
+}
 
 func TestRolloutIntegration(t *testing.T) {
 	t.Parallel()
 	integration := os.Getenv("CONFIGCAT_DISABLE_INTEGRATION_TESTS") == ""
-	runIntegrationTests(t, integration, LogLevelDebug, func(t *testing.T, test integrationTest) {
+	testFunc := func(t *testing.T, test integrationTest) {
 		snap := test.client.Snapshot(test.user)
 		var val interface{}
 		switch test.kind {
@@ -73,47 +132,14 @@ func TestRolloutIntegration(t *testing.T) {
 			t.Fatalf("unexpected kind %v", test.kind)
 		}
 		qt.Assert(t, val, qt.Equals, test.expect)
-	})
-}
-
-func TestRolloutLogLevels(t *testing.T) {
-	t.Parallel()
-	for _, level := range []LogLevel{
-		LogLevelPanic,
-		LogLevelFatal,
-		LogLevelError,
-		LogLevelWarn,
-		LogLevelInfo,
-		LogLevelDebug,
-		LogLevelTrace,
-	} {
-		level := level
-		t.Run(level.String(), func(t *testing.T) {
-			t.Parallel()
-			runIntegrationTests(t, false, level, func(t *testing.T, test integrationTest) {
-				snap := test.client.Snapshot(test.user)
-				// Run the test three times concurrently on the same snapshot so we get
-				// to test the cached case and concurrent case as well as the uncached case.
-				for i := 0; i < 3; i++ {
-					var val interface{}
-					switch test.kind {
-					case valueKind:
-						val = snap.GetValue(test.key)
-					case variationKind:
-						details := snap.GetValueDetails(test.key)
-						val = details.Data.VariationID
-					}
-					qt.Check(t, val, qt.Equals, test.expect)
-				}
-			})
-		})
 	}
+	runIntegrationTests(t, integration, LogLevelWarn, integrationTestSuites, testFunc)
+	runIntegrationTests(t, integration, LogLevelWarn, integrationTestSuitesV2, testFunc)
 }
 
 func TestRolloutConcurrent(t *testing.T) {
 	t.Parallel()
-	// Test that the caching works OK by running all the tests
-	runIntegrationTests(t, false, LogLevelFatal, func(t *testing.T, test integrationTest) {
+	testFunc := func(t *testing.T, test integrationTest) {
 		// Note: we can't call t.Parallel here because the outer client logger
 		// has been bound to this test.
 		snap := test.client.Snapshot(test.user)
@@ -136,11 +162,19 @@ func TestRolloutConcurrent(t *testing.T) {
 			}()
 		}
 		wg.Wait()
-	})
+	}
+	// Test that the caching works OK by running all the tests
+	runIntegrationTests(t, false, LogLevelWarn, integrationTestSuites, testFunc)
+	runIntegrationTests(t, false, LogLevelWarn, integrationTestSuitesV2, testFunc)
 }
 
-func runIntegrationTests(t *testing.T, integration bool, logLevel LogLevel, runTest func(t *testing.T, test integrationTest)) {
-	for _, test := range integrationTestSuites {
+func TestGenerateFiles(t *testing.T) {
+	t.Skip("this test only generates the content of 'resources/content-by-key.json'")
+	generateJsonContentFile("resources/content-by-key.json", append(integrationTestSuites, integrationTestSuitesV2...))
+}
+
+func runIntegrationTests(t *testing.T, integration bool, logLevel LogLevel, suite []integrationTestSuite, runTest func(t *testing.T, test integrationTest)) {
+	for _, test := range suite {
 		test := test
 		t.Run(test.fileName, func(t *testing.T) {
 			t.Parallel()
@@ -169,8 +203,9 @@ func (test integrationTestSuite) runTests(t *testing.T, integration bool, logLev
 		srv.setResponse(configResponse{body: contentForIntegrationTestKey(test.sdkKey)})
 		cfg = srv.config()
 	}
-	tlogger := newTestLogger(t, logLevel).(*testLogger)
+	tlogger := newTestLogger(t).(*testLogger)
 	cfg.Logger = tlogger
+	cfg.LogLevel = logLevel
 	cfg.SDKKey = test.sdkKey
 	client := NewCustomClient(cfg)
 	defer client.Close()
@@ -187,6 +222,7 @@ func (test integrationTestSuite) runTests(t *testing.T, integration bool, logLev
 
 	reader := csv.NewReader(bufio.NewReader(file))
 	reader.Comma = ';'
+	reader.LazyQuotes = true
 
 	header, _ := reader.Read()
 	settingKeys := header[4:]
@@ -208,22 +244,19 @@ func (test integrationTestSuite) runTests(t *testing.T, integration bool, logLev
 					Country:    nullStr(line[2]),
 				}
 				if s := nullStr(line[3]); s != "" {
-					userVal.Custom = map[string]string{
+					userVal.Custom = map[string]interface{}{
 						customKey: s,
 					}
 				}
 				user = userVal
 			}
-			if logLevel >= LogLevelInfo {
+			if logLevel <= LogLevelInfo {
 				t.Logf("user %#v", user)
 			}
 
 			for i, settingKey := range settingKeys {
 				t.Run(fmt.Sprintf("key-%s", settingKey), func(t *testing.T) {
-					if logLevel >= LogLevelInfo {
-						t.Logf("rule:\n%s", describeRules(client.fetcher.current(), settingKey))
-					}
-					tlogger.logFunc = t.Logf
+					tlogger.t = t
 					expected := line[i+4]
 					var expectedVal interface{}
 					if test.kind == valueKind {
@@ -267,39 +300,31 @@ func nullStr(s string) string {
 	return s
 }
 
-func describeRules(cfg *config, specificKey string) string {
-	if cfg == nil {
-		return "no config"
-	}
-
-	var buf strings.Builder
-	printf := func(f string, a ...interface{}) {
-		fmt.Fprintf(&buf, f, a...)
-	}
-	printResult := func(value interface{}, variationID string) {
-		printf("\t→ %T %#v; variation %q\n", value, value, variationID)
-	}
-	keys := make([]string, 0, len(cfg.root.Entries))
-	for key := range cfg.root.Entries {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		if specificKey != "" && key != specificKey {
-			continue
+func generateJsonContentFile(fileName string, suite []integrationTestSuite) {
+	cont := make(map[string]interface{}, len(suite))
+	for _, test := range suite {
+		resp, err := http.DefaultClient.Get("https://cdn-global.configcat.com/configuration-files/" + test.sdkKey + "/config_v6.json")
+		if err != nil {
+			panic(err)
 		}
-		entry := cfg.root.Entries[key]
-		printf("%q\n", key)
-		for _, rule := range entry.RolloutRules {
-			printf("\t: user.%s %v %q\n", rule.ComparisonAttribute, rule.Comparator, rule.ComparisonValue)
-			printResult(rule.Value, rule.VariationID)
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
 		}
-		for _, rule := range entry.PercentageRules {
-			printf("\t: %d%%\n", rule.Percentage)
-			printResult(rule.Value, rule.VariationID)
+		var a map[string]interface{}
+		err = json.Unmarshal(b, &a)
+		if err != nil {
+			panic(err)
 		}
-		printf("\t: default\n")
-		printResult(entry.Value, entry.VariationID)
+		cont[test.sdkKey] = a
+		resp.Body.Close()
 	}
-	return buf.String()
+	d, err := json.Marshal(cont)
+	if err != nil {
+		panic(err)
+	}
+	err = os.WriteFile(fileName, d, fs.ModeExclusive)
+	if err != nil {
+		panic(err)
+	}
 }

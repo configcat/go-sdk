@@ -3,39 +3,52 @@ package configcat
 import (
 	"context"
 	"fmt"
-	"github.com/configcat/go-sdk/v8/internal/wireconfig"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
 )
 
 func BenchmarkGet(b *testing.B) {
+	age := float64(21)
 	benchmarks := []struct {
 		benchName      string
-		node           *wireconfig.RootNode
+		node           *ConfigJson
 		rule           string
 		makeUser       func() User
 		want           string
 		setDefaultUser bool
 	}{{
 		benchName: "one-of",
-		node: &wireconfig.RootNode{
-			Entries: map[string]*wireconfig.Entry{
+		node: &ConfigJson{
+			Settings: map[string]*Setting{
 				"rule": {
+					Type:        StringSetting,
 					VariationID: "607147d5",
-					Value:       "no-match",
-					RolloutRules: []*wireconfig.RolloutRule{{
-						ComparisonAttribute: "Email",
-						ComparisonValue:     "a@configcat.com, b@configcat.com",
-						Comparator:          wireconfig.OpOneOf,
-						VariationID:         "385d9803",
-						Value:               "email-match",
+					Value:       &SettingValue{StringValue: "no-match"},
+					TargetingRules: []*TargetingRule{{
+						Conditions: []*Condition{{
+							UserCondition: &UserCondition{
+								ComparisonAttribute: "Email",
+								StringArrayValue:    []string{"a@configcat.com", "b@configcat.com"},
+								Comparator:          OpOneOf,
+							},
+						}},
+						ServedValue: &ServedValue{
+							Value:       &SettingValue{StringValue: "email-match"},
+							VariationID: "385d9803",
+						},
 					}, {
-						ComparisonAttribute: "Country",
-						ComparisonValue:     "United",
-						Comparator:          wireconfig.OpNotOneOf,
-						VariationID:         "385d9803",
-						Value:               "country-match",
+						Conditions: []*Condition{{
+							UserCondition: &UserCondition{
+								ComparisonAttribute: "Country",
+								StringArrayValue:    []string{"United"},
+								Comparator:          OpNotOneOf,
+							},
+						}},
+						ServedValue: &ServedValue{
+							Value:       &SettingValue{StringValue: "country-match"},
+							VariationID: "385d9803",
+						},
 					}},
 				},
 			},
@@ -51,23 +64,36 @@ func BenchmarkGet(b *testing.B) {
 		want: "no-match",
 	}, {
 		benchName: "one-of-with-default-user",
-		node: &wireconfig.RootNode{
-			Entries: map[string]*wireconfig.Entry{
+		node: &ConfigJson{
+			Settings: map[string]*Setting{
 				"rule": {
+					Type:        StringSetting,
 					VariationID: "607147d5",
-					Value:       "no-match",
-					RolloutRules: []*wireconfig.RolloutRule{{
-						ComparisonAttribute: "Email",
-						ComparisonValue:     "a@configcat.com, b@configcat.com",
-						Comparator:          wireconfig.OpOneOf,
-						VariationID:         "385d9803",
-						Value:               "email-match",
+					Value:       &SettingValue{StringValue: "no-match"},
+					TargetingRules: []*TargetingRule{{
+						Conditions: []*Condition{{
+							UserCondition: &UserCondition{
+								ComparisonAttribute: "Email",
+								StringArrayValue:    []string{"a@configcat.com", "b@configcat.com"},
+								Comparator:          OpOneOf,
+							},
+						}},
+						ServedValue: &ServedValue{
+							Value:       &SettingValue{StringValue: "email-match"},
+							VariationID: "385d9803",
+						},
 					}, {
-						ComparisonAttribute: "Country",
-						ComparisonValue:     "United",
-						Comparator:          wireconfig.OpNotOneOf,
-						VariationID:         "385d9803",
-						Value:               "country-match",
+						Conditions: []*Condition{{
+							UserCondition: &UserCondition{
+								ComparisonAttribute: "Country",
+								StringArrayValue:    []string{"United"},
+								Comparator:          OpNotOneOf,
+							},
+						}},
+						ServedValue: &ServedValue{
+							Value:       &SettingValue{StringValue: "country-match"},
+							VariationID: "385d9803",
+						},
 					}},
 				},
 			},
@@ -84,17 +110,24 @@ func BenchmarkGet(b *testing.B) {
 		want:           "no-match",
 	}, {
 		benchName: "less-than-with-int",
-		node: &wireconfig.RootNode{
-			Entries: map[string]*wireconfig.Entry{
+		node: &ConfigJson{
+			Settings: map[string]*Setting{
 				"rule": {
+					Type:        StringSetting,
 					VariationID: "607147d5",
-					Value:       "no-match",
-					RolloutRules: []*wireconfig.RolloutRule{{
-						ComparisonAttribute: "Age",
-						ComparisonValue:     "21",
-						Comparator:          wireconfig.OpLessNum,
-						VariationID:         "385d9803",
-						Value:               "age-match",
+					Value:       &SettingValue{StringValue: "no-match"},
+					TargetingRules: []*TargetingRule{{
+						Conditions: []*Condition{{
+							UserCondition: &UserCondition{
+								ComparisonAttribute: "Age",
+								DoubleValue:         &age,
+								Comparator:          OpLessNum,
+							},
+						}},
+						ServedValue: &ServedValue{
+							Value:       &SettingValue{StringValue: "age-match"},
+							VariationID: "385d9803",
+						},
 					}},
 				},
 			},
@@ -108,32 +141,45 @@ func BenchmarkGet(b *testing.B) {
 		want: "age-match",
 	}, {
 		benchName: "with-percentage",
-		node: &wireconfig.RootNode{
-			Entries: map[string]*wireconfig.Entry{
+		node: &ConfigJson{
+			Settings: map[string]*Setting{
 				"bool30TrueAdvancedRules": {
+					Type:        StringSetting,
 					VariationID: "607147d5",
-					Value:       "no-match",
-					RolloutRules: []*wireconfig.RolloutRule{{
-						ComparisonAttribute: "Email",
-						ComparisonValue:     "a@configcat.com, b@configcat.com",
-						Comparator:          wireconfig.OpOneOf,
-						VariationID:         "385d9803",
-						Value:               "email-match",
+					Value:       &SettingValue{StringValue: "no-match"},
+					TargetingRules: []*TargetingRule{{
+						Conditions: []*Condition{{
+							UserCondition: &UserCondition{
+								ComparisonAttribute: "Email",
+								StringArrayValue:    []string{"a@configcat.com", "b@configcat.com"},
+								Comparator:          OpOneOf,
+							},
+						}},
+						ServedValue: &ServedValue{
+							Value:       &SettingValue{StringValue: "email-match"},
+							VariationID: "385d9803",
+						},
 					}, {
-						ComparisonAttribute: "Country",
-						ComparisonValue:     "United",
-						Comparator:          wireconfig.OpNotOneOf,
-						VariationID:         "385d9803",
-						Value:               "country-match",
+						Conditions: []*Condition{{
+							UserCondition: &UserCondition{
+								ComparisonAttribute: "Country",
+								StringArrayValue:    []string{"United"},
+								Comparator:          OpNotOneOf,
+							},
+						}},
+						ServedValue: &ServedValue{
+							Value:       &SettingValue{StringValue: "country-match"},
+							VariationID: "385d9803",
+						},
 					}},
-					PercentageRules: []*wireconfig.PercentageRule{{
-						VariationID: "607147d5",
-						Value:       "low-percent",
+					PercentageOptions: []*PercentageOption{{
 						Percentage:  30,
+						Value:       &SettingValue{StringValue: "low-percent"},
+						VariationID: "607147d5",
 					}, {
-						VariationID: "385d9803",
-						Value:       "high-percent",
 						Percentage:  70,
+						Value:       &SettingValue{StringValue: "high-percent"},
+						VariationID: "385d9803",
 					}},
 				},
 			},
@@ -149,10 +195,11 @@ func BenchmarkGet(b *testing.B) {
 		want: "high-percent",
 	}, {
 		benchName: "no-rules",
-		node: &wireconfig.RootNode{
-			Entries: map[string]*wireconfig.Entry{
+		node: &ConfigJson{
+			Settings: map[string]*Setting{
 				"simple": {
-					Value: "no-match",
+					Type:  StringSetting,
+					Value: &SettingValue{StringValue: "no-match"},
 				},
 			},
 		},
@@ -167,32 +214,45 @@ func BenchmarkGet(b *testing.B) {
 		want: "no-match",
 	}, {
 		benchName: "no-user",
-		node: &wireconfig.RootNode{
-			Entries: map[string]*wireconfig.Entry{
+		node: &ConfigJson{
+			Settings: map[string]*Setting{
 				"bool30TrueAdvancedRules": {
+					Type:        StringSetting,
 					VariationID: "607147d5",
-					Value:       "no-match",
-					RolloutRules: []*wireconfig.RolloutRule{{
-						ComparisonAttribute: "Email",
-						ComparisonValue:     "a@configcat.com, b@configcat.com",
-						Comparator:          wireconfig.OpOneOf,
-						VariationID:         "385d9803",
-						Value:               "email-match",
+					Value:       &SettingValue{StringValue: "no-match"},
+					TargetingRules: []*TargetingRule{{
+						Conditions: []*Condition{{
+							UserCondition: &UserCondition{
+								ComparisonAttribute: "Email",
+								StringArrayValue:    []string{"a@configcat.com", "b@configcat.com"},
+								Comparator:          OpOneOf,
+							},
+						}},
+						ServedValue: &ServedValue{
+							Value:       &SettingValue{StringValue: "email-match"},
+							VariationID: "385d9803",
+						},
 					}, {
-						ComparisonAttribute: "Country",
-						ComparisonValue:     "United",
-						Comparator:          wireconfig.OpNotOneOf,
-						VariationID:         "385d9803",
-						Value:               "country-match",
+						Conditions: []*Condition{{
+							UserCondition: &UserCondition{
+								ComparisonAttribute: "Country",
+								StringArrayValue:    []string{"United"},
+								Comparator:          OpNotOneOf,
+							},
+						}},
+						ServedValue: &ServedValue{
+							Value:       &SettingValue{StringValue: "country-match"},
+							VariationID: "385d9803",
+						},
 					}},
-					PercentageRules: []*wireconfig.PercentageRule{{
-						VariationID: "607147d5",
-						Value:       "low-percent",
+					PercentageOptions: []*PercentageOption{{
 						Percentage:  30,
+						Value:       &SettingValue{StringValue: "low-percent"},
+						VariationID: "607147d5",
 					}, {
-						VariationID: "385d9803",
-						Value:       "high-percent",
 						Percentage:  70,
+						Value:       &SettingValue{StringValue: "high-percent"},
+						VariationID: "385d9803",
 					}},
 				},
 			},
@@ -209,7 +269,8 @@ func BenchmarkGet(b *testing.B) {
 			srv.setResponseJSON(bench.node)
 			cfg := srv.config()
 			cfg.PollingMode = Manual
-			cfg.Logger = DefaultLogger(LogLevelError)
+			cfg.Logger = DefaultLogger()
+			cfg.LogLevel = LogLevelError
 			user := bench.makeUser()
 			if bench.setDefaultUser {
 				cfg.DefaultUser = user
@@ -256,7 +317,7 @@ func BenchmarkNewSnapshot(b *testing.B) {
 	for i := 0; i < nkeys; i++ {
 		m[fmt.Sprint("key", i)] = false
 	}
-	logger := newTestLogger(c, LogLevelError)
+	logger := newTestLogger(c)
 	for i := 0; i < b.N; i++ {
 		NewSnapshot(logger, m)
 	}

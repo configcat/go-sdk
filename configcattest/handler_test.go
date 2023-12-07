@@ -54,12 +54,12 @@ func TestHandlerWithUser(t *testing.T) {
 			Default: 99,
 			Rules: []configcattest.Rule{{
 				ComparisonAttribute: "foo",
-				Comparator:          configcattest.OpOneOf,
+				Comparator:          configcat.OpOneOf,
 				ComparisonValue:     "something",
 				Value:               88,
 			}, {
 				ComparisonAttribute: "foo",
-				Comparator:          configcattest.OpContains,
+				Comparator:          configcat.OpContains,
 				ComparisonValue:     "xxx",
 				Value:               77,
 			}},
@@ -118,7 +118,7 @@ var invalidFlagsTests = []struct {
 		Default: 1,
 		Rules: []configcattest.Rule{{
 			ComparisonAttribute: "",
-			Comparator:          configcattest.OpContains,
+			Comparator:          configcat.OpContains,
 			ComparisonValue:     "y",
 			Value:               2,
 		}},
@@ -130,7 +130,7 @@ var invalidFlagsTests = []struct {
 		Default: 1,
 		Rules: []configcattest.Rule{{
 			ComparisonAttribute: "x",
-			Comparator:          configcattest.OpContains,
+			Comparator:          configcat.OpContains,
 			ComparisonValue:     "",
 		}},
 	},
@@ -141,7 +141,7 @@ var invalidFlagsTests = []struct {
 		Default: 1,
 		Rules: []configcattest.Rule{{
 			ComparisonAttribute: "x",
-			Comparator:          configcattest.OpContains,
+			Comparator:          configcat.OpContains,
 			ComparisonValue:     "y",
 			Value:               "x",
 		}},

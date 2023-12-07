@@ -1,28 +1,52 @@
 {
   "f": {
     "disabledFeature": {
-      "v": false,
+      "v": {
+        "b": false
+      },
+      "t": 0,
       "r": [
         {
-          "o": 0,
-          "a": "Identifier",
-          "t": 2,
-          "c": "@matching.com",
-          "v": true
+          "c": [
+            {
+              "u": {
+                "a": "Identifier",
+                "c": 2,
+                "l": ["@matching.com"]
+              }
+            }
+          ],
+          "s": {
+            "v": {
+              "b": true
+            }
+          }
         }
       ]
     },
     "enabledFeature": {
-      "v": true
+      "v": {
+        "b": true
+      },
+      "t": 0
     },
     "intSetting": {
-      "v": 5
+      "v": {
+        "i": 5
+      },
+      "t": 2
     },
     "doubleSetting": {
-      "v": 3.14
+      "v": {
+        "d": 3.14
+      },
+      "t": 3
     },
     "stringSetting": {
-      "v": "test"
+      "v": {
+        "s": "test"
+      },
+      "t": 1
     }
   }
 }

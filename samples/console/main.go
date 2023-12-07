@@ -7,8 +7,8 @@ import (
 
 func main() {
 	client := configcat.NewCustomClient(configcat.Config{
-		SDKKey: "PKDVCLf-Hq-h-kCzMp-L7Q/HhOWfwVtZ0mb30i9wi17GQ",
-		Logger: configcat.DefaultLogger(configcat.LogLevelInfo),
+		SDKKey:   "PKDVCLf-Hq-h-kCzMp-L7Q/HhOWfwVtZ0mb30i9wi17GQ",
+		LogLevel: configcat.LogLevelInfo,
 	})
 
 	// create a user object to identify your user (optional)

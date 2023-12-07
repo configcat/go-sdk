@@ -2,49 +2,42 @@ package configcat
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
+	"log"
+	"os"
 	"strconv"
 )
 
-// Define the logrus log levels
 const (
-	LogLevelPanic = logrus.PanicLevel
-	LogLevelFatal = logrus.FatalLevel
-	LogLevelError = logrus.ErrorLevel
-	LogLevelWarn  = logrus.WarnLevel
-	LogLevelInfo  = logrus.InfoLevel
-	LogLevelDebug = logrus.DebugLevel
-	LogLevelTrace = logrus.TraceLevel
+	LogLevelDebug = -2
+	LogLevelInfo  = -1
+	LogLevelWarn  = 0
+	LogLevelError = 1
+	LogLevelNone  = 2
 )
 
-type LogLevel = logrus.Level
+type LogLevel int
 
 // Logger defines the interface this library logs with.
 type Logger interface {
-	// GetLevel returns the current logging level.
-	GetLevel() LogLevel
-
 	Debugf(format string, args ...interface{})
 	Infof(format string, args ...interface{})
 	Warnf(format string, args ...interface{})
 	Errorf(format string, args ...interface{})
 }
 
-// DefaultLogger creates the default logger with specified log level (logrus.New()).
-func DefaultLogger(level LogLevel) Logger {
-	logger := logrus.New()
-	logger.SetLevel(level)
-	return logger
+// DefaultLogger creates the default logger with specified log level.
+func DefaultLogger() Logger {
+	return &defaultLogger{Logger: log.New(os.Stderr, "[ConfigCat] ", log.LstdFlags)}
 }
 
-func newLeveledLogger(logger Logger, hooks *Hooks) *leveledLogger {
+func newLeveledLogger(logger Logger, level LogLevel, hooks *Hooks) *leveledLogger {
 	if logger == nil {
-		logger = DefaultLogger(LogLevelWarn)
+		logger = DefaultLogger()
 	}
 	return &leveledLogger{
-		level:  logger.GetLevel(),
-		Logger: logger,
-		hooks:  hooks,
+		minLevel: level,
+		Logger:   logger,
+		hooks:    hooks,
 	}
 }
 
@@ -52,30 +45,76 @@ func newLeveledLogger(logger Logger, hooks *Hooks) *leveledLogger {
 // rather than an interface so the compiler can inline the level check
 // and thus avoid the allocation for the arguments.
 type leveledLogger struct {
-	level LogLevel
-	hooks *Hooks
+	minLevel LogLevel
+	hooks    *Hooks
 	Logger
 }
 
+type defaultLogger struct {
+	*log.Logger
+}
+
 func (log *leveledLogger) enabled(level LogLevel) bool {
-	return level <= log.level
+	return level >= log.minLevel
 }
 
 func (log *leveledLogger) Debugf(format string, args ...interface{}) {
-	log.Logger.Debugf("[0] "+format, args...)
+	if log.enabled(LogLevelDebug) {
+		log.Logger.Debugf("[0] "+format, args...)
+	}
 }
 
 func (log *leveledLogger) Infof(eventId int, format string, args ...interface{}) {
-	log.Logger.Infof("["+strconv.Itoa(eventId)+"] "+format, args...)
+	if log.enabled(LogLevelInfo) {
+		log.Logger.Infof("["+strconv.Itoa(eventId)+"] "+format, args...)
+	}
 }
 
 func (log *leveledLogger) Warnf(eventId int, format string, args ...interface{}) {
-	log.Logger.Warnf("["+strconv.Itoa(eventId)+"] "+format, args...)
+	if log.enabled(LogLevelWarn) {
+		log.Logger.Warnf("["+strconv.Itoa(eventId)+"] "+format, args...)
+	}
 }
 
 func (log *leveledLogger) Errorf(eventId int, format string, args ...interface{}) {
 	if log.hooks != nil && log.hooks.OnError != nil {
 		go log.hooks.OnError(fmt.Errorf(format, args...))
 	}
-	log.Logger.Errorf("["+strconv.Itoa(eventId)+"] "+format, args...)
+	if log.enabled(LogLevelError) {
+		log.Logger.Errorf("["+strconv.Itoa(eventId)+"] "+format, args...)
+	}
+}
+
+func (l *defaultLogger) Debugf(format string, args ...interface{}) {
+	l.logf(LogLevelDebug, format, args...)
+}
+
+func (l *defaultLogger) Infof(format string, args ...interface{}) {
+	l.logf(LogLevelInfo, format, args...)
+}
+
+func (l *defaultLogger) Warnf(format string, args ...interface{}) {
+	l.logf(LogLevelWarn, format, args...)
+}
+
+func (l *defaultLogger) Errorf(format string, args ...interface{}) {
+	l.logf(LogLevelError, format, args...)
+}
+
+func (l *defaultLogger) logf(level LogLevel, format string, args ...interface{}) {
+	l.Logger.Printf(level.String()+": "+format, args...)
+}
+
+func (lvl LogLevel) String() string {
+	switch lvl {
+	case LogLevelDebug:
+		return "[DEBUG]"
+	case LogLevelInfo:
+		return "[INFO]"
+	case LogLevelWarn:
+		return "[WARN]"
+	case LogLevelError:
+		return "[ERROR]"
+	}
+	return "[UNKNOWN]"
 }

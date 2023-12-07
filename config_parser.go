@@ -3,18 +3,16 @@ package configcat
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/configcat/go-sdk/v8/internal/wireconfig"
-	"sync"
 	"time"
 )
 
 type config struct {
 	jsonBody []byte
 	etag     string
-	root     *wireconfig.RootNode
+	root     *ConfigJson
 	// Note: this is a pointer because the configuration
 	// can be copied (with the withFetchTime method).
-	evaluators *sync.Map // reflect.Type -> map[string]entryEvalFunc
+	evaluators []settingEvalFunc
 	allKeys    []string
 	keyValues  map[string]keyValue
 	fetchTime  time.Time
@@ -22,17 +20,17 @@ type config struct {
 	// configuration, keyed by valueID-1.
 	values []interface{}
 
-	// precalc holds value IDs for keys that we know
+	// valueIds holds value IDs for keys that we know
 	// the values of ahead of time because they're not
 	// dependent on the user value, indexed by key id.
 	// For values that we don't know ahead of time, the
-	// precalc entry contains a negative number n. (-n - 1) is the index
+	// valueIds entry contains a negative number n. (-n - 1) is the index
 	// into the cache slice which will hold the value eventually
 	// when it's been calculated for a particular user.
-	precalc []valueID
+	valueIds []valueID
 
 	// keysWithRules holds the number of keys that have
-	// rules (i.e. that do not have a value in precalc).
+	// rules (i.e. that do not have a value in valueIds).
 	keysWithRules int
 
 	// defaultUserSnapshot holds a predefined snapshot of the
@@ -50,7 +48,7 @@ type config struct {
 type valueID = int32
 
 func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leveledLogger, defaultUser User, overrides *FlagOverrides, hooks *Hooks) (*config, error) {
-	var root wireconfig.RootNode
+	var root ConfigJson
 	// Note: jsonBody can be nil when we've got overrides only.
 	if jsonBody != nil {
 		if err := json.Unmarshal(jsonBody, &root); err != nil {
@@ -61,152 +59,199 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leve
 	conf := &config{
 		jsonBody:    jsonBody,
 		root:        &root,
-		evaluators:  new(sync.Map),
 		keyValues:   keyValuesForRootNode(&root),
 		allKeys:     keysForRootNode(&root),
 		etag:        etag,
 		fetchTime:   fetchTime,
-		precalc:     make([]valueID, numKeys()),
+		valueIds:    make([]valueID, numKeys()),
 		defaultUser: defaultUser,
 	}
+	if conf.root.Preferences != nil {
+		conf.root.Preferences.saltBytes = []byte(conf.root.Preferences.Salt)
+	} else {
+		conf.root.Preferences = &Preferences{saltBytes: make([]byte, 0)}
+	}
 	conf.fixup(make(map[interface{}]valueID))
-	conf.precalculate()
+	conf.preCalculateValueIds()
+	conf.generateEvaluators()
 	conf.defaultUserSnapshot = _newSnapshot(conf, defaultUser, logger, hooks)
 	return conf, nil
 }
 
-// precalculate populates conf.precalc with value IDs that
+// preCalculateValueIds populates valueIds with value IDs that
 // are known ahead of time or negative indexes into the cache slice
 // where the value will be stored later.
-func (conf *config) precalculate() {
-	for name, entry := range conf.root.Entries {
+func (c *config) preCalculateValueIds() {
+	for name, entry := range c.root.Settings {
 		id := idForKey(name, true)
-		if int(id) >= len(conf.precalc) {
-			precalc1 := make([]valueID, id+1)
-			copy(precalc1, conf.precalc)
-			conf.precalc = precalc1
+		if int(id) >= len(c.valueIds) {
+			value := make([]valueID, id+1)
+			copy(value, c.valueIds)
+			c.valueIds = value
 		}
-		if len(entry.RolloutRules) == 0 && len(entry.PercentageRules) == 0 {
-			conf.precalc[id] = entry.ValueID
+		if len(entry.TargetingRules) == 0 && len(entry.PercentageOptions) == 0 {
+			c.valueIds[id] = entry.valueID
 			continue
 		}
-		conf.keysWithRules++
-		conf.precalc[id] = -valueID(conf.keysWithRules)
+		c.keysWithRules++
+		c.valueIds[id] = -valueID(c.keysWithRules)
 	}
 }
 
-func (conf *config) equal(c1 *config) bool {
-	if conf == c1 || conf == nil || c1 == nil {
-		return conf == c1
+func (c *config) equal(c1 *config) bool {
+	if c == c1 || c == nil || c1 == nil {
+		return c == c1
 	}
-	return conf.fetchTime.Equal(c1.fetchTime) && conf.etag == c1.etag && bytes.Equal(conf.jsonBody, c1.jsonBody)
+	return c.fetchTime.Equal(c1.fetchTime) && c.etag == c1.etag && bytes.Equal(c.jsonBody, c1.jsonBody)
 }
 
-func (conf *config) equalContent(c1 *config) bool {
-	if conf == c1 || conf == nil || c1 == nil {
-		return conf == c1
+func (c *config) equalContent(c1 *config) bool {
+	if c == c1 || c == nil || c1 == nil {
+		return c == c1
 	}
-	return bytes.Equal(conf.jsonBody, c1.jsonBody)
+	return bytes.Equal(c.jsonBody, c1.jsonBody)
 }
 
-func (conf *config) withFetchTime(t time.Time) *config {
-	c1 := *conf
+func (c *config) withFetchTime(t time.Time) *config {
+	c1 := *c
 	c1.fetchTime = t
 	return &c1
 }
 
-func (conf *config) body() string {
-	if conf == nil {
+func (c *config) body() string {
+	if c == nil {
 		return ""
 	}
-	return string(conf.jsonBody)
+	return string(c.jsonBody)
 }
 
-func (conf *config) getKeyAndValueForVariation(variationID string) (string, interface{}) {
-	if conf == nil {
+func (c *config) getKeyAndValueForVariation(variationID string) (string, interface{}) {
+	if c == nil {
 		return "", nil
 	}
-	kv := conf.keyValues[variationID]
+	kv := c.keyValues[variationID]
 	return kv.key, kv.value
 }
 
-func (conf *config) keys() []string {
-	if conf == nil {
+func (c *config) keys() []string {
+	if c == nil {
 		return nil
 	}
-	return conf.allKeys
+	return c.allKeys
 }
 
-// fixup makes sure that int-valued entries have integer values
-// and populates the ValueID fields in conf.root.
-func (conf *config) fixup(valueMap map[interface{}]valueID) {
-	for _, entry := range conf.root.Entries {
-		entry.Value = fixValue(entry.Value, entry.Type)
-		entry.ValueID = conf.idForValue(entry.Value, valueMap)
-		for _, rule := range entry.RolloutRules {
-			rule.Value = fixValue(rule.Value, entry.Type)
-			rule.ValueID = conf.idForValue(rule.Value, valueMap)
+// fixup populates the valueID fields in conf.root and presets related fields.
+func (c *config) fixup(valueMap map[interface{}]valueID) {
+	for key, setting := range c.root.Settings {
+		setting.valueID = c.idForValue(setting.Value, setting.Type, valueMap)
+		setting.keyBytes = []byte(key)
+		for _, rule := range setting.TargetingRules {
+			if rule.ServedValue != nil {
+				rule.ServedValue.valueID = c.idForValue(rule.ServedValue.Value, setting.Type, valueMap)
+			}
+			if rule.Conditions != nil {
+				for _, condition := range rule.Conditions {
+					if condition.PrerequisiteFlagCondition != nil {
+						if prerequisite, ok := c.root.Settings[condition.PrerequisiteFlagCondition.FlagKey]; ok {
+							condition.PrerequisiteFlagCondition.valueID = c.idForValue(condition.PrerequisiteFlagCondition.Value, prerequisite.Type, valueMap)
+						}
+					}
+					if condition.SegmentCondition != nil {
+						condition.SegmentCondition.relatedSegment = c.root.Segments[condition.SegmentCondition.Index]
+					}
+				}
+			}
+			if rule.PercentageOptions != nil {
+				for _, option := range rule.PercentageOptions {
+					option.valueID = c.idForValue(option.Value, setting.Type, valueMap)
+				}
+			}
 		}
-		for _, rule := range entry.PercentageRules {
-			rule.Value = fixValue(rule.Value, entry.Type)
-			rule.ValueID = conf.idForValue(rule.Value, valueMap)
+		for _, rule := range setting.PercentageOptions {
+			rule.valueID = c.idForValue(rule.Value, setting.Type, valueMap)
 		}
+	}
+	for _, segment := range c.root.Segments {
+		segment.nameBytes = []byte(segment.Name)
 	}
 }
 
-func (conf *config) idForValue(v interface{}, valueMap map[interface{}]valueID) valueID {
-	if id, ok := valueMap[v]; ok {
+func (c *config) idForValue(v *SettingValue, settingType SettingType, valueMap map[interface{}]valueID) valueID {
+	actualValue := valueForSettingType(v, settingType)
+	if id, ok := valueMap[actualValue]; ok {
 		return id
 	}
 	// Start at 1 so the zero value always means "not known yet"
 	// so we can rely on zero-initialization of the evaluation context.
-	id := valueID(len(conf.values) + 1)
-	valueMap[v] = id
-	conf.values = append(conf.values, v)
+	id := valueID(len(c.values) + 1)
+	valueMap[actualValue] = id
+	c.values = append(c.values, actualValue)
 	return id
 }
 
-// fixValue fixes up int-valued entries, which will have the wrong type of value, so
-// change them from float64 to int.
-func fixValue(v interface{}, typ wireconfig.EntryType) interface{} {
-	if typ != wireconfig.IntEntry {
-		return v
-	}
-	f, ok := v.(float64)
-	if !ok {
-		// Shouldn't happen, but avoid a panic.
-		return v
-	}
-	return int(f)
-}
-
-func mergeWithOverrides(root *wireconfig.RootNode, overrides *FlagOverrides) {
+func mergeWithOverrides(root *ConfigJson, overrides *FlagOverrides) {
 	if overrides == nil {
 		return
 	}
-	if overrides.Behavior == LocalOnly || len(root.Entries) == 0 {
-		root.Entries = overrides.entries
+	if overrides.Behavior == LocalOnly || len(root.Settings) == 0 {
+		root.Settings = overrides.settings
 		return
 	}
-	if root.Entries == nil {
-		root.Entries = make(map[string]*wireconfig.Entry)
+	if root.Settings == nil {
+		root.Settings = make(map[string]*Setting)
 	}
-	for key, localEntry := range overrides.entries {
-		entry, ok := root.Entries[key]
+	for key, localEntry := range overrides.settings {
+		setting, ok := root.Settings[key]
 		switch {
 		case !ok:
-			root.Entries[key] = localEntry
+			root.Settings[key] = localEntry
 		case overrides.Behavior == RemoteOverLocal:
-		case entry.Type == localEntry.Type:
-			*entry = *localEntry
-		case entry.Type == wireconfig.IntEntry && localEntry.Type == wireconfig.FloatEntry:
-			*entry = *localEntry
-			entry.Type = wireconfig.IntEntry
+		case setting.Type == localEntry.Type:
+			*setting = *localEntry
+		case setting.Type == IntSetting && localEntry.Type == FloatSetting:
+			*setting = *localEntry
+			changeToInt(setting)
 		default:
 			// Type clash. Just override anyway.
-			// TODO could return an error in this case, as it's likely
-			// to be a local config issue.
-			*entry = *localEntry
+			// TODO could return an error in this case, as it's likely to be a local config issue.
+			*setting = *localEntry
 		}
+	}
+}
+
+func changeToInt(setting *Setting) {
+	setting.Type = IntSetting
+	setting.Value.IntValue = int(setting.Value.DoubleValue)
+	if len(setting.TargetingRules) > 0 {
+		for _, rule := range setting.TargetingRules {
+			if rule.ServedValue != nil {
+				rule.ServedValue.Value.IntValue = int(rule.ServedValue.Value.DoubleValue)
+			}
+			if len(rule.PercentageOptions) > 0 {
+				for _, opt := range rule.PercentageOptions {
+					opt.Value.IntValue = int(opt.Value.DoubleValue)
+				}
+			}
+		}
+		if len(setting.PercentageOptions) > 0 {
+			for _, opt := range setting.PercentageOptions {
+				opt.Value.IntValue = int(opt.Value.DoubleValue)
+			}
+		}
+	}
+}
+
+func valueForSettingType(v *SettingValue, settingType SettingType) interface{} {
+	switch settingType {
+	case BoolSetting:
+		return v.BoolValue
+	case IntSetting:
+		return v.IntValue
+	case FloatSetting:
+		return v.DoubleValue
+	case StringSetting:
+		return v.StringValue
+	default:
+		return nil
 	}
 }

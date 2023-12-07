@@ -2,10 +2,10 @@ package configcat
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/configcat/go-sdk/v8/configcatcache"
-	"github.com/configcat/go-sdk/v8/internal/wireconfig"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"sync"
@@ -68,7 +68,7 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *conf
 	f := &configFetcher{
 		sdkKey:    cfg.SDKKey,
 		cache:     cfg.Cache,
-		cacheKey:  configcatcache.ProduceCacheKey(cfg.SDKKey),
+		cacheKey:  configcatcache.ProduceCacheKey(cfg.SDKKey, configcatcache.ConfigJSONCacheVersion, configcatcache.ConfigJSONName),
 		overrides: cfg.FlagOverrides,
 		hooks:     cfg.Hooks,
 		logger:    logger,
@@ -194,7 +194,8 @@ func (f *configFetcher) fetcher(prevConfig *config) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err != nil {
-		if fErr, ok := err.(*fetcherError); ok {
+		var fErr *fetcherError
+		if errors.As(err, &fErr) {
 			f.logger.Errorf(fErr.EventId, "config fetch failed: %v", fErr.Err)
 		} else {
 			f.logger.Errorf(0, "config fetch failed: %v", err)
@@ -316,13 +317,13 @@ func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfi
 			return config, baseURL, nil
 		}
 		redirect := *preferences.Redirect
-		if redirect == wireconfig.ForceRedirect {
+		if redirect == ForceRedirect {
 			f.logger.Infof(0, "forced redirect to %v (count %d)", preferences.URL, i+1)
 			baseURL = preferences.URL
 			continue
 		}
 		if f.urlIsCustom {
-			if redirect == wireconfig.Nodirect {
+			if redirect == NoDirect {
 				// The config is available, but we won't respect the redirection
 				// request for a custom URL.
 				f.logger.Infof(0, "config fetched but refusing to redirect from custom URL without forced redirection")
@@ -341,13 +342,13 @@ func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfi
 			"the `config.DataGovernance` parameter specified at the client initialization is not in sync with the preferences on the ConfigCat Dashboard; "+
 				"read more: https://configcat.com/docs/advanced/data-governance/",
 		)
-		if redirect == wireconfig.Nodirect {
+		if redirect == NoDirect {
 			// We've already got the configuration data, we'll just fetch
 			// from the redirected URL next time.
 			f.logger.Infof(0, "redirection on next fetch to %v", baseURL)
 			return config, baseURL, nil
 		}
-		if redirect != wireconfig.ShouldRedirect {
+		if redirect != ShouldRedirect {
 			return nil, "", &fetcherError{EventId: 0, Err: fmt.Errorf("unknown redirection kind %d in response", redirect)}
 		}
 		f.logger.Infof(0, "redirecting to %v", baseURL)
@@ -386,7 +387,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 	}
 
 	if response.StatusCode >= 200 && response.StatusCode < 300 {
-		body, err := ioutil.ReadAll(response.Body)
+		body, err := io.ReadAll(response.Body)
 		if err != nil {
 			return nil, &fetcherError{EventId: 1103, Err: fmt.Errorf("unexpected error occurred while trying to fetch config JSON; read failed: %v", err)}
 		}

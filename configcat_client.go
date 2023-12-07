@@ -5,11 +5,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
 
 const DefaultPollInterval = 60 * time.Second
+const proxyPrefix = "configcat-proxy/"
+const sdkKeyCompSize = 22
 
 // Hooks describes the events sent by Client.
 type Hooks struct {
@@ -30,10 +33,13 @@ type Config struct {
 	SDKKey string
 
 	// Logger is used to log information about configuration evaluation
-	// and issues. If it's nil, DefaultLogger(LogLevelWarn) will be used.
+	// and issues. If it's nil, DefaultLogger() will be used.
 	// It assumes that the logging level will not be increased
 	// during the lifetime of the client.
 	Logger Logger
+
+	// LogLevel determines the logging verbosity.
+	LogLevel LogLevel
 
 	// Cache is used to cache configuration values.
 	// If it's nil, no caching will be done.
@@ -152,7 +158,7 @@ const (
 )
 
 // NewClient returns a new Client value that access the default
-// configcat servers using the given SDK key.
+// ConfigCat servers using the given SDK key.
 //
 // The GetBoolValue, GetIntValue, GetFloatValue and GetStringValue methods can be used to find out current
 // feature flag values. These methods will always return immediately without
@@ -169,7 +175,10 @@ func NewCustomClient(cfg Config) *Client {
 	if cfg.PollInterval < 1 {
 		cfg.PollInterval = DefaultPollInterval
 	}
-	logger := newLeveledLogger(cfg.Logger, cfg.Hooks)
+	logger := newLeveledLogger(cfg.Logger, cfg.LogLevel, cfg.Hooks)
+	if (cfg.FlagOverrides == nil || cfg.FlagOverrides.Behavior != LocalOnly) && !isValidSdkKey(cfg.SDKKey, cfg.BaseURL != "") {
+		logger.Errorf(0, "SDK Key '%s' is invalid", cfg.SDKKey)
+	}
 	if cfg.FlagOverrides != nil {
 		cfg.FlagOverrides.loadEntries(logger)
 	}
@@ -335,4 +344,22 @@ func (client *Client) Snapshot(user User) *Snapshot {
 		}
 	}
 	return newSnapshot(client.fetcher.current(), user, client.logger, client.cfg.Hooks)
+}
+
+func isValidSdkKey(sdkKey string, isCustomUrl bool) bool {
+	if strings.HasPrefix(sdkKey, "testing-") {
+		return true
+	}
+	if isCustomUrl && strings.HasPrefix(sdkKey, proxyPrefix) {
+		return true
+	}
+	comps := strings.Split(sdkKey, "/")
+	switch len(comps) {
+	case 2:
+		return len(comps[0]) == sdkKeyCompSize && len(comps[1]) == sdkKeyCompSize
+	case 3:
+		return comps[0] == "configcat-sdk-1" && len(comps[1]) == sdkKeyCompSize && len(comps[2]) == sdkKeyCompSize
+	default:
+		return false
+	}
 }

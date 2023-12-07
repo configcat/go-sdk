@@ -1,20 +1,19 @@
 package configcat
 
 import (
-	"github.com/configcat/go-sdk/v8/internal/wireconfig"
 	"time"
 )
 
 // EvaluationDetailsData holds the additional evaluation information of a feature flag or setting.
 type EvaluationDetailsData struct {
-	Key                             string
-	VariationID                     string
-	User                            User
-	IsDefaultValue                  bool
-	Error                           error
-	FetchTime                       time.Time
-	MatchedEvaluationRule           *RolloutRule
-	MatchedEvaluationPercentageRule *PercentageRule
+	Key                     string
+	VariationID             string
+	User                    User
+	IsDefaultValue          bool
+	Error                   error
+	FetchTime               time.Time
+	MatchedTargetingRule    *TargetingRule
+	MatchedPercentageOption *PercentageOption
 }
 
 // EvaluationDetails holds the additional evaluation information along with the value of a feature flag or setting.
@@ -45,34 +44,4 @@ type StringEvaluationDetails struct {
 type FloatEvaluationDetails struct {
 	Data  EvaluationDetailsData
 	Value float64
-}
-
-type RolloutRule struct {
-	ComparisonAttribute string
-	ComparisonValue     string
-	Comparator          int
-}
-
-type PercentageRule struct {
-	VariationID string
-	Percentage  int64
-}
-
-func newPublicRolloutRuleOrNil(rule *wireconfig.RolloutRule) *RolloutRule {
-	if rule == nil {
-		return nil
-	}
-
-	return &RolloutRule{
-		Comparator:          int(rule.Comparator),
-		ComparisonAttribute: rule.ComparisonAttribute,
-		ComparisonValue:     rule.ComparisonValue}
-}
-
-func newPublicPercentageRuleOrNil(rule *wireconfig.PercentageRule) *PercentageRule {
-	if rule == nil {
-		return nil
-	}
-
-	return &PercentageRule{Percentage: rule.Percentage}
 }

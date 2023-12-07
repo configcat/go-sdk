@@ -1,10 +1,6 @@
 package configcat
 
 import (
-	"context"
-	"fmt"
-	"github.com/configcat/go-sdk/v8/internal/wireconfig"
-	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -27,233 +23,6 @@ func TestNilSnapshot(t *testing.T) {
 	c.Assert(Bool("hello", true).Get(nil), qt.Equals, true)
 }
 
-var loggingTests = []struct {
-	testName    string
-	config      *wireconfig.RootNode
-	key         string
-	user        User
-	expectValue interface{}
-	expectLogs  []string
-}{{
-	testName:    "NoRules",
-	config:      rootNodeWithKeyValue("key", "value", wireconfig.StringEntry),
-	key:         "key",
-	expectValue: "value",
-	expectLogs: []string{
-		"INFO: [5000] returning key=value",
-	},
-}, {
-	testName: "RolloutRulesButNoUser",
-	config: &wireconfig.RootNode{
-		Entries: map[string]*wireconfig.Entry{
-			"key": {
-				Value: "defaultValue",
-				Type:  wireconfig.StringEntry,
-				RolloutRules: []*wireconfig.RolloutRule{{
-					Value:               "e",
-					ComparisonAttribute: "attr",
-					ComparisonValue:     "x",
-					Comparator:          wireconfig.OpContains,
-				}},
-			},
-		},
-	},
-	key:         "key",
-	expectValue: "defaultValue",
-	expectLogs: []string{
-		"WARN: [3001] cannot evaluate targeting rules and % options for setting 'key' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/",
-		"INFO: [5000] returning key=defaultValue",
-	},
-}, {
-	testName: "RolloutRulesWithUser",
-	config: &wireconfig.RootNode{
-		Entries: map[string]*wireconfig.Entry{
-			"key": {
-				Value: "defaultValue",
-				Type:  wireconfig.StringEntry,
-				RolloutRules: []*wireconfig.RolloutRule{{
-					Value:               "v1",
-					ComparisonAttribute: "Identifier",
-					Comparator:          wireconfig.OpContains,
-					ComparisonValue:     "x",
-				}, {
-					Value:               "v2",
-					ComparisonAttribute: "Identifier",
-					Comparator:          wireconfig.OpContains,
-					ComparisonValue:     "y",
-				}},
-			},
-		},
-	},
-	key: "key",
-	user: &UserData{
-		Identifier: "y",
-	},
-	expectValue: "v2",
-	expectLogs: []string{
-		"INFO: [5000] evaluating rule: [Identifier:y] [CONTAINS] [x] => no match",
-		"INFO: [5000] evaluating rule: [Identifier:y] [CONTAINS] [y] => match",
-		"INFO: [5000] returning key=v2",
-	},
-}, {
-	testName: "PercentageRulesButNoUser",
-	config: &wireconfig.RootNode{
-		Entries: map[string]*wireconfig.Entry{
-			"key": {
-				Value: "defaultValue",
-				Type:  wireconfig.StringEntry,
-				PercentageRules: []*wireconfig.PercentageRule{{
-					Value:      "low-percent",
-					Percentage: 30,
-				}, {
-					Value:      "high-percent",
-					Percentage: 70,
-				}},
-			},
-		},
-	},
-	key:         "key",
-	expectValue: "defaultValue",
-	expectLogs: []string{
-		"WARN: [3001] cannot evaluate targeting rules and % options for setting 'key' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/",
-		"INFO: [5000] returning key=defaultValue",
-	},
-}, {
-	testName: "PercentageRulesWithUser",
-	config: &wireconfig.RootNode{
-		Entries: map[string]*wireconfig.Entry{
-			"key": {
-				Value: "defaultValue",
-				Type:  wireconfig.StringEntry,
-				PercentageRules: []*wireconfig.PercentageRule{{
-					Value:      "low-percent",
-					Percentage: 1,
-				}, {
-					Value:      "high-percent",
-					Percentage: 99,
-				}},
-			},
-		},
-	},
-	key: "key",
-	user: &UserData{
-		Identifier: "y",
-	},
-	expectValue: "high-percent",
-	expectLogs: []string{
-		"INFO: [5000] returning key=high-percent",
-	},
-}, {
-	testName: "MatchErrorInUser",
-	config: &wireconfig.RootNode{
-		Entries: map[string]*wireconfig.Entry{
-			"key": {
-				Value: "defaultValue",
-				Type:  wireconfig.StringEntry,
-				RolloutRules: []*wireconfig.RolloutRule{{
-					Value:               "e",
-					ComparisonAttribute: "Identifier",
-					ComparisonValue:     "1.2.3",
-					Comparator:          wireconfig.OpLessSemver,
-				}},
-			},
-		},
-	},
-	key:         "key",
-	expectValue: "defaultValue",
-	user: &UserData{
-		Identifier: "bogus",
-	},
-	expectLogs: []string{
-		"INFO: [5000] evaluating rule: [Identifier:bogus] [< (SemVer)] [1.2.3] => SKIP rule; validation error: No Major.Minor.Patch elements found",
-		"INFO: [5000] returning key=defaultValue",
-	},
-}, {
-	testName: "MatchErrorRules",
-	config: &wireconfig.RootNode{
-		Entries: map[string]*wireconfig.Entry{
-			"key": {
-				Value: "defaultValue",
-				Type:  wireconfig.StringEntry,
-				RolloutRules: []*wireconfig.RolloutRule{{
-					Value:               "e",
-					ComparisonAttribute: "Identifier",
-					ComparisonValue:     "bogus",
-					Comparator:          wireconfig.OpLessSemver,
-				}},
-			},
-		},
-	},
-	key:         "key",
-	expectValue: "defaultValue",
-	user: &UserData{
-		Identifier: "1.2.3",
-	},
-	expectLogs: []string{
-		"INFO: [5000] evaluating rule: [Identifier:1.2.3] [< (SemVer)] [bogus] => SKIP rule; validation error: No Major.Minor.Patch elements found",
-		"INFO: [5000] returning key=defaultValue",
-	},
-}, {
-	testName: "UnknownKey",
-	config: &wireconfig.RootNode{
-		Entries: map[string]*wireconfig.Entry{
-			"key1": {
-				Value: "v1",
-				Type:  wireconfig.StringEntry,
-			},
-			"key2": {
-				Value: "v2",
-				Type:  wireconfig.StringEntry,
-			},
-		},
-	},
-	key:         "unknownKey",
-	expectValue: nil,
-	expectLogs: []string{
-		"ERROR: [1001] failed to evaluate setting 'unknownKey' (the key was not found in config JSON); available keys: ['key1', 'key2']",
-	},
-}}
-
-func TestLogging(t *testing.T) {
-	c := qt.New(t)
-	for _, test := range loggingTests {
-		c.Run(test.testName, func(c *qt.C) {
-			var logs []string
-			srv := newConfigServer(t)
-			cfg := srv.config()
-			cfg.PollingMode = Manual
-			cfg.Logger = &testLogger{
-				logFunc: func(f string, a ...interface{}) {
-					s := fmt.Sprintf(f, a...)
-					if !strings.HasPrefix(s, "DEBUG: ") {
-						logs = append(logs, s)
-					}
-				},
-				level: LogLevelInfo,
-			}
-			client := NewCustomClient(cfg)
-			defer client.Close()
-			srv.setResponseJSON(test.config)
-			client.Refresh(context.Background())
-
-			// We'll always get a "fetching from" message at the start.
-			c.Check(logs, qt.DeepEquals, []string{"INFO: [0] fetching from " + cfg.BaseURL})
-			logs = nil
-
-			snap := client.Snapshot(test.user)
-			// Run the test twice to make sure that caching doesn't
-			// interfere with the logging.
-			for i := 0; i < 2; i++ {
-				c.Logf("iteration %d", i)
-				logs = nil
-				value := snap.GetValue(test.key)
-				c.Check(value, qt.Equals, test.expectValue)
-				c.Check(logs, qt.DeepEquals, test.expectLogs)
-			}
-		})
-	}
-}
-
 func TestNewSnapshot(t *testing.T) {
 	c := qt.New(t)
 	// Make sure there's another flag in there so even when we run
@@ -266,7 +35,7 @@ func TestNewSnapshot(t *testing.T) {
 		"stringFlag": "three",
 		"boolFlag":   true,
 	}
-	snap, err := NewSnapshot(newTestLogger(t, LogLevelDebug), values)
+	snap, err := NewSnapshot(newTestLogger(t), values)
 	c.Assert(err, qt.IsNil)
 	for key, want := range values {
 		c.Check(snap.GetValue(key), qt.Equals, want)
@@ -292,7 +61,7 @@ func TestNewSnapshot(t *testing.T) {
 
 func TestNewSnapshotWithUnknownType(t *testing.T) {
 	c := qt.New(t)
-	snap, err := NewSnapshot(newTestLogger(t, LogLevelDebug), map[string]interface{}{
+	snap, err := NewSnapshot(newTestLogger(t), map[string]interface{}{
 		"badVal": int64(1),
 	})
 	c.Check(err, qt.ErrorMatches, `value for flag "badVal" has unexpected type int64 \(1\); must be bool, int, float64 or string`)

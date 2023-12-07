@@ -2,8 +2,7 @@ package configcat
 
 import (
 	"encoding/json"
-	"github.com/configcat/go-sdk/v8/internal/wireconfig"
-	"io/ioutil"
+	"os"
 )
 
 // OverrideBehavior describes how the overrides should behave.
@@ -45,8 +44,8 @@ type FlagOverrides struct {
 	// The supported JSON file formats are documented here: https://configcat.com/docs/sdk-reference/go/#json-file-structure
 	FilePath string
 
-	// entries is populated by loadEntries from the above fields.
-	entries map[string]*wireconfig.Entry
+	// settings are populated by loadEntries from the above fields.
+	settings map[string]*Setting
 }
 
 func (f *FlagOverrides) loadEntries(logger *leveledLogger) {
@@ -61,65 +60,73 @@ func (f *FlagOverrides) loadEntries(logger *leveledLogger) {
 	if f.Values == nil {
 		f.loadEntriesFromFile(logger)
 	} else {
-		f.entries = make(map[string]*wireconfig.Entry, len(f.Values))
+		f.settings = make(map[string]*Setting, len(f.Values))
 		for key, value := range f.Values {
-			f.entries[key] = &wireconfig.Entry{
-				Value: value,
+			f.settings[key] = &Setting{
+				Value: f.fromAnyValue(value, key, logger),
+				Type:  f.getSettingType(value, key, logger),
 			}
 		}
 	}
-	f.setEntryTypes(logger)
 }
 
 func (f *FlagOverrides) loadEntriesFromFile(logger *leveledLogger) {
-	data, err := ioutil.ReadFile(f.FilePath)
+	data, err := os.ReadFile(f.FilePath)
 	if err != nil {
 		logger.Errorf(1302, "failed to read the local config file '%s': %v", f.FilePath, err)
 		return
 	}
 	// Try the simplified configuration first.
-	var simplified wireconfig.SimplifiedConfig
+	var simplified SimplifiedConfig
 	if err := json.Unmarshal(data, &simplified); err == nil && simplified.Flags != nil {
-		f.entries = make(map[string]*wireconfig.Entry, len(simplified.Flags))
+		f.settings = make(map[string]*Setting, len(simplified.Flags))
 		for key, value := range simplified.Flags {
-			f.entries[key] = &wireconfig.Entry{
-				Value: value,
+			f.settings[key] = &Setting{
+				Value: f.fromAnyValue(value, key, logger),
+				Type:  f.getSettingType(value, key, logger),
 			}
 		}
 		return
 	}
 	// Fall back to using the full wire configuration.
-	var root wireconfig.RootNode
+	var root ConfigJson
 	if err := json.Unmarshal(data, &root); err != nil {
 		logger.Errorf(2302, "failed to decode JSON from the local config file '%s': %v", f.FilePath, err)
 		return
 	}
-	f.entries = root.Entries
+	f.settings = root.Settings
 }
 
-// setEntryTypes sets all the entry types in f.entries from the value.
-// Note that JSON doesn't support integer types, so when using SimplifiedConfig,
-// we might end up with a float type for an int flag, but that ambiguity
-// is dealt with in IntFlag.GetValue.
-func (f *FlagOverrides) setEntryTypes(logger *leveledLogger) {
-	for key, entry := range f.entries {
-		if entry.Type != 0 {
-			// The Type has already been set (by reading in the
-			// full config file) so don't second-guess it.
-			continue
-		}
-		switch value := entry.Value.(type) {
-		case bool:
-			entry.Type = wireconfig.BoolEntry
-		case string:
-			entry.Type = wireconfig.StringEntry
-		case float64:
-			entry.Type = wireconfig.FloatEntry
-		case int:
-			entry.Type = wireconfig.IntEntry
-		default:
-			logger.Errorf(0, "ignoring override value for flag %q with unexpected type %T (%#v); must be bool, int, float64 or string", key, value, value)
-			delete(f.entries, key)
-		}
+func (f *FlagOverrides) getSettingType(value interface{}, key string, logger *leveledLogger) SettingType {
+	switch value := value.(type) {
+	case bool:
+		return BoolSetting
+	case string:
+		return StringSetting
+	case float64:
+		return FloatSetting
+	case int:
+		return IntSetting
+	default:
+		logger.Errorf(0, "ignoring override value for flag %q with unexpected type %T (%#v); must be bool, int, float64 or string", key, value, value)
+		delete(f.settings, key)
+		return -1
+	}
+}
+
+func (f *FlagOverrides) fromAnyValue(value interface{}, key string, logger *leveledLogger) *SettingValue {
+	switch v := value.(type) {
+	case bool:
+		return &SettingValue{BoolValue: v}
+	case string:
+		return &SettingValue{StringValue: v}
+	case float64:
+		return &SettingValue{DoubleValue: v}
+	case int:
+		return &SettingValue{IntValue: v}
+	default:
+		logger.Errorf(0, "ignoring override value for flag %q with unexpected type %T (%#v); must be bool, int, float64 or string", key, value, value)
+		delete(f.settings, key)
+		return nil
 	}
 }

@@ -2,7 +2,9 @@ package configcattest
 
 import (
 	"fmt"
-	"github.com/configcat/go-sdk/v8/internal/wireconfig"
+	configcat "github.com/configcat/go-sdk/v8"
+	"strconv"
+	"strings"
 )
 
 // Flag represents a configcat flag.
@@ -24,7 +26,7 @@ type Rule struct {
 
 	// Comparator holds how the compare the above user
 	// attribute to the comparison value.
-	Comparator Operator
+	Comparator configcat.Comparator
 
 	// ComparisonValue holds the value to compare the
 	// user attribute against.
@@ -37,16 +39,16 @@ type Rule struct {
 	Value interface{}
 }
 
-func (f *Flag) entry(key string) (*wireconfig.Entry, error) {
+func (f *Flag) entry(key string) (*configcat.Setting, error) {
 	ft := typeOf(f.Default)
 	if ft == invalidEntry {
 		return nil, fmt.Errorf("invalid type %T for default value %#v", f.Default, f.Default)
 	}
-	e := &wireconfig.Entry{
-		VariationID:  "v_" + key,
-		Type:         ft,
-		Value:        f.Default,
-		RolloutRules: make([]*wireconfig.RolloutRule, 0, len(f.Rules)),
+	e := &configcat.Setting{
+		VariationID:    "v_" + key,
+		Type:           ft,
+		Value:          fromAnyValue(f.Default),
+		TargetingRules: make([]*configcat.TargetingRule, 0, len(f.Rules)),
 	}
 	for i, rule := range f.Rules {
 		if rule.Comparator.String() == "" {
@@ -61,13 +63,49 @@ func (f *Flag) entry(key string) (*wireconfig.Entry, error) {
 		if typeOf(rule.Value) != ft {
 			return nil, fmt.Errorf("rule value for rule (%q %v %q) has inconsistent type %T (value %#v) with flag default value %#v", rule.ComparisonAttribute, rule.Comparator, rule.ComparisonValue, rule.Value, rule.Value, f.Default)
 		}
-		e.RolloutRules = append(e.RolloutRules, &wireconfig.RolloutRule{
-			Value:               rule.Value,
+		cond := &configcat.UserCondition{
 			ComparisonAttribute: rule.ComparisonAttribute,
-			Comparator:          wireconfig.Operator(rule.Comparator),
-			ComparisonValue:     rule.ComparisonValue,
-			VariationID:         fmt.Sprintf("v%d_%s", i, key),
+			Comparator:          rule.Comparator,
+		}
+		if rule.Comparator.IsList() {
+			if strings.Contains(rule.ComparisonValue, ",") {
+				split := strings.Split(rule.ComparisonValue, ",")
+				cond.StringArrayValue = split
+			} else {
+				cond.StringArrayValue = []string{rule.ComparisonValue}
+			}
+		} else if rule.Comparator.IsNumeric() {
+			f, err := strconv.ParseFloat(strings.TrimSpace(rule.ComparisonValue), 64)
+			if err == nil {
+				cond.DoubleValue = &f
+			}
+		} else {
+			cond.StringValue = &rule.ComparisonValue
+		}
+		e.TargetingRules = append(e.TargetingRules, &configcat.TargetingRule{
+			Conditions: []*configcat.Condition{{
+				UserCondition: cond,
+			}},
+			ServedValue: &configcat.ServedValue{
+				Value:       fromAnyValue(rule.Value),
+				VariationID: fmt.Sprintf("v%d_%s", i, key),
+			},
 		})
 	}
 	return e, nil
+}
+
+func fromAnyValue(value interface{}) *configcat.SettingValue {
+	switch v := value.(type) {
+	case bool:
+		return &configcat.SettingValue{BoolValue: v}
+	case string:
+		return &configcat.SettingValue{StringValue: v}
+	case float64:
+		return &configcat.SettingValue{DoubleValue: v}
+	case int:
+		return &configcat.SettingValue{IntValue: v}
+	default:
+		return nil
+	}
 }

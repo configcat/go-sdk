@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/configcat/go-sdk/v8/configcatcache"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -34,7 +34,7 @@ type configResponse struct {
 func newConfigServer(t testing.TB) *configServer {
 	var buf [8]byte
 	rand.Read(buf[:])
-	return newConfigServerWithKey(t, fmt.Sprintf("fake-%x", buf[:]))
+	return newConfigServerWithKey(t, fmt.Sprintf("testing-%x", buf[:]))
 }
 
 func newConfigServerWithKey(t testing.TB, sdkKey string) *configServer {
@@ -51,9 +51,10 @@ func newConfigServerWithKey(t testing.TB, sdkKey string) *configServer {
 // a client that talks to the p.
 func (srv *configServer) config() Config {
 	return Config{
-		SDKKey:  srv.key,
-		BaseURL: srv.srv.URL,
-		Logger:  newTestLogger(srv.t, LogLevelDebug),
+		SDKKey:   srv.key,
+		BaseURL:  srv.srv.URL,
+		Logger:   newTestLogger(srv.t),
+		LogLevel: LogLevelDebug,
 	}
 }
 
@@ -123,7 +124,7 @@ var (
 
 func contentForIntegrationTestKey(key string) string {
 	readIntegrationTestKeysOnce.Do(func() {
-		data, err := ioutil.ReadFile("resources/content-by-key.json")
+		data, err := os.ReadFile("resources/content-by-key.json")
 		if err != nil {
 			panic(err)
 		}
@@ -153,77 +154,58 @@ func marshalJSON(x interface{}) string {
 // testLogger implements the Logger interface by logging to the test.T
 // instance.
 type testLogger struct {
-	logFunc func(string, ...interface{})
-	level   LogLevel
+	sync.RWMutex
+
+	t    testing.TB
+	logs []string
 }
 
-func newTestLogger(t testing.TB, level LogLevel) Logger {
+func newTestLogger(t testing.TB) Logger {
 	return &testLogger{
-		logFunc: t.Logf,
-		level:   level,
+		t: t,
 	}
 }
 
-func (log testLogger) GetLevel() LogLevel {
-	return log.level
+func (log *testLogger) Debugf(format string, args ...interface{}) {
+	log.Lock()
+	defer log.Unlock()
+	s := fmt.Sprintf("DEBUG: %s", fmt.Sprintf(format, args...))
+	log.logs = append(log.logs, s)
+	log.t.Log(s)
 }
 
-func (log testLogger) Debugf(format string, args ...interface{}) {
-	log.logf("DEBUG", format, args...)
+func (log *testLogger) Infof(format string, args ...interface{}) {
+	log.Lock()
+	defer log.Unlock()
+	s := fmt.Sprintf("INFO: %s", fmt.Sprintf(format, args...))
+	log.logs = append(log.logs, s)
+	log.t.Log(s)
 }
 
-func (log testLogger) Infof(format string, args ...interface{}) {
-	log.logf("INFO", format, args...)
+func (log *testLogger) Warnf(format string, args ...interface{}) {
+	log.Lock()
+	defer log.Unlock()
+	s := fmt.Sprintf("WARN: %s", fmt.Sprintf(format, args...))
+	log.logs = append(log.logs, s)
+	log.t.Log(s)
 }
 
-func (log testLogger) Warnf(format string, args ...interface{}) {
-	log.logf("WARN", format, args...)
+func (log *testLogger) Errorf(format string, args ...interface{}) {
+	log.Lock()
+	defer log.Unlock()
+	s := fmt.Sprintf("ERROR: %s", fmt.Sprintf(format, args...))
+	log.logs = append(log.logs, s)
+	log.t.Log(s)
 }
 
-func (log testLogger) Errorf(format string, args ...interface{}) {
-	log.logf("ERROR", format, args...)
+func (log *testLogger) Logs() []string {
+	log.RLock()
+	defer log.RUnlock()
+	return log.logs
 }
 
-func (log testLogger) Debug(args ...interface{}) {
-	log.log("DEBUG", args...)
-}
-
-func (log testLogger) Info(args ...interface{}) {
-	log.log("INFO", args...)
-}
-
-func (log testLogger) Warn(args ...interface{}) {
-	log.log("WARN", args...)
-}
-
-func (log testLogger) Error(args ...interface{}) {
-	log.log("ERROR", args...)
-}
-
-func (log testLogger) Debugln(args ...interface{}) {
-	log.logln("DEBUG", args...)
-}
-
-func (log testLogger) Infoln(args ...interface{}) {
-	log.logln("INFO", args...)
-}
-
-func (log testLogger) Warnln(args ...interface{}) {
-	log.logln("WARN", args...)
-}
-
-func (log testLogger) Errorln(args ...interface{}) {
-	log.logln("ERROR", args...)
-}
-
-func (log testLogger) logf(level string, format string, args ...interface{}) {
-	log.logFunc("%s: %s", level, fmt.Sprintf(format, args...))
-}
-
-func (log testLogger) log(level string, args ...interface{}) {
-	log.logFunc("%s: %s", level, fmt.Sprint(args...))
-}
-
-func (log testLogger) logln(level string, args ...interface{}) {
-	log.logFunc("%s: %s", level, fmt.Sprintln(args...))
+func (log *testLogger) Clear() {
+	log.Lock()
+	defer log.Unlock()
+	log.logs = nil
 }

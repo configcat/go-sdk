@@ -96,7 +96,7 @@ func Test_Consistent_Cache(t *testing.T) {
 	c := qt.New(t)
 	cacheEntry := `1686756435844
 test-etag
-{"p":{"u":"https://cdn-global.configcat.com","r":0},"f":{"testKey":{"v":"testValue","t":1,"p":[],"r":[]}}}`
+{"p":{"u":"https://cdn-global.configcat.com","r":0,"s":"FUkC6RADjzF0vXrDSfJn7BcEBag9afw1Y6jkqjMP9BA="},"f":{"testKey":{"t":1,"v":{"s":"testValue"}}}}`
 	srv := newConfigServer(t)
 	srv.setResponse(configResponse{
 		status: http.StatusInternalServerError,
@@ -120,7 +120,7 @@ test-etag
 	c.Assert(etag, qt.Equals, "test-etag")
 
 	tn, _ := time.Parse(time.RFC3339Nano, "2023-06-14T15:27:15.8440000Z")
-	serialized := configcatcache.CacheSegmentsToBytes(tn, "test-etag", []byte(`{"p":{"u":"https://cdn-global.configcat.com","r":0},"f":{"testKey":{"v":"testValue","t":1,"p":[],"r":[]}}}`))
+	serialized := configcatcache.CacheSegmentsToBytes(tn, "test-etag", []byte(`{"p":{"u":"https://cdn-global.configcat.com","r":0,"s":"FUkC6RADjzF0vXrDSfJn7BcEBag9afw1Y6jkqjMP9BA="},"f":{"testKey":{"t":1,"v":{"s":"testValue"}}}}`))
 	c.Assert(string(serialized), qt.Equals, cacheEntry)
 }
 
