@@ -3,6 +3,7 @@ package configcat
 import (
 	"bytes"
 	"encoding/json"
+	"sync"
 	"time"
 )
 
@@ -16,6 +17,7 @@ type config struct {
 	allKeys    []string
 	keyValues  map[string]keyValue
 	fetchTime  time.Time
+	userInfos  *sync.Map
 	// values holds all the values that can be returned from the
 	// configuration, keyed by valueID-1.
 	values []interface{}
@@ -65,6 +67,7 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leve
 		fetchTime:   fetchTime,
 		valueIds:    make([]valueID, numKeys()),
 		defaultUser: defaultUser,
+		userInfos:   new(sync.Map),
 	}
 	if conf.root.Preferences != nil {
 		conf.root.Preferences.saltBytes = []byte(conf.root.Preferences.Salt)

@@ -32,18 +32,6 @@ type evalContext struct {
 	contextSalt    []byte
 }
 
-func newEvaluationContext(logger *leveledLogger, salt []byte) *evalContext {
-	ctx := &evalContext{
-		logger:         logger,
-		visitedKeys:    make(map[keyID]string),
-		configJsonSalt: salt,
-	}
-	if logger.enabled(LogLevelInfo) {
-		ctx.evalLogBuilder = &evalLogBuilder{}
-	}
-	return ctx
-}
-
 type settingEvalFunc = func(id keyID, user reflect.Value, info *userTypeInfo) (valueID, string, *TargetingRule, *PercentageOption)
 
 func (c *config) generateEvaluators() {
@@ -140,9 +128,6 @@ type userTypeInfo struct {
 }
 
 type attrInfo struct {
-	kind          fieldKind
-	ftype         reflect.Type
-	index         []int
 	asString      func(v reflect.Value) string
 	asBytes       func(v reflect.Value) []byte
 	asSemver      func(v reflect.Value) (*semver.Version, error)
@@ -150,16 +135,17 @@ type attrInfo struct {
 	asStringSlice func(v reflect.Value) []string
 }
 
-type fieldKind int
-
-const (
-	kindText fieldKind = iota
-	kindInt
-	kindUint
-	kindFloat
-	kindSlice
-	kindStruct
-)
+func (c *config) getOrNewUserTypeInfo(userType reflect.Type) (*userTypeInfo, error) {
+	if info, ok := c.userInfos.Load(userType); ok {
+		return info.(*userTypeInfo), nil
+	}
+	info, err := newUserTypeInfo(userType)
+	if err != nil {
+		return nil, err
+	}
+	res, _ := c.userInfos.LoadOrStore(userType, info)
+	return res.(*userTypeInfo), nil
+}
 
 func newUserTypeInfo(userType reflect.Type) (*userTypeInfo, error) {
 	if userType == nil {
@@ -219,7 +205,6 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 	switch field.Type.Kind() {
 	case reflect.String:
 		return attrInfo{
-			ftype: field.Type,
 			asString: func(v reflect.Value) string {
 				return v.FieldByIndex(field.Index).String()
 			},
@@ -236,7 +221,6 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 	case reflect.Slice:
 		if field.Type.Elem().Kind() == reflect.Uint8 {
 			return attrInfo{
-				ftype: field.Type,
 				asString: func(v reflect.Value) string {
 					return string(v.FieldByIndex(field.Index).Bytes())
 				},
@@ -252,7 +236,6 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 			}, nil
 		} else if field.Type.Elem().Kind() == reflect.String {
 			return attrInfo{
-				kind: kindSlice,
 				asStringSlice: func(v reflect.Value) []string {
 					sl := v.FieldByIndex(field.Index)
 					res := make([]string, sl.Len())
@@ -266,9 +249,6 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 		return attrInfo{}, fmt.Errorf("user value field %s has unsupported slice type %s", field.Name, field.Type)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return attrInfo{
-			kind:  kindInt,
-			ftype: field.Type,
-			index: field.Index,
 			asString: func(v reflect.Value) string {
 				return strconv.FormatInt(v.FieldByIndex(field.Index).Int(), 10)
 			},
@@ -281,9 +261,6 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 		}, nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return attrInfo{
-			kind:  kindUint,
-			ftype: field.Type,
-			index: field.Index,
 			asString: func(v reflect.Value) string {
 				return strconv.FormatUint(v.FieldByIndex(field.Index).Uint(), 10)
 			},
@@ -296,9 +273,6 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 		}, nil
 	case reflect.Float32, reflect.Float64:
 		return attrInfo{
-			kind:  kindFloat,
-			ftype: field.Type,
-			index: field.Index,
 			asString: func(v reflect.Value) string {
 				return strconv.FormatFloat(v.FieldByIndex(field.Index).Float(), 'g', -1, 64)
 			},
@@ -312,9 +286,6 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 	case reflect.Struct:
 		if field.Type == timeType {
 			return attrInfo{
-				kind:  kindFloat,
-				ftype: field.Type,
-				index: field.Index,
 				asFloat: func(v reflect.Value) (float64, error) {
 					return float64(v.FieldByIndex(field.Index).Interface().(time.Time).UnixMilli() / 1000), nil
 				},

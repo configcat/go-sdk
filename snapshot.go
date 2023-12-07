@@ -135,8 +135,11 @@ func _newSnapshot(cfg *config, user User, logger *leveledLogger, hooks *Hooks) *
 		originalUser: user,
 		hooks:        hooks,
 	}
+	if cfg == nil {
+		return snap
+	}
 	if user != nil && !snap.user.IsNil() {
-		userInfo, err := newUserTypeInfo(snap.user.Type())
+		userInfo, err := cfg.getOrNewUserTypeInfo(snap.user.Type())
 		if err != nil {
 			logger.Errorf(0, "%v", err)
 			return snap
@@ -145,9 +148,6 @@ func _newSnapshot(cfg *config, user User, logger *leveledLogger, hooks *Hooks) *
 		if userInfo.deref {
 			snap.user = snap.user.Elem()
 		}
-	}
-	if cfg == nil {
-		return snap
 	}
 	snap.evaluators = cfg.evaluators
 	snap.values = cfg.values
