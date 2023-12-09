@@ -141,7 +141,7 @@ type SimplifiedConfig struct {
 	Flags map[string]interface{} `json:"flags"`
 }
 
-type RedirectionKind int
+type RedirectionKind uint8
 
 const (
 	// NoDirect indicates that the configuration is available
@@ -161,7 +161,7 @@ const (
 	ForceRedirect RedirectionKind = 2
 )
 
-type SettingType int
+type SettingType int8
 
 const (
 	BoolSetting   SettingType = 0
@@ -211,14 +211,14 @@ const (
 	OpArrayNotContainsAnyOf       Comparator = 35
 )
 
-type PrerequisiteComparator int
+type PrerequisiteComparator uint8
 
 const (
 	OpPrerequisiteEq    PrerequisiteComparator = 0
 	OpPrerequisiteNotEq PrerequisiteComparator = 1
 )
 
-type SegmentComparator int
+type SegmentComparator uint8
 
 const (
 	OpSegmentIsIn    SegmentComparator = 0
