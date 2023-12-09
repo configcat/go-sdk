@@ -1,0 +1,11 @@
+WARN: [3003] cannot evaluate certain targeting rules of setting 'stringIsInDogDefaultCat' (the User.Email attribute is missing); you should set the User.Email attribute in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/
+WARN: [3003] cannot evaluate certain targeting rules of setting 'stringIsInDogDefaultCat' (the User.Custom1 attribute is missing); you should set the User.Custom1 attribute in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/
+INFO: [5000] Evaluating 'stringIsInDogDefaultCat' for User 'map[string]interface {}{"Identifier":"12345"}'
+Evaluating targeting rules and applying the first match if any:
+- IF User.Email IS ONE OF ['a@configcat.com', 'b@configcat.com'] => false, skipping the remaining AND conditions
+  THEN 'Dog' => cannot evaluate, the User.Email attribute is missing
+  The current targeting rule is ignored and the evaluation continues with the next rule.
+- IF User.Custom1 IS ONE OF ['admin'] => false, skipping the remaining AND conditions
+  THEN 'Dog' => cannot evaluate, the User.Custom1 attribute is missing
+  The current targeting rule is ignored and the evaluation continues with the next rule.
+Returning 'Cat'.

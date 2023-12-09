@@ -8,7 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	configcat "github.com/configcat/go-sdk/v8"
+	configcat "github.com/configcat/go-sdk/v9"
 	"net/http"
 	"sync"
 )

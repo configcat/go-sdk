@@ -4,39 +4,65 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/blang/semver/v4"
 	"math"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 )
 
-// NoUserError is returned when the given user is nil.
-type NoUserError struct{}
+// noUserError is returned when the given user is nil.
+type noUserError struct{}
 
-func (n NoUserError) Error() string {
-	return "no user passed"
+func (n noUserError) Error() string {
+	return "cannot evaluate, User Object is missing"
 }
 
-// ComparisonValueError is returned when the comparison value is nil.
-type ComparisonValueError struct{}
-
-func (n ComparisonValueError) Error() string {
-	return "comparison value missing"
+// comparisonValueError is returned when the comparison value is nil.
+type comparisonValueError struct {
+	value interface{}
+	attr  string
+	err   error
 }
 
-var noUser = &NoUserError{}
-var compValMiss = &ComparisonValueError{}
+func (n comparisonValueError) Error() string {
+	result := fmt.Sprintf("comparison value '%v' is invalid", n.value)
+	if n.err != nil {
+		result += fmt.Sprintf(" (%s)", n.err.Error())
+	}
+	return result
+}
 
-func conditionsMatcher(conditions []*Condition, evaluators []settingEvalFunc, configJsonSalt []byte, contextSalt []byte) func(user reflect.Value, info *userTypeInfo) (bool, error) {
-	matchers := make([]func(user reflect.Value, info *userTypeInfo) (bool, error), len(conditions))
+var noUser = &noUserError{}
+
+func conditionsMatcher(conditions []*Condition, evaluators []settingEvalFunc, configJsonSalt []byte, contextSalt []byte) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+	matchers := make([]func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error), len(conditions))
 	for i, condition := range conditions {
 		matchers[i] = conditionMatcher(condition, evaluators, configJsonSalt, contextSalt)
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
-		for _, matcher := range matchers {
-			matched, err := matcher(user, info)
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.newLineString("- ")
+		}
+		for i, matcher := range matchers {
+			if builder != nil {
+				if i == 0 {
+					builder.append("IF ").incIndent()
+				} else {
+					builder.incIndent().newLineString("AND ")
+				}
+			}
+			matched, err := matcher(user, info, builder, logger)
+			if builder != nil {
+				builder.append(" => ").append(fmt.Sprintf("%v", matched))
+				if !matched {
+					builder.append(", skipping the remaining AND conditions")
+				}
+				builder.decIndent()
+			}
 			if err != nil {
 				return false, err
 			}
@@ -48,7 +74,7 @@ func conditionsMatcher(conditions []*Condition, evaluators []settingEvalFunc, co
 	}
 }
 
-func conditionMatcher(condition *Condition, evaluators []settingEvalFunc, configJsonSalt []byte, contextSalt []byte) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func conditionMatcher(condition *Condition, evaluators []settingEvalFunc, configJsonSalt []byte, contextSalt []byte) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if condition.UserCondition != nil {
 		return userConditionMatcher(condition.UserCondition, configJsonSalt, contextSalt)
 	}
@@ -58,90 +84,158 @@ func conditionMatcher(condition *Condition, evaluators []settingEvalFunc, config
 	if condition.PrerequisiteFlagCondition != nil {
 		return prerequisiteConditionMatcher(condition.PrerequisiteFlagCondition, evaluators)
 	}
-	return falseResultMatcher
+	return falseResultMatcher(errors.New("condition isn't a type of user, segment, or prerequisite condition"))
 }
 
-func segmentConditionMatcher(segmentCondition *SegmentCondition, configJsonSalt []byte) func(user reflect.Value, info *userTypeInfo) (bool, error) {
-	matchers := make([]func(user reflect.Value, info *userTypeInfo) (bool, error), len(segmentCondition.relatedSegment.Conditions))
+func segmentConditionMatcher(segmentCondition *SegmentCondition, configJsonSalt []byte) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+	matchers := make([]func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error), len(segmentCondition.relatedSegment.Conditions))
 	for i, condition := range segmentCondition.relatedSegment.Conditions {
 		matchers[i] = userConditionMatcher(condition, configJsonSalt, segmentCondition.relatedSegment.nameBytes)
 	}
+	name := "<invalid value>"
+	if segmentCondition.relatedSegment != nil {
+		name = segmentCondition.relatedSegment.Name
+	}
+	op := segmentCondition.Comparator
 	needsTrue := segmentCondition.Comparator == OpSegmentIsIn
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.append(fmt.Sprintf("User %s '%s'", op.String(), name))
+		}
 		if info == nil {
 			return false, noUser
 		}
-		for _, matcher := range matchers {
-			matched, err := matcher(user, info)
-			if err != nil {
-				return false, err
+		if builder != nil {
+			builder.newLineString("(").incIndent().newLine().
+				append(fmt.Sprintf("Evaluating segment '%s':", name))
+		}
+		result := true
+		var resErr error
+		for i, matcher := range matchers {
+			if builder != nil {
+				builder.newLineString("- ")
 			}
-			if matched {
-				return needsTrue, nil
+			if builder != nil {
+				if i == 0 {
+					builder.append("IF ").incIndent()
+				} else {
+					builder.incIndent().newLineString("AND ")
+				}
+			}
+			matched, err := matcher(user, info, builder, logger)
+			if builder != nil {
+				builder.append(" => ").append(fmt.Sprintf("%v", matched))
+				if !matched {
+					builder.append(", skipping the remaining AND conditions")
+				}
+				builder.decIndent()
+			}
+			if err != nil {
+				result = false
+				resErr = err
+				break
+			}
+			if !matched {
+				result = false
+				break
 			}
 		}
-		return !needsTrue, nil
+		if builder != nil {
+			builder.newLineString("Segment evaluation result: ")
+			if resErr != nil {
+				builder.append(resErr.Error())
+			} else {
+				resOp := OpSegmentIsNotIn
+				if result {
+					resOp = OpSegmentIsIn
+				}
+				builder.append(fmt.Sprintf("User %s", resOp.String()))
+			}
+			builder.decIndent().newLineString(")")
+		}
+		return result == needsTrue, resErr
 	}
 }
 
-func prerequisiteConditionMatcher(prerequisiteCondition *PrerequisiteFlagCondition, evaluators []settingEvalFunc) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func prerequisiteConditionMatcher(prerequisiteCondition *PrerequisiteFlagCondition, evaluators []settingEvalFunc) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	prerequisiteKey := prerequisiteCondition.FlagKey
 	expectedValueId := prerequisiteCondition.valueID
 	prerequisiteKeyId := idForKey(prerequisiteKey, true)
+	prerequisiteType := prerequisiteCondition.prerequisiteSettingType
+	prerequisiteValue := valueForSettingType(prerequisiteCondition.Value, prerequisiteType)
+	op := prerequisiteCondition.Comparator
 
-	needsTrue := prerequisiteCondition.Comparator == OpPrerequisiteEq
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	needsTrue := op == OpPrerequisiteEq
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.append(fmt.Sprintf("Flag '%s' %s ", prerequisiteKey, op.String()))
+			if prerequisiteValue == nil {
+				builder.append("<invalid value>")
+			} else {
+				builder.append(fmt.Sprintf("'%v'", prerequisiteValue))
+			}
+		}
 		if len(evaluators) <= int(prerequisiteKeyId) {
 			return false, fmt.Errorf("prerequisite not found")
 		}
+		if builder != nil {
+			builder.newLineString("(").incIndent().newLine()
+		}
 		prerequisiteEvalFunc := evaluators[prerequisiteKeyId]
-		prerequisiteValueId, _, _, _ := prerequisiteEvalFunc(prerequisiteKeyId, user, info)
+		prerequisiteValueId, _, _, _ := prerequisiteEvalFunc(prerequisiteKeyId, user, info, builder, logger)
+		if builder != nil {
+			builder.decIndent().newLineString(")")
+		}
 		return (expectedValueId == prerequisiteValueId) == needsTrue, nil
 	}
 }
 
-func userConditionMatcher(userCondition *UserCondition, configJsonSalt []byte, contextSalt []byte) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func userConditionMatcher(userCondition *UserCondition, configJsonSalt []byte, contextSalt []byte) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	op := userCondition.Comparator
 	switch op {
 	case OpEq, OpNotEq:
-		return textEqualsMatcher(userCondition.ComparisonAttribute, userCondition.StringValue, op == OpEq)
+		return textEqualsMatcher(userCondition.ComparisonAttribute, userCondition.StringValue, op)
 	case OpEqHashed, OpNotEqHashed:
-		return sensitiveTextEqualsMatcher(userCondition.ComparisonAttribute, userCondition.StringValue, configJsonSalt, contextSalt, op == OpEqHashed)
+		return sensitiveTextEqualsMatcher(userCondition.ComparisonAttribute, userCondition.StringValue, configJsonSalt, contextSalt, op)
 	case OpOneOf, OpNotOneOf:
-		return oneOfMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, op == OpOneOf)
+		return oneOfMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, op)
 	case OpOneOfHashed, OpNotOneOfHashed:
-		return sensitiveOneOfMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, configJsonSalt, contextSalt, op == OpOneOfHashed)
+		return sensitiveOneOfMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, configJsonSalt, contextSalt, op)
 	case OpStartsWithAnyOf, OpNotStartsWithAnyOf:
-		return startsEndsWithMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, true, op == OpStartsWithAnyOf)
+		return startsEndsWithMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, true, op)
 	case OpStartsWithAnyOfHashed, OpNotStartsWithAnyOfHashed:
-		return sensitiveStartsEndsWithMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, configJsonSalt, contextSalt, true, op == OpStartsWithAnyOfHashed)
+		return sensitiveStartsEndsWithMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, configJsonSalt, contextSalt, true, op)
 	case OpEndsWithAnyOf, OpNotEndsWithAnyOf:
-		return startsEndsWithMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, false, op == OpEndsWithAnyOf)
+		return startsEndsWithMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, false, op)
 	case OpEndsWithAnyOfHashed, OpNotEndsWithAnyOfHashed:
-		return sensitiveStartsEndsWithMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, configJsonSalt, contextSalt, false, op == OpEndsWithAnyOfHashed)
+		return sensitiveStartsEndsWithMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, configJsonSalt, contextSalt, false, op)
 	case OpContains, OpNotContains:
-		return containsMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, op == OpContains)
+		return containsMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, op)
 	case OpOneOfSemver, OpNotOneOfSemver:
-		return semverIsOneOfMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, op == OpOneOfSemver)
+		return semverIsOneOfMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, op)
 	case OpGreaterSemver, OpGreaterEqSemver, OpLessSemver, OpLessEqSemver:
 		return semverCompareMatcher(userCondition.ComparisonAttribute, userCondition.StringValue, op)
 	case OpEqNum, OpNotEqNum, OpGreaterNum, OpGreaterEqNum, OpLessNum, OpLessEqNum:
 		return numberCompareMatcher(userCondition.ComparisonAttribute, userCondition.DoubleValue, op)
 	case OpBeforeDateTime, OpAfterDateTime:
-		return dateTimeMatcher(userCondition.ComparisonAttribute, userCondition.DoubleValue, op == OpBeforeDateTime)
+		return dateTimeMatcher(userCondition.ComparisonAttribute, userCondition.DoubleValue, op)
 	case OpArrayContainsAnyOf, OpArrayNotContainsAnyOf:
-		return arrayContainsMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, op == OpArrayContainsAnyOf)
+		return arrayContainsMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, op)
 	case OpArrayContainsAnyOfHashed, OpArrayNotContainsAnyOfHashed:
-		return sensitiveArrayContainsMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, configJsonSalt, contextSalt, op == OpArrayContainsAnyOfHashed)
+		return sensitiveArrayContainsMatcher(userCondition.ComparisonAttribute, userCondition.StringArrayValue, configJsonSalt, contextSalt, op)
 	}
-	return falseResultMatcher
+	return falseResultMatcher(errors.New("comparison operator is invalid"))
 }
 
-func textEqualsMatcher(comparisonAttribute string, comparisonValue *string, needsTrue bool) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func textEqualsMatcher(comparisonAttribute string, comparisonValue *string, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValue == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValue, op, nil)
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	needsTrue := op == OpEq
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, *comparisonValue)
+		}
 		if info == nil {
 			return false, noUser
 		}
@@ -153,15 +247,19 @@ func textEqualsMatcher(comparisonAttribute string, comparisonValue *string, need
 	}
 }
 
-func sensitiveTextEqualsMatcher(comparisonAttribute string, comparisonValue *string, configJsonSalt []byte, contextSalt []byte, needsTrue bool) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func sensitiveTextEqualsMatcher(comparisonAttribute string, comparisonValue *string, configJsonSalt []byte, contextSalt []byte, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValue == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValue, op, nil)
 	}
 	hComp, err := hex.DecodeString(*comparisonValue)
 	if err != nil || len(hComp) != sha256.Size {
-		return falseResultMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, *comparisonValue, op, nil)
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	needsTrue := op == OpEqHashed
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, *comparisonValue)
+		}
 		if info == nil {
 			return false, noUser
 		}
@@ -174,15 +272,19 @@ func sensitiveTextEqualsMatcher(comparisonAttribute string, comparisonValue *str
 	}
 }
 
-func oneOfMatcher(comparisonAttribute string, comparisonValues []string, needsTrue bool) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func oneOfMatcher(comparisonAttribute string, comparisonValues []string, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValues == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValues, op, nil)
 	}
 	values := make(map[string]bool, len(comparisonValues))
 	for _, item := range comparisonValues {
 		values[item] = true
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	needsTrue := op == OpOneOf
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, keys(values))
+		}
 		if info == nil {
 			return false, noUser
 		}
@@ -194,9 +296,9 @@ func oneOfMatcher(comparisonAttribute string, comparisonValues []string, needsTr
 	}
 }
 
-func sensitiveOneOfMatcher(comparisonAttribute string, comparisonValues []string, configJsonSalt []byte, contextSalt []byte, needsTrue bool) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func sensitiveOneOfMatcher(comparisonAttribute string, comparisonValues []string, configJsonSalt []byte, contextSalt []byte, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValues == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValues, op, nil)
 	}
 	values := make(map[[sha256.Size]byte]bool, len(comparisonValues))
 	for _, item := range comparisonValues {
@@ -208,7 +310,11 @@ func sensitiveOneOfMatcher(comparisonAttribute string, comparisonValues []string
 		copy(final[:], hashed)
 		values[final] = true
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	needsTrue := op == OpOneOfHashed
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, make([]string, len(values)))
+		}
 		if info == nil {
 			return false, noUser
 		}
@@ -221,11 +327,20 @@ func sensitiveOneOfMatcher(comparisonAttribute string, comparisonValues []string
 	}
 }
 
-func startsEndsWithMatcher(comparisonAttribute string, comparisonValues []string, startsWith bool, needsTrue bool) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func startsEndsWithMatcher(comparisonAttribute string, comparisonValues []string, startsWith bool, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValues == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValues, op, nil)
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	var needsTrue bool
+	if startsWith {
+		needsTrue = op == OpStartsWithAnyOf
+	} else {
+		needsTrue = op == OpEndsWithAnyOf
+	}
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, comparisonValues)
+		}
 		if info == nil {
 			return false, noUser
 		}
@@ -248,9 +363,9 @@ func startsEndsWithMatcher(comparisonAttribute string, comparisonValues []string
 	}
 }
 
-func sensitiveStartsEndsWithMatcher(comparisonAttribute string, comparisonValues []string, configJsonSalt []byte, contextSalt []byte, startsWith bool, needsTrue bool) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func sensitiveStartsEndsWithMatcher(comparisonAttribute string, comparisonValues []string, configJsonSalt []byte, contextSalt []byte, startsWith bool, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValues == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValues, op, nil)
 	}
 	values := make([][sha256.Size]byte, len(comparisonValues))
 	lengths := make([]int, len(comparisonValues))
@@ -258,21 +373,30 @@ func sensitiveStartsEndsWithMatcher(comparisonAttribute string, comparisonValues
 		var final [sha256.Size]byte
 		parts := strings.Split(item, "_")
 		if len(parts) != 2 {
-			return falseResultMatcher
+			return falseWithCompErrorMatcher(comparisonAttribute, comparisonValues, op, nil)
 		}
 		length, err := strconv.Atoi(parts[0])
 		if err != nil {
-			return falseResultMatcher
+			return falseWithCompErrorMatcher(comparisonAttribute, comparisonValues, op, nil)
 		}
 		hashed, err := hex.DecodeString(parts[1])
 		if err != nil {
-			return falseResultMatcher
+			return falseWithCompErrorMatcher(comparisonAttribute, comparisonValues, op, nil)
 		}
 		copy(final[:], hashed)
 		values[i] = final
 		lengths[i] = length
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	var needsTrue bool
+	if startsWith {
+		needsTrue = op == OpStartsWithAnyOfHashed
+	} else {
+		needsTrue = op == OpEndsWithAnyOfHashed
+	}
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, make([]string, len(values)))
+		}
 		if info == nil {
 			return false, noUser
 		}
@@ -303,11 +427,15 @@ func sensitiveStartsEndsWithMatcher(comparisonAttribute string, comparisonValues
 	}
 }
 
-func containsMatcher(comparisonAttribute string, comparisonValues []string, needsTrue bool) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func containsMatcher(comparisonAttribute string, comparisonValues []string, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValues == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValues, op, nil)
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	needsTrue := op == OpContains
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, comparisonValues)
+		}
 		if info == nil {
 			return false, noUser
 		}
@@ -324,9 +452,9 @@ func containsMatcher(comparisonAttribute string, comparisonValues []string, need
 	}
 }
 
-func semverIsOneOfMatcher(comparisonAttribute string, comparisonValues []string, needsTrue bool) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func semverIsOneOfMatcher(comparisonAttribute string, comparisonValues []string, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValues == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValues, op, nil)
 	}
 	versions := make([]semver.Version, 0, len(comparisonValues))
 	for _, item := range comparisonValues {
@@ -336,11 +464,15 @@ func semverIsOneOfMatcher(comparisonAttribute string, comparisonValues []string,
 		}
 		v, err := semver.Make(ver)
 		if err != nil {
-			return falseResultMatcher
+			return falseWithCompErrorMatcher(comparisonAttribute, comparisonValues, op, err)
 		}
 		versions = append(versions, v)
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	needsTrue := op == OpOneOfSemver
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, comparisonValues)
+		}
 		if info == nil {
 			return false, noUser
 		}
@@ -357,13 +489,13 @@ func semverIsOneOfMatcher(comparisonAttribute string, comparisonValues []string,
 	}
 }
 
-func semverCompareMatcher(comparisonAttribute string, comparisonValue *string, op Comparator) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func semverCompareMatcher(comparisonAttribute string, comparisonValue *string, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValue == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValue, op, nil)
 	}
 	compVer, err := semver.Make(strings.TrimSpace(*comparisonValue))
 	if err != nil {
-		return falseResultMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, *comparisonValue, op, err)
 	}
 	var cmpFunc func(a *semver.Version, b semver.Version) bool
 	switch op {
@@ -384,7 +516,10 @@ func semverCompareMatcher(comparisonAttribute string, comparisonValue *string, o
 			return a.LTE(b)
 		}
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, *comparisonValue)
+		}
 		if info == nil {
 			return false, noUser
 		}
@@ -396,9 +531,9 @@ func semverCompareMatcher(comparisonAttribute string, comparisonValue *string, o
 	}
 }
 
-func numberCompareMatcher(comparisonAttribute string, comparisonValue *float64, op Comparator) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func numberCompareMatcher(comparisonAttribute string, comparisonValue *float64, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValue == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValue, op, nil)
 	}
 	var cmpFunc func(a, b float64) bool
 	switch op {
@@ -427,7 +562,10 @@ func numberCompareMatcher(comparisonAttribute string, comparisonValue *float64, 
 			return a <= b
 		}
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, *comparisonValue)
+		}
 		if info == nil {
 			return false, noUser
 		}
@@ -439,11 +577,15 @@ func numberCompareMatcher(comparisonAttribute string, comparisonValue *float64, 
 	}
 }
 
-func dateTimeMatcher(comparisonAttribute string, comparisonValue *float64, before bool) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func dateTimeMatcher(comparisonAttribute string, comparisonValue *float64, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValue == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValue, op, nil)
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	before := op == OpBeforeDateTime
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, *comparisonValue)
+		}
 		if info == nil {
 			return false, noUser
 		}
@@ -459,21 +601,25 @@ func dateTimeMatcher(comparisonAttribute string, comparisonValue *float64, befor
 	}
 }
 
-func arrayContainsMatcher(comparisonAttribute string, comparisonValues []string, needsTrue bool) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func arrayContainsMatcher(comparisonAttribute string, comparisonValues []string, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValues == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValues, op, nil)
 	}
 	values := make(map[string]bool, len(comparisonValues))
 	for _, item := range comparisonValues {
 		values[item] = true
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	needsTrue := op == OpArrayContainsAnyOf
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, comparisonValues)
+		}
 		if info == nil {
 			return false, noUser
 		}
-		attrVal := info.getSlice(user, comparisonAttribute)
-		if len(attrVal) == 0 {
-			return false, fmt.Errorf("user attribute '%s' not found", comparisonAttribute)
+		attrVal, err := info.getSlice(user, comparisonAttribute)
+		if err != nil {
+			return false, err
 		}
 		for _, item := range attrVal {
 			matched := values[item]
@@ -485,9 +631,9 @@ func arrayContainsMatcher(comparisonAttribute string, comparisonValues []string,
 	}
 }
 
-func sensitiveArrayContainsMatcher(comparisonAttribute string, comparisonValues []string, configJsonSalt []byte, contextSalt []byte, needsTrue bool) func(user reflect.Value, info *userTypeInfo) (bool, error) {
+func sensitiveArrayContainsMatcher(comparisonAttribute string, comparisonValues []string, configJsonSalt []byte, contextSalt []byte, op Comparator) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	if comparisonValues == nil {
-		return falseWithCompMissErrorMatcher
+		return falseWithCompErrorMatcher(comparisonAttribute, comparisonValues, op, nil)
 	}
 	values := make(map[[sha256.Size]byte]bool, len(comparisonValues))
 	for _, item := range comparisonValues {
@@ -499,13 +645,17 @@ func sensitiveArrayContainsMatcher(comparisonAttribute string, comparisonValues 
 		copy(final[:], hashed)
 		values[final] = true
 	}
-	return func(user reflect.Value, info *userTypeInfo) (bool, error) {
+	needsTrue := op == OpArrayContainsAnyOfHashed
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, make([]string, len(values)))
+		}
 		if info == nil {
 			return false, noUser
 		}
-		attrVal := info.getSlice(user, comparisonAttribute)
-		if len(attrVal) == 0 {
-			return false, fmt.Errorf("user attribute '%s' not found", comparisonAttribute)
+		attrVal, err := info.getSlice(user, comparisonAttribute)
+		if err != nil {
+			return false, err
 		}
 		for _, item := range attrVal {
 			usrHash := hashVal([]byte(item), configJsonSalt, contextSalt)
@@ -518,12 +668,19 @@ func sensitiveArrayContainsMatcher(comparisonAttribute string, comparisonValues 
 	}
 }
 
-func falseResultMatcher(_ reflect.Value, _ *userTypeInfo) (bool, error) {
-	return false, nil
+func falseResultMatcher(err error) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		return false, err
+	}
 }
 
-func falseWithCompMissErrorMatcher(_ reflect.Value, _ *userTypeInfo) (bool, error) {
-	return false, compValMiss
+func falseWithCompErrorMatcher(comparisonAttribute string, comparisonValue interface{}, op Comparator, err error) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+	return func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
+		if builder != nil {
+			builder.appendUserCondition(comparisonAttribute, op, comparisonValue)
+		}
+		return false, &comparisonValueError{value: comparisonValue, attr: comparisonAttribute, err: err}
+	}
 }
 
 func hashVal(val []byte, configJsonSalt []byte, contextSalt []byte) [sha256.Size]byte {
@@ -532,4 +689,13 @@ func hashVal(val []byte, configJsonSalt []byte, contextSalt []byte) [sha256.Size
 	copy(cont[len(val):], configJsonSalt)
 	copy(cont[len(val)+len(configJsonSalt):], contextSalt)
 	return sha256.Sum256(cont)
+}
+
+func keys[M ~map[string]V, V any](m M) []string {
+	r := make([]string, 0, len(m))
+	for k := range m {
+		r = append(r, k)
+	}
+	sort.Strings(r)
+	return r
 }

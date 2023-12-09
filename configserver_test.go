@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/configcat/go-sdk/v8/configcatcache"
+	"github.com/configcat/go-sdk/v9/configcatcache"
 	"net/http"
 	"net/http/httptest"
 	"os"

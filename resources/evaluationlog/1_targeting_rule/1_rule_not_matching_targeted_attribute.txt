@@ -1,0 +1,5 @@
+INFO: [5000] Evaluating 'stringContainsDogDefaultCat' for User 'map[string]interface {}{"Email":"joe@example.com", "Identifier":"12345"}'
+Evaluating targeting rules and applying the first match if any:
+- IF User.Email CONTAINS ANY OF ['@configcat.com'] => false, skipping the remaining AND conditions
+  THEN 'Dog' => no match
+Returning 'Cat'.

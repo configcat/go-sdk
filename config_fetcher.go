@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/configcat/go-sdk/v8/configcatcache"
+	"github.com/configcat/go-sdk/v9/configcatcache"
 	"io"
 	"net/http"
 	"os"
@@ -303,7 +303,7 @@ func (f *configFetcher) saveToCache(ctx context.Context, fetchTime time.Time, eT
 // It returns the newly fetched configuration and the new base URL
 // (empty if it hasn't changed).
 func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfig *config) (newConfig *config, newBaseURL string, err error) {
-	f.logger.Infof(0, "fetching from %v", baseURL)
+	f.logger.Debugf("fetching from %v", baseURL)
 	for i := 0; i < 3; i++ {
 		config, err := f.fetchHTTPWithoutRedirect(ctx, baseURL, prevConfig)
 		if err != nil {
@@ -318,7 +318,7 @@ func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfi
 		}
 		redirect := *preferences.Redirect
 		if redirect == ForceRedirect {
-			f.logger.Infof(0, "forced redirect to %v (count %d)", preferences.URL, i+1)
+			f.logger.Debugf("forced redirect to %v (count %d)", preferences.URL, i+1)
 			baseURL = preferences.URL
 			continue
 		}
@@ -326,7 +326,7 @@ func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfi
 			if redirect == NoDirect {
 				// The config is available, but we won't respect the redirection
 				// request for a custom URL.
-				f.logger.Infof(0, "config fetched but refusing to redirect from custom URL without forced redirection")
+				f.logger.Debugf("config fetched but refusing to redirect from custom URL without forced redirection")
 				return config, baseURL, nil
 			}
 			// With shouldRedirect, there is no configuration available
@@ -345,13 +345,13 @@ func (f *configFetcher) fetchHTTP(ctx context.Context, baseURL string, prevConfi
 		if redirect == NoDirect {
 			// We've already got the configuration data, we'll just fetch
 			// from the redirected URL next time.
-			f.logger.Infof(0, "redirection on next fetch to %v", baseURL)
+			f.logger.Debugf("redirection on next fetch to %v", baseURL)
 			return config, baseURL, nil
 		}
 		if redirect != ShouldRedirect {
 			return nil, "", &fetcherError{EventId: 0, Err: fmt.Errorf("unknown redirection kind %d in response", redirect)}
 		}
-		f.logger.Infof(0, "redirecting to %v", baseURL)
+		f.logger.Debugf("redirecting to %v", baseURL)
 	}
 	return nil, "", &fetcherError{EventId: 1104, Err: fmt.Errorf("redirection loop encountered while trying to fetch config JSON; please contact us at https://configcat.com/support/")}
 }

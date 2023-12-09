@@ -2,10 +2,26 @@ package configcattest
 
 import (
 	"fmt"
-	configcat "github.com/configcat/go-sdk/v8"
+	configcat "github.com/configcat/go-sdk/v9"
 	"strconv"
 	"strings"
 )
+
+const invalidType configcat.SettingType = -1
+
+func typeOf(x interface{}) configcat.SettingType {
+	switch x.(type) {
+	case string:
+		return configcat.StringSetting
+	case int:
+		return configcat.IntSetting
+	case float64:
+		return configcat.FloatSetting
+	case bool:
+		return configcat.BoolSetting
+	}
+	return invalidType
+}
 
 // Flag represents a configcat flag.
 type Flag struct {
@@ -41,7 +57,7 @@ type Rule struct {
 
 func (f *Flag) entry(key string) (*configcat.Setting, error) {
 	ft := typeOf(f.Default)
-	if ft == invalidEntry {
+	if ft == invalidType {
 		return nil, fmt.Errorf("invalid type %T for default value %#v", f.Default, f.Default)
 	}
 	e := &configcat.Setting{

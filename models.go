@@ -113,7 +113,8 @@ type PrerequisiteFlagCondition struct {
 	// Value that the evaluated value of the prerequisite flag is compared to.
 	Value *SettingValue `json:"v"`
 
-	valueID int32
+	valueID                 int32
+	prerequisiteSettingType SettingType
 }
 
 // SettingValue describes the possible values of a feature flag or setting.
@@ -227,22 +228,22 @@ const (
 var opStrings = []string{
 	OpOneOf:                       "IS ONE OF",
 	OpNotOneOf:                    "IS NOT ONE OF",
-	OpContains:                    "CONTAINS",
-	OpNotContains:                 "DOES NOT CONTAIN",
-	OpOneOfSemver:                 "IS ONE OF (SemVer)",
-	OpNotOneOfSemver:              "IS NOT ONE OF (SemVer)",
-	OpLessSemver:                  "< (SemVer)",
-	OpLessEqSemver:                "<= (SemVer)",
-	OpGreaterSemver:               "> (SemVer)",
-	OpGreaterEqSemver:             ">= (SemVer)",
-	OpEqNum:                       "= (Number)",
-	OpNotEqNum:                    "<> (Number)",
-	OpLessNum:                     "< (Number)",
-	OpLessEqNum:                   "<= (Number)",
-	OpGreaterNum:                  "> (Number)",
-	OpGreaterEqNum:                ">= (Number)",
-	OpOneOfHashed:                 "IS ONE OF (Sensitive)",
-	OpNotOneOfHashed:              "IS NOT ONE OF (Sensitive)",
+	OpContains:                    "CONTAINS ANY OF",
+	OpNotContains:                 "NOT CONTAINS ANY OF",
+	OpOneOfSemver:                 "IS ONE OF",
+	OpNotOneOfSemver:              "IS NOT ONE OF",
+	OpLessSemver:                  "<",
+	OpLessEqSemver:                "<=",
+	OpGreaterSemver:               ">",
+	OpGreaterEqSemver:             ">=",
+	OpEqNum:                       "=",
+	OpNotEqNum:                    "!=",
+	OpLessNum:                     "<",
+	OpLessEqNum:                   "<=",
+	OpGreaterNum:                  ">",
+	OpGreaterEqNum:                ">=",
+	OpOneOfHashed:                 "IS ONE OF",
+	OpNotOneOfHashed:              "IS NOT ONE OF",
 	OpBeforeDateTime:              "BEFORE",
 	OpAfterDateTime:               "AFTER",
 	OpEqHashed:                    "EQUALS",
@@ -295,6 +296,25 @@ func (op Comparator) IsList() bool {
 func (op Comparator) IsNumeric() bool {
 	switch op {
 	case OpEqNum, OpNotEqNum, OpLessNum, OpLessEqNum, OpGreaterNum, OpGreaterEqNum:
+		return true
+	default:
+		return false
+	}
+}
+
+func (op Comparator) IsSensitive() bool {
+	switch op {
+	case OpOneOfHashed, OpNotOneOfHashed, OpEqHashed, OpNotEqHashed, OpStartsWithAnyOfHashed, OpNotStartsWithAnyOfHashed,
+		OpEndsWithAnyOfHashed, OpNotEndsWithAnyOfHashed, OpArrayContainsAnyOfHashed, OpArrayNotContainsAnyOfHashed:
+		return true
+	default:
+		return false
+	}
+}
+
+func (op Comparator) IsDateTime() bool {
+	switch op {
+	case OpBeforeDateTime, OpAfterDateTime:
 		return true
 	default:
 		return false

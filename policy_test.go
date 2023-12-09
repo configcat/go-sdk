@@ -3,7 +3,7 @@ package configcat
 import (
 	"context"
 	"fmt"
-	"github.com/configcat/go-sdk/v8/configcatcache"
+	"github.com/configcat/go-sdk/v9/configcatcache"
 	"net/http"
 	"sync"
 	"testing"

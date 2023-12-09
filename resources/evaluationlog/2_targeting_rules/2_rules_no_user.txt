@@ -1,0 +1,10 @@
+WARN: [3001] cannot evaluate targeting rules and % options for setting 'stringIsInDogDefaultCat' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/
+INFO: [5000] Evaluating 'stringIsInDogDefaultCat'
+Evaluating targeting rules and applying the first match if any:
+- IF User.Email IS ONE OF ['a@configcat.com', 'b@configcat.com'] => false, skipping the remaining AND conditions
+  THEN 'Dog' => cannot evaluate, User Object is missing
+  The current targeting rule is ignored and the evaluation continues with the next rule.
+- IF User.Custom1 IS ONE OF ['admin'] => false, skipping the remaining AND conditions
+  THEN 'Dog' => cannot evaluate, User Object is missing
+  The current targeting rule is ignored and the evaluation continues with the next rule.
+Returning 'Cat'.

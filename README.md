@@ -7,17 +7,17 @@ ConfigCat is a feature flag and configuration management service that lets you s
 
 ConfigCat is a <a target="_blank" href="https://configcat.com">hosted feature flag service</a>. Manage feature toggles across frontend, backend, mobile, desktop apps. <a target="_blank" href="https://configcat.com">Alternative to LaunchDarkly</a>. Management app + feature flag SDKs.
 
-[![Build Status](https://github.com/configcat/go-sdk/actions/workflows/go-ci.yml/badge.svg?branch=v8)](https://github.com/configcat/go-sdk/actions/workflows/go-ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/configcat/go-sdk/v8)](https://goreportcard.com/report/github.com/configcat/go-sdk/v8)
-[![codecov](https://codecov.io/gh/configcat/go-sdk/branch/v8/graph/badge.svg)](https://codecov.io/gh/configcat/go-sdk)
-[![GoDoc](https://godoc.org/github.com/configcat/go-sdk?status.svg)](https://pkg.go.dev/github.com/configcat/go-sdk/v8)
+[![Build Status](https://github.com/configcat/go-sdk/actions/workflows/go-ci.yml/badge.svg?branch=v9)](https://github.com/configcat/go-sdk/actions/workflows/go-ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/configcat/go-sdk/v9)](https://goreportcard.com/report/github.com/configcat/go-sdk/v9)
+[![codecov](https://codecov.io/gh/configcat/go-sdk/branch/v9/graph/badge.svg)](https://codecov.io/gh/configcat/go-sdk)
+[![GoDoc](https://godoc.org/github.com/configcat/go-sdk?status.svg)](https://pkg.go.dev/github.com/configcat/go-sdk/v9)
 ![License](https://img.shields.io/github/license/configcat/go-sdk.svg)
 
 ## Getting started
 
 ### 1. Install the package with `go`
 ```bash
-go get github.com/configcat/go-sdk/v8
+go get github.com/configcat/go-sdk/v9
 ```
 
 ### 2. Go to the <a href="https://app.configcat.com/sdkkey" target="_blank">ConfigCat Dashboard</a> to get your *SDK Key*:
@@ -26,7 +26,7 @@ go get github.com/configcat/go-sdk/v8
 
 ### 3. Import the *ConfigCat* client package to your application
 ```go
-import "github.com/configcat/go-sdk/v8"
+import "github.com/configcat/go-sdk/v9"
 ```
 
 ### 4. Create a *ConfigCat* client instance:

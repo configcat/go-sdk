@@ -1,0 +1,8 @@
+WARN: [3001] cannot evaluate targeting rules and % options for setting 'integer25One25Two25Three25FourAdvancedRules' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/
+INFO: [5000] Evaluating 'integer25One25Two25Three25FourAdvancedRules'
+Evaluating targeting rules and applying the first match if any:
+- IF User.Email CONTAINS ANY OF ['@configcat.com'] => false, skipping the remaining AND conditions
+  THEN '5' => cannot evaluate, User Object is missing
+  The current targeting rule is ignored and the evaluation continues with the next rule.
+Skipping % options because the User Object is missing.
+Returning '-1'.

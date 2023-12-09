@@ -1,0 +1,5 @@
+INFO: [5000] Evaluating 'integer25One25Two25Three25FourAdvancedRules' for User 'map[string]interface {}{"Email":"joe@configcat.com", "Identifier":"12345"}'
+Evaluating targeting rules and applying the first match if any:
+- IF User.Email CONTAINS ANY OF ['@configcat.com'] => true
+  THEN '5' => MATCH, applying rule
+Returning '5'.

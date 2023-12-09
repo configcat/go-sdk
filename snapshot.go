@@ -99,7 +99,7 @@ func NewSnapshot(logger Logger, values map[string]interface{}) (*Snapshot, error
 		keys = append(keys, name)
 	}
 	// Save some allocations by using the same closure for every key.
-	eval := func(id keyID, userv reflect.Value, info *userTypeInfo) (valueID, string, *TargetingRule, *PercentageOption) {
+	eval := func(id keyID, _ reflect.Value, _ *userTypeInfo, _ *evalLogBuilder, _ *leveledLogger) (valueID, string, *TargetingRule, *PercentageOption) {
 		return valueID(id) + 1, "", nil, nil
 	}
 	evaluators := make([]settingEvalFunc, len(valuesSlice))
@@ -233,10 +233,14 @@ func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *Targe
 		snap.logger.Errorf(1001, err.Error())
 		return nil, "", nil, nil, err
 	}
-	valID, varID, targeting, percentage := eval(id, snap.user, snap.userTypeInfo)
-	val := snap.valueForID(valID)
+	var builder *evalLogBuilder
 	if snap.logger.enabled(LogLevelInfo) {
-		snap.logger.Infof(5000, "returning %v=%v", key, val)
+		builder = &evalLogBuilder{user: snap.originalUser}
+	}
+	valID, varID, targeting, percentage := eval(id, snap.user, snap.userTypeInfo, builder, snap.logger)
+	val := snap.valueForID(valID)
+	if snap.logger.enabled(LogLevelInfo) && builder != nil {
+		snap.logger.Infof(5000, builder.builder.String())
 	}
 	if v := snap.valueIds[id]; v < 0 {
 		snap.initCache()

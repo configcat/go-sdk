@@ -1,0 +1,23 @@
+WARN: [3004] cannot evaluate certain targeting rules of setting 'relations' (comparison value '1.0.0,' is invalid (Invalid character(s) found in patch number "0,"))
+WARN: [3004] cannot evaluate certain targeting rules of setting 'relations' (the User.Custom1 attribute is invalid (No Major.Minor.Patch elements found)); please check the User.Custom1 attribute and make sure that its value corresponds to the comparison operator
+WARN: [3004] cannot evaluate certain targeting rules of setting 'relations' (the User.Custom1 attribute is invalid (No Major.Minor.Patch elements found)); please check the User.Custom1 attribute and make sure that its value corresponds to the comparison operator
+WARN: [3004] cannot evaluate certain targeting rules of setting 'relations' (the User.Custom1 attribute is invalid (No Major.Minor.Patch elements found)); please check the User.Custom1 attribute and make sure that its value corresponds to the comparison operator
+WARN: [3004] cannot evaluate certain targeting rules of setting 'relations' (the User.Custom1 attribute is invalid (No Major.Minor.Patch elements found)); please check the User.Custom1 attribute and make sure that its value corresponds to the comparison operator
+INFO: [5000] Evaluating 'relations' for User 'map[string]interface {}{"Custom1":"wrong_semver", "Identifier":"12345"}'
+Evaluating targeting rules and applying the first match if any:
+- IF User.Custom1 < '1.0.0,' => false, skipping the remaining AND conditions
+  THEN '<1.0.0,' => comparison value '1.0.0,' is invalid (Invalid character(s) found in patch number "0,")
+  The current targeting rule is ignored and the evaluation continues with the next rule.
+- IF User.Custom1 < '1.0.0' => false, skipping the remaining AND conditions
+  THEN '< 1.0.0' => cannot evaluate, the User.Custom1 attribute is invalid (No Major.Minor.Patch elements found)
+  The current targeting rule is ignored and the evaluation continues with the next rule.
+- IF User.Custom1 <= '1.0.0' => false, skipping the remaining AND conditions
+  THEN '<=1.0.0' => cannot evaluate, the User.Custom1 attribute is invalid (No Major.Minor.Patch elements found)
+  The current targeting rule is ignored and the evaluation continues with the next rule.
+- IF User.Custom1 > '2.0.0' => false, skipping the remaining AND conditions
+  THEN '>2.0.0' => cannot evaluate, the User.Custom1 attribute is invalid (No Major.Minor.Patch elements found)
+  The current targeting rule is ignored and the evaluation continues with the next rule.
+- IF User.Custom1 >= '2.0.0' => false, skipping the remaining AND conditions
+  THEN '>=2.0.0' => cannot evaluate, the User.Custom1 attribute is invalid (No Major.Minor.Patch elements found)
+  The current targeting rule is ignored and the evaluation continues with the next rule.
+Returning 'Default'.

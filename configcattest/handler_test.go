@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	configcat "github.com/configcat/go-sdk/v8"
-	"github.com/configcat/go-sdk/v8/configcattest"
+	configcat "github.com/configcat/go-sdk/v9"
+	"github.com/configcat/go-sdk/v9/configcattest"
 	qt "github.com/frankban/quicktest"
 )
 
@@ -146,7 +146,7 @@ var invalidFlagsTests = []struct {
 			Value:               "x",
 		}},
 	},
-	expectError: `invalid flag "foo": rule value for rule \("x" CONTAINS "y"\) has inconsistent type string \(value "x"\) with flag default value 1`,
+	expectError: `invalid flag "foo": rule value for rule \("x" CONTAINS ANY OF "y"\) has inconsistent type string \(value "x"\) with flag default value 1`,
 }}
 
 func TestInvalidFlags(t *testing.T) {

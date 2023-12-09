@@ -3,7 +3,7 @@ package configcat
 import (
 	"context"
 	"errors"
-	"github.com/configcat/go-sdk/v8/configcatcache"
+	"github.com/configcat/go-sdk/v9/configcatcache"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -563,6 +563,108 @@ func TestClient_DefaultUser(t *testing.T) {
 		Cluster: "otherwhere",
 	})
 	c.Check(fooFlag.Get(snap), qt.Equals, "default")
+}
+
+func TestLog(t *testing.T) {
+	type user struct {
+		Cluster string `configcat:"cluster"`
+		Role    string
+		Version string
+	}
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	cfg := srv.config()
+	cfg.PollingMode = Manual
+	u := &user{
+		Cluster: "somewhere",
+		Role:    "Admin",
+		Version: "wrong_semver",
+	}
+	cfg.DefaultUser = u
+	cfg.LogLevel = LogLevelInfo
+	client := NewCustomClient(cfg)
+	t.Cleanup(client.Close)
+
+	srv.setResponseJSON(&ConfigJson{
+		Segments: []*Segment{{
+			Name: "Beta users (kaki)",
+			Conditions: []*UserCondition{
+				{
+					ComparisonAttribute: "Role",
+					Comparator:          OpOneOf,
+					StringArrayValue:    []string{"Admin"},
+				},
+			},
+		}},
+		Settings: map[string]*Setting{
+			"bool": {
+				Value: &SettingValue{BoolValue: false},
+				Type:  BoolSetting,
+				TargetingRules: []*TargetingRule{{
+					Conditions: []*Condition{{
+						UserCondition: &UserCondition{
+							ComparisonAttribute: "cluster",
+							Comparator:          OpOneOf,
+							StringArrayValue:    []string{"somewhere"},
+						},
+					}, {
+						UserCondition: &UserCondition{
+							ComparisonAttribute: "Role",
+							Comparator:          OpOneOf,
+							StringArrayValue:    []string{"Admin"},
+						},
+					}, {
+						UserCondition: &UserCondition{
+							ComparisonAttribute: "Version",
+							Comparator:          OpOneOfSemver,
+							StringArrayValue:    []string{"1.2.3"},
+						},
+					}},
+					ServedValue: &ServedValue{Value: &SettingValue{BoolValue: true}},
+				}},
+			},
+			"foo": {
+				Value: &SettingValue{StringValue: "default"},
+				Type:  StringSetting,
+				TargetingRules: []*TargetingRule{{
+					Conditions: []*Condition{{
+						UserCondition: &UserCondition{
+							ComparisonAttribute: "cluster",
+							Comparator:          OpOneOf,
+							StringArrayValue:    []string{"somewhere"},
+						},
+					}, {
+						SegmentCondition: &SegmentCondition{
+							Comparator: OpSegmentIsIn,
+							Index:      0,
+						},
+					}, {
+						PrerequisiteFlagCondition: &PrerequisiteFlagCondition{
+							FlagKey:    "bool",
+							Comparator: OpPrerequisiteEq,
+							Value:      &SettingValue{BoolValue: true},
+						},
+					}},
+					PercentageOptions: []*PercentageOption{{
+						Percentage: 50,
+						Value:      &SettingValue{StringValue: "somewhere-match-1"},
+					}, {
+						Percentage: 50,
+						Value:      &SettingValue{StringValue: "somewhere-match-2"},
+					}},
+				}},
+				PercentageOptions: []*PercentageOption{{
+					Percentage: 50,
+					Value:      &SettingValue{StringValue: "somewhere-match-1"},
+				}, {
+					Percentage: 50,
+					Value:      &SettingValue{StringValue: "somewhere-match-2"},
+				}},
+			},
+		},
+	})
+	client.Refresh(context.Background())
+	c.Check(client.GetStringValue("foo", "", nil), qt.Equals, "somewhere-match-2")
 }
 
 func TestSnapshot_Get(t *testing.T) {

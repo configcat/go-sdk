@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -15,7 +16,8 @@ import (
 )
 
 const (
-	identifierAttr = "Identifier"
+	identifierAttr     = "Identifier"
+	ruleIgnoredMessage = "The current targeting rule is ignored and the evaluation continues with the next rule."
 )
 
 var (
@@ -24,15 +26,24 @@ var (
 	timeType         = reflect.TypeOf((*time.Time)(nil))
 )
 
-type evalContext struct {
-	logger         *leveledLogger
-	evalLogBuilder *evalLogBuilder
-	visitedKeys    map[keyID]string
-	configJsonSalt []byte
-	contextSalt    []byte
+type userAttrMissingError struct {
+	attr string
 }
 
-type settingEvalFunc = func(id keyID, user reflect.Value, info *userTypeInfo) (valueID, string, *TargetingRule, *PercentageOption)
+type userAttrError struct {
+	err  error
+	attr string
+}
+
+func (u userAttrMissingError) Error() string {
+	return fmt.Sprintf("cannot evaluate, the User.%s attribute is missing", u.attr)
+}
+
+func (u userAttrError) Error() string {
+	return fmt.Sprintf("cannot evaluate, the User.%s attribute is invalid (%s)", u.attr, u.err.Error())
+}
+
+type settingEvalFunc = func(id keyID, user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (valueID, string, *TargetingRule, *PercentageOption)
 
 func (c *config) generateEvaluators() {
 	// Allocate all key IDs.
@@ -47,43 +58,129 @@ func (c *config) generateEvaluators() {
 
 func settingEvaluator(setting *Setting, salt []byte, evaluators []settingEvalFunc) settingEvalFunc {
 	rules := setting.TargetingRules
+	settingType := setting.Type
 	keyBytes := setting.keyBytes
 	attr := setting.PercentageOptionsAttribute
 	percentageOptions := setting.PercentageOptions
-	conditionMatchers := make([]func(user reflect.Value, info *userTypeInfo) (bool, error), len(rules))
+	conditionMatchers := make([]func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error), len(rules))
 	for i, rule := range rules {
 		conditionMatchers[i] = conditionsMatcher(rule.Conditions, evaluators, salt, setting.keyBytes)
 	}
 
-	return func(_ keyID, user reflect.Value, info *userTypeInfo) (valueID, string, *TargetingRule, *PercentageOption) {
+	return func(_ keyID, user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (valueID, string, *TargetingRule, *PercentageOption) {
+		if builder != nil {
+			builder.append(fmt.Sprintf("Evaluating '%s'", string(keyBytes)))
+			if builder.user != nil && info != nil {
+				builder.append(fmt.Sprintf(" for User '%s'", builder.userAsString()))
+			}
+		}
+		userMissingErrorLogged := false
+		if builder != nil && len(rules) > 0 {
+			builder.newLineString("Evaluating targeting rules and applying the first match if any:")
+		}
+
 		for i, matcher := range conditionMatchers {
-			matched, err := matcher(user, info)
+			rule := rules[i]
+			matched, err := matcher(user, info, builder, logger)
+			if builder != nil {
+				builder.incIndent().newLineString("THEN ")
+				if rule.ServedValue != nil {
+					builder.append(fmt.Sprintf("'%v'", valueForSettingType(rule.ServedValue.Value, settingType)))
+				} else if len(rule.PercentageOptions) > 0 {
+					builder.append("%% options")
+				}
+				if err != nil {
+					builder.append(fmt.Sprintf(" => %s", err.Error()))
+				} else if matched {
+					builder.append(" => MATCH, applying rule")
+				} else if !matched {
+					builder.append(" => no match")
+				}
+				builder.decIndent()
+			}
 			if !matched || err != nil {
+				if err != nil {
+					var noUserErr *noUserError
+					var attrMissing *userAttrMissingError
+					var attrErr *userAttrError
+					var cmpValErr *comparisonValueError
+					switch {
+					case errors.As(err, &noUserErr) && !userMissingErrorLogged:
+						logger.Warnf(3001, "cannot evaluate targeting rules and %% options for setting '%s' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", string(keyBytes))
+						userMissingErrorLogged = true
+					case errors.As(err, &attrMissing):
+						logger.Warnf(3003, "cannot evaluate certain targeting rules of setting '%s' (the User.%s attribute is missing); you should set the User.%s attribute in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", string(keyBytes), attrMissing.attr, attrMissing.attr)
+					case errors.As(err, &attrErr):
+						logger.Warnf(3004, "cannot evaluate certain targeting rules of setting '%s' (the User.%s attribute is invalid (%s)); please check the User.%s attribute and make sure that its value corresponds to the comparison operator", string(keyBytes), attrErr.attr, attrErr.err.Error(), attrErr.attr)
+					case errors.As(err, &cmpValErr):
+						logger.Warnf(3004, "cannot evaluate certain targeting rules of setting '%s' (%s)", string(keyBytes), cmpValErr.Error())
+					}
+					if builder != nil {
+						builder.
+							incIndent().
+							newLineString(ruleIgnoredMessage).
+							decIndent()
+					}
+				}
 				continue
 			}
-			rule := rules[i]
 			if rule.ServedValue != nil {
+				if builder != nil {
+					builder.newLine().append(fmt.Sprintf("Returning '%v'.", valueForSettingType(rule.ServedValue.Value, settingType)))
+				}
 				return rule.ServedValue.valueID, rule.ServedValue.VariationID, rule, nil
 			}
 			if len(rule.PercentageOptions) > 0 {
-				matchedOption := evalPercentageOptions(user, info, attr, keyBytes, rule.PercentageOptions)
+				if builder != nil {
+					builder.incIndent()
+				}
+				if info == nil && !userMissingErrorLogged {
+					logger.Warnf(3001, "cannot evaluate targeting rules and %% options for setting '%s' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", string(keyBytes))
+					userMissingErrorLogged = true
+				}
+				matchedOption := evalPercentageOptions(user, info, builder, logger, settingType, attr, keyBytes, rule.PercentageOptions)
 				if matchedOption != nil {
+					if builder != nil {
+						builder.decIndent()
+						if builder != nil {
+							builder.newLine().append(fmt.Sprintf("Returning '%v'.", valueForSettingType(matchedOption.Value, settingType)))
+						}
+					}
 					return matchedOption.valueID, matchedOption.VariationID, nil, matchedOption
+				} else {
+					if builder != nil {
+						builder.
+							newLineString(ruleIgnoredMessage).
+							decIndent()
+					}
 				}
 			}
 		}
 		if len(percentageOptions) > 0 {
-			matchedOption := evalPercentageOptions(user, info, attr, keyBytes, percentageOptions)
+			if info == nil && !userMissingErrorLogged {
+				logger.Warnf(3001, "cannot evaluate targeting rules and %% options for setting '%s' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", string(keyBytes))
+				userMissingErrorLogged = true
+			}
+			matchedOption := evalPercentageOptions(user, info, builder, logger, settingType, attr, keyBytes, percentageOptions)
 			if matchedOption != nil {
+				if builder != nil {
+					builder.newLine().append(fmt.Sprintf("Returning '%v'.", valueForSettingType(matchedOption.Value, settingType)))
+				}
 				return matchedOption.valueID, matchedOption.VariationID, nil, matchedOption
 			}
+		}
+		if builder != nil {
+			builder.newLine().append(fmt.Sprintf("Returning '%v'.", valueForSettingType(setting.Value, settingType)))
 		}
 		return setting.valueID, setting.VariationID, nil, nil
 	}
 }
 
-func evalPercentageOptions(user reflect.Value, info *userTypeInfo, percentageAttr string, settingKey []byte, percentageOptions []*PercentageOption) *PercentageOption {
+func evalPercentageOptions(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger, settingType SettingType, percentageAttr string, settingKey []byte, percentageOptions []*PercentageOption) *PercentageOption {
 	if info == nil {
+		if builder != nil {
+			builder.newLineString("Skipping %% options because the User Object is missing.")
+		}
 		return nil
 	}
 	if percentageAttr == "" {
@@ -93,7 +190,18 @@ func evalPercentageOptions(user reflect.Value, info *userTypeInfo, percentageAtt
 	if percentageAttr == identifierAttr && len(attrBytes) == 0 {
 		attrBytes = []byte("")
 	} else if err != nil {
+		var attrMissing *userAttrMissingError
+		switch {
+		case errors.As(err, &attrMissing):
+			logger.Warnf(3003, "cannot evaluate %% options for setting '%s' (the User.%s attribute is missing); you should set the User.%s attribute in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", string(settingKey), percentageAttr, percentageAttr)
+		}
+		if builder != nil {
+			builder.newLineString("Skipping %% options because the User." + percentageAttr + " attribute is missing.")
+		}
 		return nil
+	}
+	if builder != nil {
+		builder.newLineString("Evaluating %% options based on the User." + percentageAttr + " attribute:")
 	}
 	hashKey := make([]byte, len(settingKey)+len(attrBytes))
 	copy(hashKey, settingKey)
@@ -104,12 +212,17 @@ func evalPercentageOptions(user reflect.Value, info *userTypeInfo, percentageAtt
 	// entire sum into hex, then decoding the first 7 digits.
 	num := int64(binary.BigEndian.Uint32(sum[:4]))
 	num >>= 4
-
 	scaled := num % 100
+	if builder != nil {
+		builder.newLineString(fmt.Sprintf("- Computing hash in the [0..99] range from User.%s => %d (this value is sticky and consistent across all SDKs)", percentageAttr, scaled))
+	}
 	bucket := int64(0)
-	for _, option := range percentageOptions {
+	for i, option := range percentageOptions {
 		bucket += option.Percentage
 		if scaled < bucket {
+			if builder != nil {
+				builder.newLineString("- Hash value " + strconv.FormatInt(scaled, 10) + " selects %% option " + strconv.Itoa(i+1) + " (" + strconv.FormatInt(option.Percentage, 10) + "%%), '" + fmt.Sprintf("%v", valueForSettingType(option.Value, settingType)) + "'.")
+			}
 			return option
 		}
 	}
@@ -155,6 +268,13 @@ func newUserTypeInfo(userType reflect.Type) (*userTypeInfo, error) {
 		return &userTypeInfo{
 			getAttribute: func(v reflect.Value, attr string) interface{} {
 				return v.Interface().(UserAttributes).GetAttribute(attr)
+			},
+		}, nil
+	}
+	if userType == anyMapType {
+		return &userTypeInfo{
+			getAttribute: func(v reflect.Value, attr string) interface{} {
+				return v.Interface().(map[string]interface{})[attr]
 			},
 		}, nil
 	}
@@ -312,7 +432,7 @@ func (t *userTypeInfo) getString(v reflect.Value, attr string) (string, error) {
 		}
 	}
 	if len(result) == 0 {
-		return "", fmt.Errorf("user attribute '%s' not found", attr)
+		return "", &userAttrMissingError{attr: attr}
 	}
 	return result, nil
 }
@@ -332,7 +452,7 @@ func (t *userTypeInfo) getBytes(v reflect.Value, attr string) ([]byte, error) {
 		}
 	}
 	if len(result) == 0 {
-		return nil, fmt.Errorf("user attribute '%s' not found", attr)
+		return nil, &userAttrMissingError{attr: attr}
 	}
 	return result, nil
 }
@@ -340,23 +460,39 @@ func (t *userTypeInfo) getBytes(v reflect.Value, attr string) ([]byte, error) {
 func (t *userTypeInfo) getSemver(v reflect.Value, attr string) (*semver.Version, error) {
 	info, ok := t.fields[attr]
 	if ok && info.asSemver != nil {
-		return info.asSemver(v)
+		ver, err := info.asSemver(v)
+		if err != nil {
+			return nil, &userAttrError{attr: attr, err: err}
+		}
+		return ver, nil
 	}
 	if t.getAttribute != nil {
 		if res, ok := t.getAttribute(v, attr).([]byte); ok {
-			return parseSemver(string(res))
+			ver, err := parseSemver(string(res))
+			if err != nil {
+				return nil, &userAttrError{attr: attr, err: err}
+			}
+			return ver, nil
 		}
 		if res, ok := t.getAttribute(v, attr).(string); ok {
-			return parseSemver(res)
+			ver, err := parseSemver(res)
+			if err != nil {
+				return nil, &userAttrError{attr: attr, err: err}
+			}
+			return ver, nil
 		}
 	}
-	return nil, fmt.Errorf("cannot use attribute '%s' as semantic version", attr)
+	return nil, &userAttrMissingError{attr: attr}
 }
 
 func (t *userTypeInfo) getFloat(v reflect.Value, attr string) (float64, error) {
 	info, ok := t.fields[attr]
 	if ok {
-		return info.asFloat(v)
+		res, err := info.asFloat(v)
+		if err != nil {
+			return 0, &userAttrError{attr: attr, err: err}
+		}
+		return res, nil
 	}
 	if t.getAttribute != nil {
 		val := t.getAttribute(v, attr)
@@ -364,9 +500,17 @@ func (t *userTypeInfo) getFloat(v reflect.Value, attr string) (float64, error) {
 		case float64:
 			return val, nil
 		case string:
-			return parseFloat(val)
+			res, err := parseFloat(val)
+			if err != nil {
+				return 0, &userAttrError{attr: attr, err: err}
+			}
+			return res, nil
 		case []byte:
-			return parseFloat(string(val))
+			res, err := parseFloat(string(val))
+			if err != nil {
+				return 0, &userAttrError{attr: attr, err: err}
+			}
+			return res, nil
 		case int:
 			return float64(val), nil
 		case uint:
@@ -392,34 +536,34 @@ func (t *userTypeInfo) getFloat(v reflect.Value, attr string) (float64, error) {
 		case time.Time:
 			return float64(val.UnixMilli() / 1000), nil
 		default:
-			return 0, fmt.Errorf("cannot convert '%v' to float64", val)
+			return 0, &userAttrError{attr: attr, err: fmt.Errorf("cannot convert '%v' to float64", val)}
 		}
 	}
-	return 0, fmt.Errorf("user attribute '%s' not found", attr)
+	return 0, &userAttrMissingError{attr: attr}
 }
 
-func (t *userTypeInfo) getSlice(v reflect.Value, attr string) []string {
+func (t *userTypeInfo) getSlice(v reflect.Value, attr string) ([]string, error) {
 	info, ok := t.fields[attr]
 	if ok {
-		return info.asStringSlice(v)
+		return info.asStringSlice(v), nil
 	}
 	if t.getAttribute != nil {
 		val := t.getAttribute(v, attr)
 		switch val := val.(type) {
 		case []string:
-			return val
+			return val, nil
 		case string:
 			var res []string
 			err := json.Unmarshal([]byte(val), &res)
 			if err != nil {
-				return nil
+				return nil, err
 			}
-			return res
+			return res, nil
 		default:
-			return nil
+			return nil, &userAttrError{attr: attr, err: fmt.Errorf("cannot convert '%v' to []string", val)}
 		}
 	}
-	return nil
+	return nil, &userAttrMissingError{attr: attr}
 }
 
 func parseSemver(s string) (*semver.Version, error) {

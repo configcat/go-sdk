@@ -157,6 +157,7 @@ func (c *config) fixup(valueMap map[interface{}]valueID) {
 					if condition.PrerequisiteFlagCondition != nil {
 						if prerequisite, ok := c.root.Settings[condition.PrerequisiteFlagCondition.FlagKey]; ok {
 							condition.PrerequisiteFlagCondition.valueID = c.idForValue(condition.PrerequisiteFlagCondition.Value, prerequisite.Type, valueMap)
+							condition.PrerequisiteFlagCondition.prerequisiteSettingType = prerequisite.Type
 						}
 					}
 					if condition.SegmentCondition != nil {
