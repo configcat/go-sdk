@@ -108,13 +108,13 @@ func (l *defaultLogger) logf(level LogLevel, format string, args ...interface{})
 func (lvl LogLevel) String() string {
 	switch lvl {
 	case LogLevelDebug:
-		return "[DEBUG]"
+		return "DEBUG"
 	case LogLevelInfo:
-		return "[INFO]"
+		return "INFO"
 	case LogLevelWarn:
-		return "[WARN]"
+		return "WARN"
 	case LogLevelError:
-		return "[ERROR]"
+		return "ERROR"
 	}
-	return "[UNKNOWN]"
+	return "UNKNOWN"
 }
