@@ -23,7 +23,7 @@ const (
 var (
 	getAttributeType = reflect.TypeOf((*UserAttributes)(nil)).Elem()
 	anyMapType       = reflect.TypeOf(map[string]interface{}(nil))
-	timeType         = reflect.TypeOf((*time.Time)(nil))
+	timeType         = reflect.TypeOf(time.Time{})
 )
 
 type userAttrMissingError struct {
@@ -245,7 +245,7 @@ type attrInfo struct {
 	asBytes       func(v reflect.Value) []byte
 	asSemver      func(v reflect.Value) (*semver.Version, error)
 	asFloat       func(v reflect.Value) (float64, error)
-	asStringSlice func(v reflect.Value) []string
+	asStringSlice func(v reflect.Value) ([]string, error)
 }
 
 func (c *config) getOrNewUserTypeInfo(userType reflect.Type) (*userTypeInfo, error) {
@@ -337,6 +337,9 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 			asFloat: func(v reflect.Value) (float64, error) {
 				return parseFloat(v.FieldByIndex(field.Index).String())
 			},
+			asStringSlice: func(v reflect.Value) ([]string, error) {
+				return parseStringSliceJson(v.FieldByIndex(field.Index).String())
+			},
 		}, nil
 	case reflect.Slice:
 		if field.Type.Elem().Kind() == reflect.Uint8 {
@@ -353,16 +356,19 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 				asFloat: func(v reflect.Value) (float64, error) {
 					return parseFloat(string(v.FieldByIndex(field.Index).Bytes()))
 				},
+				asStringSlice: func(v reflect.Value) ([]string, error) {
+					return parseStringSliceJson(string(v.FieldByIndex(field.Index).Bytes()))
+				},
 			}, nil
 		} else if field.Type.Elem().Kind() == reflect.String {
 			return attrInfo{
-				asStringSlice: func(v reflect.Value) []string {
+				asStringSlice: func(v reflect.Value) ([]string, error) {
 					sl := v.FieldByIndex(field.Index)
 					res := make([]string, sl.Len())
 					for i := 0; i < sl.Len(); i++ {
 						res[i] = sl.Index(i).String()
 					}
-					return res
+					return res, nil
 				},
 			}, nil
 		}
@@ -422,13 +428,42 @@ func (t *userTypeInfo) getString(v reflect.Value, attr string) (string, error) {
 	info, ok := t.fields[attr]
 	if ok && info.asString != nil {
 		result = info.asString(v)
-	}
-	if t.getAttribute != nil {
-		if res, ok := t.getAttribute(v, attr).(string); ok {
-			result = res
+	} else if t.getAttribute != nil {
+		res := t.getAttribute(v, attr)
+		if res == nil {
+			return "", &userAttrMissingError{attr: attr}
 		}
-		if res, ok := t.getAttribute(v, attr).([]byte); ok {
-			result = string(res)
+		switch val := res.(type) {
+		case string:
+			result = val
+		case []byte:
+			result = string(val)
+		case float32:
+			result = strconv.FormatFloat(float64(val), 'g', -1, 64)
+		case float64:
+			result = strconv.FormatFloat(val, 'g', -1, 64)
+		case int:
+			result = strconv.FormatInt(int64(val), 10)
+		case uint:
+			result = strconv.FormatUint(uint64(val), 10)
+		case int8:
+			result = strconv.FormatInt(int64(val), 10)
+		case uint8:
+			result = strconv.FormatUint(uint64(val), 10)
+		case int16:
+			result = strconv.FormatInt(int64(val), 10)
+		case uint16:
+			result = strconv.FormatUint(uint64(val), 10)
+		case int32:
+			result = strconv.FormatInt(int64(val), 10)
+		case uint32:
+			result = strconv.FormatUint(uint64(val), 10)
+		case int64:
+			result = strconv.FormatInt(val, 10)
+		case uint64:
+			result = strconv.FormatUint(val, 10)
+		case uintptr:
+			result = strconv.FormatUint(uint64(val), 10)
 		}
 	}
 	if len(result) == 0 {
@@ -442,13 +477,42 @@ func (t *userTypeInfo) getBytes(v reflect.Value, attr string) ([]byte, error) {
 	info, ok := t.fields[attr]
 	if ok && info.asBytes != nil {
 		result = info.asBytes(v)
-	}
-	if t.getAttribute != nil {
-		if res, ok := t.getAttribute(v, attr).([]byte); ok {
-			result = res
+	} else if t.getAttribute != nil {
+		res := t.getAttribute(v, attr)
+		if res == nil {
+			return nil, &userAttrMissingError{attr: attr}
 		}
-		if res, ok := t.getAttribute(v, attr).(string); ok {
-			result = []byte(res)
+		switch val := res.(type) {
+		case string:
+			result = []byte(val)
+		case []byte:
+			result = val
+		case float32:
+			result = strconv.AppendFloat(nil, float64(val), 'g', -1, 64)
+		case float64:
+			result = strconv.AppendFloat(nil, val, 'g', -1, 64)
+		case int:
+			result = strconv.AppendInt(nil, int64(val), 10)
+		case uint:
+			result = strconv.AppendUint(nil, uint64(val), 10)
+		case int8:
+			result = strconv.AppendInt(nil, int64(val), 10)
+		case uint8:
+			result = strconv.AppendUint(nil, uint64(val), 10)
+		case int16:
+			result = strconv.AppendInt(nil, int64(val), 10)
+		case uint16:
+			result = strconv.AppendUint(nil, uint64(val), 10)
+		case int32:
+			result = strconv.AppendInt(nil, int64(val), 10)
+		case uint32:
+			result = strconv.AppendUint(nil, uint64(val), 10)
+		case int64:
+			result = strconv.AppendInt(nil, val, 10)
+		case uint64:
+			result = strconv.AppendUint(nil, val, 10)
+		case uintptr:
+			result = strconv.AppendUint(nil, uint64(val), 10)
 		}
 	}
 	if len(result) == 0 {
@@ -465,8 +529,7 @@ func (t *userTypeInfo) getSemver(v reflect.Value, attr string) (*semver.Version,
 			return nil, &userAttrError{attr: attr, err: err}
 		}
 		return ver, nil
-	}
-	if t.getAttribute != nil {
+	} else if t.getAttribute != nil {
 		if res, ok := t.getAttribute(v, attr).([]byte); ok {
 			ver, err := parseSemver(string(res))
 			if err != nil {
@@ -487,18 +550,19 @@ func (t *userTypeInfo) getSemver(v reflect.Value, attr string) (*semver.Version,
 
 func (t *userTypeInfo) getFloat(v reflect.Value, attr string) (float64, error) {
 	info, ok := t.fields[attr]
-	if ok {
+	if ok && info.asFloat != nil {
 		res, err := info.asFloat(v)
 		if err != nil {
 			return 0, &userAttrError{attr: attr, err: err}
 		}
 		return res, nil
-	}
-	if t.getAttribute != nil {
+	} else if t.getAttribute != nil {
 		val := t.getAttribute(v, attr)
 		switch val := val.(type) {
 		case float64:
 			return val, nil
+		case float32:
+			return float64(val), nil
 		case string:
 			res, err := parseFloat(val)
 			if err != nil {
@@ -544,19 +608,27 @@ func (t *userTypeInfo) getFloat(v reflect.Value, attr string) (float64, error) {
 
 func (t *userTypeInfo) getSlice(v reflect.Value, attr string) ([]string, error) {
 	info, ok := t.fields[attr]
-	if ok {
-		return info.asStringSlice(v), nil
-	}
-	if t.getAttribute != nil {
+	if ok && info.asStringSlice != nil {
+		val, err := info.asStringSlice(v)
+		if err != nil {
+			return nil, &userAttrError{attr: attr, err: err}
+		}
+		return val, nil
+	} else if t.getAttribute != nil {
 		val := t.getAttribute(v, attr)
 		switch val := val.(type) {
 		case []string:
 			return val, nil
 		case string:
-			var res []string
-			err := json.Unmarshal([]byte(val), &res)
+			res, err := parseStringSliceJson(val)
 			if err != nil {
-				return nil, err
+				return nil, &userAttrError{attr: attr, err: err}
+			}
+			return res, nil
+		case []byte:
+			res, err := parseStringSliceJson(string(val))
+			if err != nil {
+				return nil, &userAttrError{attr: attr, err: err}
 			}
 			return res, nil
 		default:
@@ -575,6 +647,15 @@ func parseSemver(s string) (*semver.Version, error) {
 		return nil, err
 	}
 	return &vers, nil
+}
+
+func parseStringSliceJson(s string) ([]string, error) {
+	var res []string
+	err := json.Unmarshal([]byte(s), &res)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 type keyValue struct {
