@@ -1,0 +1,23 @@
+{
+  "jsonOverride": "test_circulardependency_v6.json",
+  "tests": [
+    {
+      "key": "key1",
+      "defaultValue": "default",
+      "returnValue": "default",
+      "expectedLog": "key1.txt"
+    },
+    {
+      "key": "key2",
+      "defaultValue": "default",
+      "returnValue": "default",
+      "expectedLog": "key2.txt"
+    },
+    {
+      "key": "key4",
+      "defaultValue": "default",
+      "returnValue": "default",
+      "expectedLog": "key3.txt"
+    }
+  ]
+}

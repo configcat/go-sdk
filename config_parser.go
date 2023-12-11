@@ -75,6 +75,7 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leve
 		conf.root.Preferences = &Preferences{saltBytes: make([]byte, 0)}
 	}
 	conf.fixup(make(map[interface{}]valueID))
+	conf.checkCycles()
 	conf.preCalculateValueIds()
 	conf.generateEvaluators()
 	conf.defaultUserSnapshot = _newSnapshot(conf, defaultUser, logger, hooks)
@@ -193,6 +194,64 @@ func (c *config) idForValue(v *SettingValue, settingType SettingType, valueMap m
 	return id
 }
 
+type cycleTracker struct {
+	visitedKeys []string
+}
+
+func (c *cycleTracker) contains(key string) bool {
+	for _, v := range c.visitedKeys {
+		if v == key {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *cycleTracker) append(key string) {
+	c.visitedKeys = append(c.visitedKeys, key)
+}
+
+func (c *cycleTracker) removeLast() {
+	if len(c.visitedKeys) > 0 {
+		c.visitedKeys = c.visitedKeys[:len(c.visitedKeys)-1]
+	}
+}
+
+func (c *config) checkCycles() {
+	for key, setting := range c.root.Settings {
+		tracker := &cycleTracker{}
+		if c.checkCyclesForSetting(setting, key, tracker) {
+			setting.prerequisiteCycle = tracker.visitedKeys
+		}
+	}
+}
+
+func (c *config) checkCyclesForSetting(s *Setting, key string, tracker *cycleTracker) bool {
+	tracker.append(key)
+	if len(s.TargetingRules) > 0 {
+		for _, rule := range s.TargetingRules {
+			if len(rule.Conditions) > 0 {
+				for _, cond := range rule.Conditions {
+					if cond.PrerequisiteFlagCondition != nil {
+						if prerequisite, ok := c.root.Settings[cond.PrerequisiteFlagCondition.FlagKey]; ok {
+							if tracker.contains(cond.PrerequisiteFlagCondition.FlagKey) {
+								tracker.append(cond.PrerequisiteFlagCondition.FlagKey)
+								return true
+							}
+							if c.checkCyclesForSetting(prerequisite, cond.PrerequisiteFlagCondition.FlagKey, tracker) {
+								return true
+							} else {
+								tracker.removeLast()
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
 func mergeWithOverrides(root *ConfigJson, overrides *FlagOverrides) {
 	if overrides == nil {
 		return
@@ -258,4 +317,13 @@ func valueForSettingType(v *SettingValue, settingType SettingType) interface{} {
 	default:
 		return nil
 	}
+}
+
+func contains[T comparable](s []T, e T) bool {
+	for _, v := range s {
+		if v == e {
+			return true
+		}
+	}
+	return false
 }

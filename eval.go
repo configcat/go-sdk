@@ -43,7 +43,7 @@ func (u userAttrError) Error() string {
 	return fmt.Sprintf("cannot evaluate, the User.%s attribute is invalid (%s)", u.attr, u.err.Error())
 }
 
-type settingEvalFunc = func(id keyID, user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (valueID, string, *TargetingRule, *PercentageOption)
+type settingEvalFunc = func(id keyID, user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (valueID, string, *TargetingRule, *PercentageOption, error)
 
 func (c *config) generateEvaluators() {
 	// Allocate all key IDs.
@@ -57,6 +57,11 @@ func (c *config) generateEvaluators() {
 }
 
 func settingEvaluator(setting *Setting, salt []byte, evaluators []settingEvalFunc) settingEvalFunc {
+	if setting.prerequisiteCycle != nil {
+		return func(id keyID, user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (valueID, string, *TargetingRule, *PercentageOption, error) {
+			return 0, "", nil, nil, fmt.Errorf("circular dependency detected between the following depending flags: [%s]", strings.Join(setting.prerequisiteCycle, " -> "))
+		}
+	}
 	rules := setting.TargetingRules
 	settingType := setting.Type
 	keyBytes := setting.keyBytes
@@ -67,7 +72,7 @@ func settingEvaluator(setting *Setting, salt []byte, evaluators []settingEvalFun
 		conditionMatchers[i] = conditionsMatcher(rule.Conditions, evaluators, salt, setting.keyBytes)
 	}
 
-	return func(_ keyID, user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (valueID, string, *TargetingRule, *PercentageOption) {
+	return func(_ keyID, user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (valueID, string, *TargetingRule, *PercentageOption, error) {
 		if builder != nil {
 			builder.append(fmt.Sprintf("Evaluating '%s'", string(keyBytes)))
 			if builder.user != nil && info != nil {
@@ -128,7 +133,7 @@ func settingEvaluator(setting *Setting, salt []byte, evaluators []settingEvalFun
 				if builder != nil {
 					builder.newLine().append(fmt.Sprintf("Returning '%v'.", valueForSettingType(rule.ServedValue.Value, settingType)))
 				}
-				return rule.ServedValue.valueID, rule.ServedValue.VariationID, rule, nil
+				return rule.ServedValue.valueID, rule.ServedValue.VariationID, rule, nil, nil
 			}
 			if len(rule.PercentageOptions) > 0 {
 				if builder != nil {
@@ -146,7 +151,7 @@ func settingEvaluator(setting *Setting, salt []byte, evaluators []settingEvalFun
 							builder.newLine().append(fmt.Sprintf("Returning '%v'.", valueForSettingType(matchedOption.Value, settingType)))
 						}
 					}
-					return matchedOption.valueID, matchedOption.VariationID, nil, matchedOption
+					return matchedOption.valueID, matchedOption.VariationID, nil, matchedOption, nil
 				} else {
 					if builder != nil {
 						builder.
@@ -166,13 +171,13 @@ func settingEvaluator(setting *Setting, salt []byte, evaluators []settingEvalFun
 				if builder != nil {
 					builder.newLine().append(fmt.Sprintf("Returning '%v'.", valueForSettingType(matchedOption.Value, settingType)))
 				}
-				return matchedOption.valueID, matchedOption.VariationID, nil, matchedOption
+				return matchedOption.valueID, matchedOption.VariationID, nil, matchedOption, nil
 			}
 		}
 		if builder != nil {
 			builder.newLine().append(fmt.Sprintf("Returning '%v'.", valueForSettingType(setting.Value, settingType)))
 		}
-		return setting.valueID, setting.VariationID, nil, nil
+		return setting.valueID, setting.VariationID, nil, nil, nil
 	}
 }
 

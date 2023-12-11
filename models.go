@@ -25,8 +25,9 @@ type Setting struct {
 	// PercentageOptions is the list of percentage options.
 	PercentageOptions []*PercentageOption `json:"p"`
 
-	valueID  int32
-	keyBytes []byte
+	valueID           int32
+	keyBytes          []byte
+	prerequisiteCycle []string
 }
 
 // TargetingRule describes a targeting rule used in the flag evaluation process.

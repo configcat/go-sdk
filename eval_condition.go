@@ -182,11 +182,11 @@ func prerequisiteConditionMatcher(prerequisiteCondition *PrerequisiteFlagConditi
 			builder.newLineString("(").incIndent().newLine()
 		}
 		prerequisiteEvalFunc := evaluators[prerequisiteKeyId]
-		prerequisiteValueId, _, _, _ := prerequisiteEvalFunc(prerequisiteKeyId, user, info, builder, logger)
+		prerequisiteValueId, _, _, _, err := prerequisiteEvalFunc(prerequisiteKeyId, user, info, builder, logger)
 		if builder != nil {
 			builder.decIndent().newLineString(")")
 		}
-		return (expectedValueId == prerequisiteValueId) == needsTrue, nil
+		return (expectedValueId == prerequisiteValueId) == needsTrue, err
 	}
 }
 

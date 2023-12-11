@@ -15,6 +15,7 @@ var testKeys = []string{
 	"1_targeting_rule",
 	"2_targeting_rules",
 	"and_rules",
+	"circular_dep",
 	"comparators",
 	"epoch_date_validation",
 	"list_truncation",
@@ -96,6 +97,9 @@ func runEvalTest(t *testing.T, key string) {
 					log.Fatal(err)
 				}
 				val := client.Snapshot(test.User).GetValue(test.Key)
+				if val == nil {
+					val = test.DefaultValue
+				}
 				switch v := val.(type) {
 				case int:
 					c.Assert(float64(v), qt.Equals, test.ReturnValue)

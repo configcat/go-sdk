@@ -1,0 +1,1 @@
+ERROR: [1002] failed to evaluate setting 'key2' (circular dependency detected between the following depending flags: [key2 -> key3 -> key2])

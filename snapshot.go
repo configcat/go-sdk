@@ -99,8 +99,8 @@ func NewSnapshot(logger Logger, values map[string]interface{}) (*Snapshot, error
 		keys = append(keys, name)
 	}
 	// Save some allocations by using the same closure for every key.
-	eval := func(id keyID, _ reflect.Value, _ *userTypeInfo, _ *evalLogBuilder, _ *leveledLogger) (valueID, string, *TargetingRule, *PercentageOption) {
-		return valueID(id) + 1, "", nil, nil
+	eval := func(id keyID, _ reflect.Value, _ *userTypeInfo, _ *evalLogBuilder, _ *leveledLogger) (valueID, string, *TargetingRule, *PercentageOption, error) {
+		return valueID(id) + 1, "", nil, nil, nil
 	}
 	evaluators := make([]settingEvalFunc, len(valuesSlice))
 	valueIds := make([]valueID, len(valuesSlice))
@@ -237,7 +237,11 @@ func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *Targe
 	if snap.logger.enabled(LogLevelInfo) {
 		builder = &evalLogBuilder{user: snap.originalUser}
 	}
-	valID, varID, targeting, percentage := eval(id, snap.user, snap.userTypeInfo, builder, snap.logger)
+	valID, varID, targeting, percentage, err := eval(id, snap.user, snap.userTypeInfo, builder, snap.logger)
+	if err != nil {
+		snap.logger.Errorf(1002, "failed to evaluate setting '%s' (%s)", key, err.Error())
+		return nil, "", nil, nil, err
+	}
 	val := snap.valueForID(valID)
 	if snap.logger.enabled(LogLevelInfo) && builder != nil {
 		snap.logger.Infof(5000, builder.builder.String())
