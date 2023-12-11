@@ -52,7 +52,7 @@ func (c *config) generateEvaluators() {
 	}
 	c.evaluators = make([]settingEvalFunc, numKeys())
 	for key, setting := range c.root.Settings {
-		c.evaluators[idForKey(key, true)] = settingEvaluator(setting, c.root.Preferences.saltBytes, c.evaluators)
+		c.evaluators[idForKey(key, true)] = settingEvaluator(setting, setting.saltBytes, c.evaluators)
 	}
 }
 
@@ -109,6 +109,7 @@ func settingEvaluator(setting *Setting, salt []byte, evaluators []settingEvalFun
 					var attrMissing *userAttrMissingError
 					var attrErr *userAttrError
 					var cmpValErr *comparisonValueError
+					var prereqNotFoundErr *prerequisiteNotFoundErr
 					switch {
 					case errors.As(err, &noUserErr) && !userMissingErrorLogged:
 						logger.Warnf(3001, "cannot evaluate targeting rules and %% options for setting '%s' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", string(keyBytes))
@@ -119,6 +120,8 @@ func settingEvaluator(setting *Setting, salt []byte, evaluators []settingEvalFun
 						logger.Warnf(3004, "cannot evaluate certain targeting rules of setting '%s' (the User.%s attribute is invalid (%s)); please check the User.%s attribute and make sure that its value corresponds to the comparison operator", string(keyBytes), attrErr.attr, attrErr.err.Error(), attrErr.attr)
 					case errors.As(err, &cmpValErr):
 						logger.Warnf(3004, "cannot evaluate certain targeting rules of setting '%s' (%s)", string(keyBytes), cmpValErr.Error())
+					case errors.As(err, &prereqNotFoundErr):
+						return 0, "", nil, nil, err
 					}
 					if builder != nil {
 						builder.

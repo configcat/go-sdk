@@ -54,7 +54,7 @@ func (srv *configServer) config() Config {
 		SDKKey:   srv.key,
 		BaseURL:  srv.srv.URL,
 		Logger:   newTestLogger(srv.t),
-		LogLevel: LogLevelDebug,
+		LogLevel: LogLevelError,
 	}
 }
 

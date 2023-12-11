@@ -21,6 +21,8 @@ func (n noUserError) Error() string {
 	return "cannot evaluate, User Object is missing"
 }
 
+var noUser = &noUserError{}
+
 // comparisonValueError is returned when the comparison value is nil.
 type comparisonValueError struct {
 	value interface{}
@@ -36,7 +38,13 @@ func (n comparisonValueError) Error() string {
 	return result
 }
 
-var noUser = &noUserError{}
+type prerequisiteNotFoundErr struct {
+	key string
+}
+
+func (p prerequisiteNotFoundErr) Error() string {
+	return fmt.Sprintf("prerequisite '%s' not found", p.key)
+}
 
 func conditionsMatcher(conditions []*Condition, evaluators []settingEvalFunc, configJsonSalt []byte, contextSalt []byte) func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error) {
 	matchers := make([]func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error), len(conditions))
@@ -176,12 +184,15 @@ func prerequisiteConditionMatcher(prerequisiteCondition *PrerequisiteFlagConditi
 			}
 		}
 		if len(evaluators) <= int(prerequisiteKeyId) {
-			return false, fmt.Errorf("prerequisite not found")
+			return false, &prerequisiteNotFoundErr{key: prerequisiteKey}
+		}
+		prerequisiteEvalFunc := evaluators[prerequisiteKeyId]
+		if prerequisiteEvalFunc == nil {
+			return false, &prerequisiteNotFoundErr{key: prerequisiteKey}
 		}
 		if builder != nil {
 			builder.newLineString("(").incIndent().newLine()
 		}
-		prerequisiteEvalFunc := evaluators[prerequisiteKeyId]
 		prerequisiteValueId, _, _, _, err := prerequisiteEvalFunc(prerequisiteKeyId, user, info, builder, logger)
 		if builder != nil {
 			builder.decIndent().newLineString(")")

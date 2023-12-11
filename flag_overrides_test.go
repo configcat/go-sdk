@@ -2,6 +2,7 @@ package configcat
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -235,4 +236,104 @@ func TestFlagOverrides_Values_Local_Invalid(t *testing.T) {
 
 	c.Assert(client.GetBoolValue("fakeKey", false, nil), qt.IsTrue)
 	c.Assert(client.GetBoolValue("invalid", false, nil), qt.IsFalse)
+}
+
+func TestPrerequisiteOverride(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/JoGwdqJZQ0K2xDy7LnbyOg"),
+	})
+
+	tests := []struct {
+		key      string
+		userId   string
+		email    string
+		behavior OverrideBehavior
+		result   string
+	}{
+		{"stringDependsOnString", "1", "john@sensitivecompany.com", -1, "Dog"},
+		{"stringDependsOnString", "1", "john@sensitivecompany.com", RemoteOverLocal, "Dog"},
+		{"stringDependsOnString", "1", "john@sensitivecompany.com", LocalOverRemote, "Dog"},
+		{"stringDependsOnString", "1", "john@sensitivecompany.com", LocalOnly, ""},
+		{"stringDependsOnString", "2", "john@notsensitivecompany.com", -1, "Cat"},
+		{"stringDependsOnString", "2", "john@notsensitivecompany.com", RemoteOverLocal, "Cat"},
+		{"stringDependsOnString", "2", "john@notsensitivecompany.com", LocalOverRemote, "Dog"},
+		{"stringDependsOnString", "2", "john@notsensitivecompany.com", LocalOnly, ""},
+		{"stringDependsOnInt", "1", "john@sensitivecompany.com", -1, "Dog"},
+		{"stringDependsOnInt", "1", "john@sensitivecompany.com", RemoteOverLocal, "Dog"},
+		{"stringDependsOnInt", "1", "john@sensitivecompany.com", LocalOverRemote, "Cat"},
+		{"stringDependsOnInt", "1", "john@sensitivecompany.com", LocalOnly, ""},
+		{"stringDependsOnInt", "2", "john@notsensitivecompany.com", -1, "Cat"},
+		{"stringDependsOnInt", "2", "john@notsensitivecompany.com", RemoteOverLocal, "Cat"},
+		{"stringDependsOnInt", "2", "john@notsensitivecompany.com", LocalOverRemote, "Dog"},
+		{"stringDependsOnInt", "2", "john@notsensitivecompany.com", LocalOnly, ""},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+			cfg := srv.config()
+			if test.behavior != -1 {
+				cfg.FlagOverrides = &FlagOverrides{
+					FilePath: "resources/test_override_flagdependency_v6.json",
+					Behavior: test.behavior,
+				}
+			}
+			cfg.PollingMode = Manual
+			cfg.LogLevel = LogLevelInfo
+			client := NewCustomClient(cfg)
+			err := client.Refresh(context.Background())
+			c.Assert(err, qt.IsNil)
+
+			c.Assert(client.GetStringValue(test.key, "", &UserData{Identifier: test.userId, Email: test.email}), qt.Equals, test.result)
+
+			client.Close()
+		})
+	}
+}
+
+func TestSegmentOverride(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/h99HYXWWNE2bH8eWyLAVMA"),
+	})
+
+	tests := []struct {
+		key      string
+		userId   string
+		email    string
+		behavior OverrideBehavior
+		result   interface{}
+	}{
+		{"developerAndBetaUserSegment", "1", "john@example.com", -1, false},
+		{"developerAndBetaUserSegment", "1", "john@example.com", RemoteOverLocal, false},
+		{"developerAndBetaUserSegment", "1", "john@example.com", LocalOverRemote, true},
+		{"developerAndBetaUserSegment", "1", "john@example.com", LocalOnly, true},
+		{"notDeveloperAndNotBetaUserSegment", "2", "kate@example.com", -1, true},
+		{"notDeveloperAndNotBetaUserSegment", "2", "kate@example.com", RemoteOverLocal, true},
+		{"notDeveloperAndNotBetaUserSegment", "2", "kate@example.com", LocalOverRemote, true},
+		{"notDeveloperAndNotBetaUserSegment", "2", "kate@example.com", LocalOnly, nil},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+			cfg := srv.config()
+			if test.behavior != -1 {
+				cfg.FlagOverrides = &FlagOverrides{
+					FilePath: "resources/test_override_segments_v6.json",
+					Behavior: test.behavior,
+				}
+			}
+			cfg.PollingMode = Manual
+			cfg.LogLevel = LogLevelInfo
+			client := NewCustomClient(cfg)
+			err := client.Refresh(context.Background())
+			c.Assert(err, qt.IsNil)
+
+			c.Assert(client.Snapshot(&UserData{Identifier: test.userId, Email: test.email}).GetValue(test.key), qt.Equals, test.result)
+
+			client.Close()
+		})
+	}
 }

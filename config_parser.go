@@ -57,6 +57,7 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leve
 			return nil, err
 		}
 	}
+	fixupSegmentsAndSalt(&root)
 	mergeWithOverrides(&root, overrides)
 	conf := &config{
 		jsonBody:    jsonBody,
@@ -68,11 +69,6 @@ func parseConfig(jsonBody []byte, etag string, fetchTime time.Time, logger *leve
 		valueIds:    make([]valueID, numKeys()),
 		defaultUser: defaultUser,
 		userInfos:   new(sync.Map),
-	}
-	if conf.root.Preferences != nil {
-		conf.root.Preferences.saltBytes = []byte(conf.root.Preferences.Salt)
-	} else {
-		conf.root.Preferences = &Preferences{saltBytes: make([]byte, 0)}
 	}
 	conf.fixup(make(map[interface{}]valueID))
 	conf.checkCycles()
@@ -146,9 +142,8 @@ func (c *config) keys() []string {
 
 // fixup populates the valueID fields in conf.root and presets related fields.
 func (c *config) fixup(valueMap map[interface{}]valueID) {
-	for key, setting := range c.root.Settings {
+	for _, setting := range c.root.Settings {
 		setting.valueID = c.idForValue(setting.Value, setting.Type, valueMap)
-		setting.keyBytes = []byte(key)
 		for _, rule := range setting.TargetingRules {
 			if rule.ServedValue != nil {
 				rule.ServedValue.valueID = c.idForValue(rule.ServedValue.Value, setting.Type, valueMap)
@@ -161,9 +156,6 @@ func (c *config) fixup(valueMap map[interface{}]valueID) {
 							condition.PrerequisiteFlagCondition.prerequisiteSettingType = prerequisite.Type
 						}
 					}
-					if condition.SegmentCondition != nil {
-						condition.SegmentCondition.relatedSegment = c.root.Segments[condition.SegmentCondition.Index]
-					}
 				}
 			}
 			if rule.PercentageOptions != nil {
@@ -175,9 +167,6 @@ func (c *config) fixup(valueMap map[interface{}]valueID) {
 		for _, rule := range setting.PercentageOptions {
 			rule.valueID = c.idForValue(rule.Value, setting.Type, valueMap)
 		}
-	}
-	for _, segment := range c.root.Segments {
-		segment.nameBytes = []byte(segment.Name)
 	}
 }
 
@@ -299,6 +288,29 @@ func changeToInt(setting *Setting) {
 		if len(setting.PercentageOptions) > 0 {
 			for _, opt := range setting.PercentageOptions {
 				opt.Value.IntValue = int(opt.Value.DoubleValue)
+			}
+		}
+	}
+}
+
+func fixupSegmentsAndSalt(root *ConfigJson) {
+	var saltBytes []byte
+	if root.Preferences != nil {
+		saltBytes = []byte(root.Preferences.Salt)
+	} else {
+		saltBytes = make([]byte, 0)
+	}
+	for key, setting := range root.Settings {
+		setting.saltBytes = saltBytes
+		setting.keyBytes = []byte(key)
+		for _, rule := range setting.TargetingRules {
+			if rule.Conditions != nil {
+				for _, condition := range rule.Conditions {
+					if condition.SegmentCondition != nil {
+						condition.SegmentCondition.relatedSegment = root.Segments[condition.SegmentCondition.Index]
+						condition.SegmentCondition.relatedSegment.nameBytes = []byte(condition.SegmentCondition.relatedSegment.Name)
+					}
+				}
 			}
 		}
 	}

@@ -94,6 +94,7 @@ func (f *FlagOverrides) loadEntriesFromFile(logger *leveledLogger) {
 		logger.Errorf(2302, "failed to decode JSON from the local config file '%s': %v", f.FilePath, err)
 		return
 	}
+	fixupSegmentsAndSalt(&root)
 	f.settings = root.Settings
 }
 

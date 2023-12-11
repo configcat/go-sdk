@@ -28,6 +28,7 @@ type Setting struct {
 	valueID           int32
 	keyBytes          []byte
 	prerequisiteCycle []string
+	saltBytes         []byte
 }
 
 // TargetingRule describes a targeting rule used in the flag evaluation process.
