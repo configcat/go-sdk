@@ -84,12 +84,7 @@ func (f *Flag) entry(key string) (*configcat.Setting, error) {
 			Comparator:          rule.Comparator,
 		}
 		if rule.Comparator.IsList() {
-			if strings.Contains(rule.ComparisonValue, ",") {
-				split := strings.Split(rule.ComparisonValue, ",")
-				cond.StringArrayValue = split
-			} else {
-				cond.StringArrayValue = []string{rule.ComparisonValue}
-			}
+			cond.StringArrayValue = strings.Split(rule.ComparisonValue, ",")
 		} else if rule.Comparator.IsNumeric() {
 			f, err := strconv.ParseFloat(strings.TrimSpace(rule.ComparisonValue), 64)
 			if err == nil {
