@@ -130,7 +130,7 @@ const (
 type Client struct {
 	logger         *leveledLogger
 	cfg            Config
-	fetcher        *configFetcher
+	fetcher        fetcher
 	needGetCheck   bool
 	firstFetchWait sync.Once
 	defaultUser    User
@@ -176,16 +176,20 @@ func NewCustomClient(cfg Config) *Client {
 		cfg.PollInterval = DefaultPollInterval
 	}
 	logger := newLeveledLogger(cfg.Logger, cfg.LogLevel, cfg.Hooks)
-	if (cfg.FlagOverrides == nil || cfg.FlagOverrides.Behavior != LocalOnly) && !isValidSdkKey(cfg.SDKKey, cfg.BaseURL != "") {
-		logger.Errorf(0, "SDK Key '%s' is invalid", cfg.SDKKey)
-	}
 	if cfg.FlagOverrides != nil {
 		cfg.FlagOverrides.loadEntries(logger)
+	}
+	var f fetcher
+	if (cfg.FlagOverrides == nil || cfg.FlagOverrides.Behavior != LocalOnly) && !isValidSdkKey(cfg.SDKKey, cfg.BaseURL != "") {
+		logger.Errorf(0, "SDK Key '%s' is invalid", cfg.SDKKey)
+		f = newEmptyFetcher()
+	} else {
+		f = newConfigFetcher(cfg, logger, cfg.DefaultUser)
 	}
 	client := &Client{
 		cfg:          cfg,
 		logger:       logger,
-		fetcher:      newConfigFetcher(cfg, logger, cfg.DefaultUser),
+		fetcher:      f,
 		needGetCheck: cfg.PollingMode == Lazy || cfg.PollingMode == AutoPoll && !cfg.NoWaitForRefresh,
 		defaultUser:  cfg.DefaultUser,
 	}
@@ -194,7 +198,7 @@ func NewCustomClient(cfg Config) *Client {
 		client.ready = make(chan struct{})
 		close(client.ready)
 	} else {
-		client.ready = client.fetcher.doneInitialGet
+		client.ready = client.fetcher.doneInitGet()
 	}
 
 	return client
@@ -331,7 +335,7 @@ func (client *Client) Snapshot(user User) *Snapshot {
 	if client.needGetCheck {
 		switch client.cfg.PollingMode {
 		case Lazy:
-			if err := client.fetcher.refreshIfOlder(client.fetcher.ctx, time.Now().Add(-client.cfg.PollInterval), !client.cfg.NoWaitForRefresh); err != nil {
+			if err := client.fetcher.refreshIfOlder(client.fetcher.context(), time.Now().Add(-client.cfg.PollInterval), !client.cfg.NoWaitForRefresh); err != nil {
 				client.logger.Errorf(0, "lazy refresh failed: %v", err)
 			}
 		case AutoPoll:
@@ -339,7 +343,7 @@ func (client *Client) Snapshot(user User) *Snapshot {
 				// Note: we don't have to select on client.fetcher.ctx.Done here
 				// because if that's closed, the first fetch will be unblocked and
 				// will close this channel.
-				<-client.fetcher.doneInitialGet
+				<-client.fetcher.doneInitGet()
 			})
 		}
 	}
@@ -347,10 +351,7 @@ func (client *Client) Snapshot(user User) *Snapshot {
 }
 
 func isValidSdkKey(sdkKey string, isCustomUrl bool) bool {
-	if strings.HasPrefix(sdkKey, "testing-") {
-		return true
-	}
-	if isCustomUrl && strings.HasPrefix(sdkKey, proxyPrefix) {
+	if isCustomUrl && len(sdkKey) > len(proxyPrefix) && strings.HasPrefix(sdkKey, proxyPrefix) {
 		return true
 	}
 	comps := strings.Split(sdkKey, "/")

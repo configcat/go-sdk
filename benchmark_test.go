@@ -24,7 +24,7 @@ func BenchmarkGet(b *testing.B) {
 				"rule": {
 					Type:        StringSetting,
 					VariationID: "607147d5",
-					Value:       &SettingValue{StringValue: "no-match"},
+					Value:       &SettingValue{Value: "no-match"},
 					TargetingRules: []*TargetingRule{{
 						Conditions: []*Condition{{
 							UserCondition: &UserCondition{
@@ -34,7 +34,7 @@ func BenchmarkGet(b *testing.B) {
 							},
 						}},
 						ServedValue: &ServedValue{
-							Value:       &SettingValue{StringValue: "email-match"},
+							Value:       &SettingValue{Value: "email-match"},
 							VariationID: "385d9803",
 						},
 					}, {
@@ -46,7 +46,7 @@ func BenchmarkGet(b *testing.B) {
 							},
 						}},
 						ServedValue: &ServedValue{
-							Value:       &SettingValue{StringValue: "country-match"},
+							Value:       &SettingValue{Value: "country-match"},
 							VariationID: "385d9803",
 						},
 					}},
@@ -69,7 +69,7 @@ func BenchmarkGet(b *testing.B) {
 				"rule": {
 					Type:        StringSetting,
 					VariationID: "607147d5",
-					Value:       &SettingValue{StringValue: "no-match"},
+					Value:       &SettingValue{Value: "no-match"},
 					TargetingRules: []*TargetingRule{{
 						Conditions: []*Condition{{
 							UserCondition: &UserCondition{
@@ -79,7 +79,7 @@ func BenchmarkGet(b *testing.B) {
 							},
 						}},
 						ServedValue: &ServedValue{
-							Value:       &SettingValue{StringValue: "email-match"},
+							Value:       &SettingValue{Value: "email-match"},
 							VariationID: "385d9803",
 						},
 					}, {
@@ -91,7 +91,7 @@ func BenchmarkGet(b *testing.B) {
 							},
 						}},
 						ServedValue: &ServedValue{
-							Value:       &SettingValue{StringValue: "country-match"},
+							Value:       &SettingValue{Value: "country-match"},
 							VariationID: "385d9803",
 						},
 					}},
@@ -115,7 +115,7 @@ func BenchmarkGet(b *testing.B) {
 				"rule": {
 					Type:        StringSetting,
 					VariationID: "607147d5",
-					Value:       &SettingValue{StringValue: "no-match"},
+					Value:       &SettingValue{Value: "no-match"},
 					TargetingRules: []*TargetingRule{{
 						Conditions: []*Condition{{
 							UserCondition: &UserCondition{
@@ -125,7 +125,7 @@ func BenchmarkGet(b *testing.B) {
 							},
 						}},
 						ServedValue: &ServedValue{
-							Value:       &SettingValue{StringValue: "age-match"},
+							Value:       &SettingValue{Value: "age-match"},
 							VariationID: "385d9803",
 						},
 					}},
@@ -146,7 +146,7 @@ func BenchmarkGet(b *testing.B) {
 				"bool30TrueAdvancedRules": {
 					Type:        StringSetting,
 					VariationID: "607147d5",
-					Value:       &SettingValue{StringValue: "no-match"},
+					Value:       &SettingValue{Value: "no-match"},
 					TargetingRules: []*TargetingRule{{
 						Conditions: []*Condition{{
 							UserCondition: &UserCondition{
@@ -156,7 +156,7 @@ func BenchmarkGet(b *testing.B) {
 							},
 						}},
 						ServedValue: &ServedValue{
-							Value:       &SettingValue{StringValue: "email-match"},
+							Value:       &SettingValue{Value: "email-match"},
 							VariationID: "385d9803",
 						},
 					}, {
@@ -168,17 +168,17 @@ func BenchmarkGet(b *testing.B) {
 							},
 						}},
 						ServedValue: &ServedValue{
-							Value:       &SettingValue{StringValue: "country-match"},
+							Value:       &SettingValue{Value: "country-match"},
 							VariationID: "385d9803",
 						},
 					}},
 					PercentageOptions: []*PercentageOption{{
 						Percentage:  30,
-						Value:       &SettingValue{StringValue: "low-percent"},
+						Value:       &SettingValue{Value: "low-percent"},
 						VariationID: "607147d5",
 					}, {
 						Percentage:  70,
-						Value:       &SettingValue{StringValue: "high-percent"},
+						Value:       &SettingValue{Value: "high-percent"},
 						VariationID: "385d9803",
 					}},
 				},
@@ -199,7 +199,7 @@ func BenchmarkGet(b *testing.B) {
 			Settings: map[string]*Setting{
 				"simple": {
 					Type:  StringSetting,
-					Value: &SettingValue{StringValue: "no-match"},
+					Value: &SettingValue{Value: "no-match"},
 				},
 			},
 		},
@@ -219,7 +219,7 @@ func BenchmarkGet(b *testing.B) {
 				"bool30TrueAdvancedRules": {
 					Type:        StringSetting,
 					VariationID: "607147d5",
-					Value:       &SettingValue{StringValue: "no-match"},
+					Value:       &SettingValue{Value: "no-match"},
 					TargetingRules: []*TargetingRule{{
 						Conditions: []*Condition{{
 							UserCondition: &UserCondition{
@@ -229,7 +229,7 @@ func BenchmarkGet(b *testing.B) {
 							},
 						}},
 						ServedValue: &ServedValue{
-							Value:       &SettingValue{StringValue: "email-match"},
+							Value:       &SettingValue{Value: "email-match"},
 							VariationID: "385d9803",
 						},
 					}, {
@@ -241,17 +241,17 @@ func BenchmarkGet(b *testing.B) {
 							},
 						}},
 						ServedValue: &ServedValue{
-							Value:       &SettingValue{StringValue: "country-match"},
+							Value:       &SettingValue{Value: "country-match"},
 							VariationID: "385d9803",
 						},
 					}},
 					PercentageOptions: []*PercentageOption{{
 						Percentage:  30,
-						Value:       &SettingValue{StringValue: "low-percent"},
+						Value:       &SettingValue{Value: "low-percent"},
 						VariationID: "607147d5",
 					}, {
 						Percentage:  70,
-						Value:       &SettingValue{StringValue: "high-percent"},
+						Value:       &SettingValue{Value: "high-percent"},
 						VariationID: "385d9803",
 					}},
 				},

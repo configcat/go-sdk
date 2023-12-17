@@ -63,7 +63,7 @@ func (f *Flag) entry(key string) (*configcat.Setting, error) {
 	e := &configcat.Setting{
 		VariationID:    "v_" + key,
 		Type:           ft,
-		Value:          fromAnyValue(f.Default),
+		Value:          &configcat.SettingValue{Value: f.Default},
 		TargetingRules: make([]*configcat.TargetingRule, 0, len(f.Rules)),
 	}
 	for i, rule := range f.Rules {
@@ -98,25 +98,10 @@ func (f *Flag) entry(key string) (*configcat.Setting, error) {
 				UserCondition: cond,
 			}},
 			ServedValue: &configcat.ServedValue{
-				Value:       fromAnyValue(rule.Value),
+				Value:       &configcat.SettingValue{Value: rule.Value},
 				VariationID: fmt.Sprintf("v%d_%s", i, key),
 			},
 		})
 	}
 	return e, nil
-}
-
-func fromAnyValue(value interface{}) *configcat.SettingValue {
-	switch v := value.(type) {
-	case bool:
-		return &configcat.SettingValue{BoolValue: v}
-	case string:
-		return &configcat.SettingValue{StringValue: v}
-	case float64:
-		return &configcat.SettingValue{DoubleValue: v}
-	case int:
-		return &configcat.SettingValue{IntValue: v}
-	default:
-		return nil
-	}
 }

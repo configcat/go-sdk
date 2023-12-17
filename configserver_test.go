@@ -32,9 +32,14 @@ type configResponse struct {
 }
 
 func newConfigServer(t testing.TB) *configServer {
-	var buf [8]byte
-	rand.Read(buf[:])
-	return newConfigServerWithKey(t, fmt.Sprintf("testing-%x", buf[:]))
+	return newConfigServerWithKey(t, randomSdkKey())
+}
+
+func randomSdkKey() string {
+	var seg1, seg2 [11]byte
+	rand.Read(seg1[:])
+	rand.Read(seg2[:])
+	return fmt.Sprintf("%x/%x", seg1, seg2)
 }
 
 func newConfigServerWithKey(t testing.TB, sdkKey string) *configServer {

@@ -52,45 +52,42 @@ func (c *config) generateEvaluators() {
 	}
 	c.evaluators = make([]settingEvalFunc, numKeys())
 	for key, setting := range c.root.Settings {
-		c.evaluators[idForKey(key, true)] = settingEvaluator(setting, setting.saltBytes, c.evaluators)
+		c.evaluators[idForKey(key, true)] = settingEvaluator(setting, key, setting.saltBytes, c.evaluators)
 	}
 }
 
-func settingEvaluator(setting *Setting, salt []byte, evaluators []settingEvalFunc) settingEvalFunc {
+func settingEvaluator(setting *Setting, key string, salt []byte, evaluators []settingEvalFunc) settingEvalFunc {
 	if setting.prerequisiteCycle != nil {
 		return func(id keyID, user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (valueID, string, *TargetingRule, *PercentageOption, error) {
 			return 0, "", nil, nil, fmt.Errorf("circular dependency detected between the following depending flags: [%s]", strings.Join(setting.prerequisiteCycle, " -> "))
 		}
 	}
-	rules := setting.TargetingRules
-	settingType := setting.Type
-	keyBytes := setting.keyBytes
-	attr := setting.PercentageOptionsAttribute
+	keyBytes := []byte(key)
 	percentageOptions := setting.PercentageOptions
-	conditionMatchers := make([]func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error), len(rules))
-	for i, rule := range rules {
-		conditionMatchers[i] = conditionsMatcher(rule.Conditions, evaluators, salt, setting.keyBytes)
+	conditionMatchers := make([]func(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (bool, error), len(setting.TargetingRules))
+	for i, rule := range setting.TargetingRules {
+		conditionMatchers[i] = conditionsMatcher(rule.Conditions, key, evaluators, salt, keyBytes)
 	}
 
 	return func(_ keyID, user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger) (valueID, string, *TargetingRule, *PercentageOption, error) {
 		if builder != nil {
-			builder.append(fmt.Sprintf("Evaluating '%s'", string(keyBytes)))
+			builder.append(fmt.Sprintf("Evaluating '%s'", key))
 			if builder.user != nil && info != nil {
 				builder.append(fmt.Sprintf(" for User '%s'", builder.userAsString()))
 			}
 		}
 		userMissingErrorLogged := false
-		if builder != nil && len(rules) > 0 {
+		if builder != nil && len(setting.TargetingRules) > 0 {
 			builder.newLineString("Evaluating targeting rules and applying the first match if any:")
 		}
 
 		for i, matcher := range conditionMatchers {
-			rule := rules[i]
+			rule := setting.TargetingRules[i]
 			matched, err := matcher(user, info, builder, logger)
 			if builder != nil {
 				builder.incIndent().newLineString("THEN ")
 				if rule.ServedValue != nil {
-					builder.append(fmt.Sprintf("'%v'", valueForSettingType(rule.ServedValue.Value, settingType)))
+					builder.append(fmt.Sprintf("'%v'", rule.ServedValue.Value.Value))
 				} else if len(rule.PercentageOptions) > 0 {
 					builder.append("%% options")
 				}
@@ -109,18 +106,18 @@ func settingEvaluator(setting *Setting, salt []byte, evaluators []settingEvalFun
 					var attrMissing *userAttrMissingError
 					var attrErr *userAttrError
 					var cmpValErr *comparisonValueError
-					var prereqNotFoundErr *prerequisiteNotFoundErr
+					var fatalEvalErr *fatalEvalErr
 					switch {
 					case errors.As(err, &noUserErr) && !userMissingErrorLogged:
-						logger.Warnf(3001, "cannot evaluate targeting rules and %% options for setting '%s' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", string(keyBytes))
+						logger.Warnf(3001, "cannot evaluate targeting rules and %% options for setting '%s' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", key)
 						userMissingErrorLogged = true
 					case errors.As(err, &attrMissing):
-						logger.Warnf(3003, "cannot evaluate certain targeting rules of setting '%s' (the User.%s attribute is missing); you should set the User.%s attribute in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", string(keyBytes), attrMissing.attr, attrMissing.attr)
+						logger.Warnf(3003, "cannot evaluate certain targeting rules of setting '%s' (the User.%s attribute is missing); you should set the User.%s attribute in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", key, attrMissing.attr, attrMissing.attr)
 					case errors.As(err, &attrErr):
-						logger.Warnf(3004, "cannot evaluate certain targeting rules of setting '%s' (the User.%s attribute is invalid (%s)); please check the User.%s attribute and make sure that its value corresponds to the comparison operator", string(keyBytes), attrErr.attr, attrErr.err.Error(), attrErr.attr)
+						logger.Warnf(3004, "cannot evaluate certain targeting rules of setting '%s' (the User.%s attribute is invalid (%s)); please check the User.%s attribute and make sure that its value corresponds to the comparison operator", key, attrErr.attr, attrErr.err.Error(), attrErr.attr)
 					case errors.As(err, &cmpValErr):
-						logger.Warnf(3004, "cannot evaluate certain targeting rules of setting '%s' (%s)", string(keyBytes), cmpValErr.Error())
-					case errors.As(err, &prereqNotFoundErr):
+						logger.Warnf(3004, "cannot evaluate certain targeting rules of setting '%s' (%s)", key, cmpValErr.Error())
+					case errors.As(err, &fatalEvalErr):
 						return 0, "", nil, nil, err
 					}
 					if builder != nil {
@@ -134,27 +131,27 @@ func settingEvaluator(setting *Setting, salt []byte, evaluators []settingEvalFun
 			}
 			if rule.ServedValue != nil {
 				if builder != nil {
-					builder.newLine().append(fmt.Sprintf("Returning '%v'.", valueForSettingType(rule.ServedValue.Value, settingType)))
+					builder.newLine().append(fmt.Sprintf("Returning '%v'.", rule.ServedValue.Value.Value))
 				}
-				return rule.ServedValue.valueID, rule.ServedValue.VariationID, rule, nil, nil
+				return evalResult(rule.ServedValue.Value, rule.ServedValue.valueID, rule.ServedValue.VariationID, rule, nil)
 			}
 			if len(rule.PercentageOptions) > 0 {
 				if builder != nil {
 					builder.incIndent()
 				}
 				if info == nil && !userMissingErrorLogged {
-					logger.Warnf(3001, "cannot evaluate targeting rules and %% options for setting '%s' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", string(keyBytes))
+					logger.Warnf(3001, "cannot evaluate targeting rules and %% options for setting '%s' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", key)
 					userMissingErrorLogged = true
 				}
-				matchedOption := evalPercentageOptions(user, info, builder, logger, settingType, attr, keyBytes, rule.PercentageOptions)
+				matchedOption := evalPercentageOptions(user, info, builder, logger, setting.PercentageOptionsAttribute, keyBytes, rule.PercentageOptions)
 				if matchedOption != nil {
 					if builder != nil {
 						builder.decIndent()
 						if builder != nil {
-							builder.newLine().append(fmt.Sprintf("Returning '%v'.", valueForSettingType(matchedOption.Value, settingType)))
+							builder.newLine().append(fmt.Sprintf("Returning '%v'.", matchedOption.Value.Value))
 						}
 					}
-					return matchedOption.valueID, matchedOption.VariationID, nil, matchedOption, nil
+					return evalResult(matchedOption.Value, matchedOption.valueID, matchedOption.VariationID, rule, matchedOption)
 				} else {
 					if builder != nil {
 						builder.
@@ -166,25 +163,35 @@ func settingEvaluator(setting *Setting, salt []byte, evaluators []settingEvalFun
 		}
 		if len(percentageOptions) > 0 {
 			if info == nil && !userMissingErrorLogged {
-				logger.Warnf(3001, "cannot evaluate targeting rules and %% options for setting '%s' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", string(keyBytes))
+				logger.Warnf(3001, "cannot evaluate targeting rules and %% options for setting '%s' (User Object is missing); you should pass a User Object to the evaluation methods like `GetValue()` in order to make targeting work properly; read more: https://configcat.com/docs/advanced/user-object/", key)
 				userMissingErrorLogged = true
 			}
-			matchedOption := evalPercentageOptions(user, info, builder, logger, settingType, attr, keyBytes, percentageOptions)
+			matchedOption := evalPercentageOptions(user, info, builder, logger, setting.PercentageOptionsAttribute, keyBytes, percentageOptions)
 			if matchedOption != nil {
 				if builder != nil {
-					builder.newLine().append(fmt.Sprintf("Returning '%v'.", valueForSettingType(matchedOption.Value, settingType)))
+					builder.newLine().append(fmt.Sprintf("Returning '%v'.", matchedOption.Value.Value))
 				}
-				return matchedOption.valueID, matchedOption.VariationID, nil, matchedOption, nil
+				return evalResult(matchedOption.Value, matchedOption.valueID, matchedOption.VariationID, nil, matchedOption)
 			}
 		}
 		if builder != nil {
-			builder.newLine().append(fmt.Sprintf("Returning '%v'.", valueForSettingType(setting.Value, settingType)))
+			builder.newLine().append(fmt.Sprintf("Returning '%v'.", setting.Value.Value))
 		}
-		return setting.valueID, setting.VariationID, nil, nil, nil
+		return evalResult(setting.Value, setting.valueID, setting.VariationID, nil, nil)
 	}
 }
 
-func evalPercentageOptions(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger, settingType SettingType, percentageAttr string, settingKey []byte, percentageOptions []*PercentageOption) *PercentageOption {
+func evalResult(v *SettingValue, valueId valueID, variationId string, rule *TargetingRule, opt *PercentageOption) (valueID, string, *TargetingRule, *PercentageOption, error) {
+	if v.invalidValue != nil {
+		return 0, "", nil, nil, fmt.Errorf("setting value '%v' is of an unsupported type (%T)", v.invalidValue, v.invalidValue)
+	}
+	if v.Value == nil {
+		return 0, "", nil, nil, fmt.Errorf("setting value is nil")
+	}
+	return valueId, variationId, rule, opt, nil
+}
+
+func evalPercentageOptions(user reflect.Value, info *userTypeInfo, builder *evalLogBuilder, logger *leveledLogger, percentageAttr string, settingKey []byte, percentageOptions []*PercentageOption) *PercentageOption {
 	if info == nil {
 		if builder != nil {
 			builder.newLineString("Skipping %% options because the User Object is missing.")
@@ -194,7 +201,7 @@ func evalPercentageOptions(user reflect.Value, info *userTypeInfo, builder *eval
 	if percentageAttr == "" {
 		percentageAttr = identifierAttr
 	}
-	attrBytes, err := info.getBytes(user, percentageAttr)
+	attrBytes, _, err := info.getBytes(user, percentageAttr)
 	if percentageAttr == identifierAttr && len(attrBytes) == 0 {
 		attrBytes = []byte("")
 	} else if err != nil {
@@ -229,7 +236,7 @@ func evalPercentageOptions(user reflect.Value, info *userTypeInfo, builder *eval
 		bucket += option.Percentage
 		if scaled < bucket {
 			if builder != nil {
-				builder.newLineString("- Hash value " + strconv.FormatInt(scaled, 10) + " selects %% option " + strconv.Itoa(i+1) + " (" + strconv.FormatInt(option.Percentage, 10) + "%%), '" + fmt.Sprintf("%v", valueForSettingType(option.Value, settingType)) + "'.")
+				builder.newLineString("- Hash value " + strconv.FormatInt(scaled, 10) + " selects %% option " + strconv.Itoa(i+1) + " (" + strconv.FormatInt(option.Percentage, 10) + "%%), '" + fmt.Sprintf("%v", option.Value.Value) + "'.")
 			}
 			return option
 		}
@@ -249,8 +256,8 @@ type userTypeInfo struct {
 }
 
 type attrInfo struct {
-	asString      func(v reflect.Value) string
-	asBytes       func(v reflect.Value) []byte
+	asString      func(v reflect.Value) (string, bool)
+	asBytes       func(v reflect.Value) ([]byte, bool)
 	asSemver      func(v reflect.Value) (*semver.Version, error)
 	asFloat       func(v reflect.Value) (float64, error)
 	asStringSlice func(v reflect.Value) ([]string, error)
@@ -272,17 +279,17 @@ func newUserTypeInfo(userType reflect.Type) (*userTypeInfo, error) {
 	if userType == nil {
 		return nil, nil
 	}
-	if userType.Implements(getAttributeType) {
-		return &userTypeInfo{
-			getAttribute: func(v reflect.Value, attr string) interface{} {
-				return v.Interface().(UserAttributes).GetAttribute(attr)
-			},
-		}, nil
-	}
 	if userType == anyMapType {
 		return &userTypeInfo{
 			getAttribute: func(v reflect.Value, attr string) interface{} {
 				return v.Interface().(map[string]interface{})[attr]
+			},
+		}, nil
+	}
+	if userType.Implements(getAttributeType) {
+		return &userTypeInfo{
+			getAttribute: func(v reflect.Value, attr string) interface{} {
+				return v.Interface().(UserAttributes).GetAttribute(attr)
 			},
 		}, nil
 	}
@@ -333,17 +340,17 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 	switch field.Type.Kind() {
 	case reflect.String:
 		return attrInfo{
-			asString: func(v reflect.Value) string {
-				return v.FieldByIndex(field.Index).String()
+			asString: func(v reflect.Value) (string, bool) {
+				return v.FieldByIndex(field.Index).String(), false
 			},
-			asBytes: func(v reflect.Value) []byte {
-				return []byte(v.FieldByIndex(field.Index).String())
+			asBytes: func(v reflect.Value) ([]byte, bool) {
+				return []byte(v.FieldByIndex(field.Index).String()), false
 			},
 			asSemver: func(v reflect.Value) (*semver.Version, error) {
-				return parseSemver(v.FieldByIndex(field.Index).String())
+				return parseSemver(strings.TrimSpace(v.FieldByIndex(field.Index).String()))
 			},
 			asFloat: func(v reflect.Value) (float64, error) {
-				return parseFloat(v.FieldByIndex(field.Index).String())
+				return parseFloat(strings.TrimSpace(v.FieldByIndex(field.Index).String()))
 			},
 			asStringSlice: func(v reflect.Value) ([]string, error) {
 				return parseStringSliceJson(v.FieldByIndex(field.Index).String())
@@ -352,17 +359,17 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 	case reflect.Slice:
 		if field.Type.Elem().Kind() == reflect.Uint8 {
 			return attrInfo{
-				asString: func(v reflect.Value) string {
-					return string(v.FieldByIndex(field.Index).Bytes())
+				asString: func(v reflect.Value) (string, bool) {
+					return string(v.FieldByIndex(field.Index).Bytes()), false
 				},
-				asBytes: func(v reflect.Value) []byte {
-					return v.FieldByIndex(field.Index).Bytes()
+				asBytes: func(v reflect.Value) ([]byte, bool) {
+					return v.FieldByIndex(field.Index).Bytes(), false
 				},
 				asSemver: func(v reflect.Value) (*semver.Version, error) {
-					return parseSemver(string(v.FieldByIndex(field.Index).Bytes()))
+					return parseSemver(strings.TrimSpace(string(v.FieldByIndex(field.Index).Bytes())))
 				},
 				asFloat: func(v reflect.Value) (float64, error) {
-					return parseFloat(string(v.FieldByIndex(field.Index).Bytes()))
+					return parseFloat(strings.TrimSpace(string(v.FieldByIndex(field.Index).Bytes())))
 				},
 				asStringSlice: func(v reflect.Value) ([]string, error) {
 					return parseStringSliceJson(string(v.FieldByIndex(field.Index).Bytes()))
@@ -378,16 +385,34 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 					}
 					return res, nil
 				},
+				asString: func(v reflect.Value) (string, bool) {
+					sl := v.FieldByIndex(field.Index)
+					res := make([]string, sl.Len())
+					for i := 0; i < sl.Len(); i++ {
+						res[i] = sl.Index(i).String()
+					}
+					b, _ := toJson(res)
+					return string(b), false
+				},
+				asBytes: func(v reflect.Value) ([]byte, bool) {
+					sl := v.FieldByIndex(field.Index)
+					res := make([]string, sl.Len())
+					for i := 0; i < sl.Len(); i++ {
+						res[i] = sl.Index(i).String()
+					}
+					b, _ := toJson(res)
+					return b, false
+				},
 			}, nil
 		}
 		return attrInfo{}, fmt.Errorf("user value field %s has unsupported slice type %s", field.Name, field.Type)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return attrInfo{
-			asString: func(v reflect.Value) string {
-				return strconv.FormatInt(v.FieldByIndex(field.Index).Int(), 10)
+			asString: func(v reflect.Value) (string, bool) {
+				return strconv.FormatInt(v.FieldByIndex(field.Index).Int(), 10), true
 			},
-			asBytes: func(v reflect.Value) []byte {
-				return strconv.AppendInt(nil, v.FieldByIndex(field.Index).Int(), 10)
+			asBytes: func(v reflect.Value) ([]byte, bool) {
+				return strconv.AppendInt(nil, v.FieldByIndex(field.Index).Int(), 10), true
 			},
 			asFloat: func(v reflect.Value) (float64, error) {
 				return float64(v.FieldByIndex(field.Index).Int()), nil
@@ -395,11 +420,11 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 		}, nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return attrInfo{
-			asString: func(v reflect.Value) string {
-				return strconv.FormatUint(v.FieldByIndex(field.Index).Uint(), 10)
+			asString: func(v reflect.Value) (string, bool) {
+				return strconv.FormatUint(v.FieldByIndex(field.Index).Uint(), 10), true
 			},
-			asBytes: func(v reflect.Value) []byte {
-				return strconv.AppendUint(nil, v.FieldByIndex(field.Index).Uint(), 10)
+			asBytes: func(v reflect.Value) ([]byte, bool) {
+				return strconv.AppendUint(nil, v.FieldByIndex(field.Index).Uint(), 10), true
 			},
 			asFloat: func(v reflect.Value) (float64, error) {
 				return float64(v.FieldByIndex(field.Index).Uint()), nil
@@ -407,11 +432,11 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 		}, nil
 	case reflect.Float32, reflect.Float64:
 		return attrInfo{
-			asString: func(v reflect.Value) string {
-				return strconv.FormatFloat(v.FieldByIndex(field.Index).Float(), 'g', -1, 64)
+			asString: func(v reflect.Value) (string, bool) {
+				return strconv.FormatFloat(v.FieldByIndex(field.Index).Float(), 'g', -1, 64), true
 			},
-			asBytes: func(v reflect.Value) []byte {
-				return strconv.AppendFloat(nil, v.FieldByIndex(field.Index).Float(), 'g', -1, 64)
+			asBytes: func(v reflect.Value) ([]byte, bool) {
+				return strconv.AppendFloat(nil, v.FieldByIndex(field.Index).Float(), 'g', -1, 64), true
 			},
 			asFloat: func(v reflect.Value) (float64, error) {
 				return v.FieldByIndex(field.Index).Float(), nil
@@ -421,7 +446,7 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 		if field.Type == timeType {
 			return attrInfo{
 				asFloat: func(v reflect.Value) (float64, error) {
-					return float64(v.FieldByIndex(field.Index).Interface().(time.Time).UnixMilli() / 1000), nil
+					return float64(v.FieldByIndex(field.Index).Interface().(time.Time).UnixMilli()) / 1000, nil
 				},
 			}, nil
 		}
@@ -431,102 +456,120 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 	}
 }
 
-func (t *userTypeInfo) getString(v reflect.Value, attr string) (string, error) {
-	var result string
-	info, ok := t.fields[attr]
-	if ok && info.asString != nil {
-		result = info.asString(v)
-	} else if t.getAttribute != nil {
-		res := t.getAttribute(v, attr)
-		if res == nil {
-			return "", &userAttrMissingError{attr: attr}
-		}
-		switch val := res.(type) {
-		case string:
-			result = val
-		case []byte:
-			result = string(val)
-		case float32:
-			result = strconv.FormatFloat(float64(val), 'g', -1, 64)
-		case float64:
-			result = strconv.FormatFloat(val, 'g', -1, 64)
-		case int:
-			result = strconv.FormatInt(int64(val), 10)
-		case uint:
-			result = strconv.FormatUint(uint64(val), 10)
-		case int8:
-			result = strconv.FormatInt(int64(val), 10)
-		case uint8:
-			result = strconv.FormatUint(uint64(val), 10)
-		case int16:
-			result = strconv.FormatInt(int64(val), 10)
-		case uint16:
-			result = strconv.FormatUint(uint64(val), 10)
-		case int32:
-			result = strconv.FormatInt(int64(val), 10)
-		case uint32:
-			result = strconv.FormatUint(uint64(val), 10)
-		case int64:
-			result = strconv.FormatInt(val, 10)
-		case uint64:
-			result = strconv.FormatUint(val, 10)
-		case uintptr:
-			result = strconv.FormatUint(uint64(val), 10)
-		}
+func isPredefined(attr string) bool {
+	switch attr {
+	case "Identifier", "Email", "Country":
+		return true
 	}
-	if len(result) == 0 {
-		return "", &userAttrMissingError{attr: attr}
-	}
-	return result, nil
+	return false
 }
 
-func (t *userTypeInfo) getBytes(v reflect.Value, attr string) ([]byte, error) {
-	var result []byte
+func (t *userTypeInfo) getString(v reflect.Value, attr string) (string, bool, error) {
 	info, ok := t.fields[attr]
-	if ok && info.asBytes != nil {
-		result = info.asBytes(v)
+	if ok && info.asString != nil {
+		result, converted := info.asString(v)
+		if len(result) == 0 && isPredefined(attr) {
+			return "", false, &userAttrMissingError{attr: attr}
+		}
+		return result, converted, nil
 	} else if t.getAttribute != nil {
 		res := t.getAttribute(v, attr)
 		if res == nil {
-			return nil, &userAttrMissingError{attr: attr}
+			return "", false, &userAttrMissingError{attr: attr}
 		}
 		switch val := res.(type) {
 		case string:
-			result = []byte(val)
+			return val, false, nil
 		case []byte:
-			result = val
+			return string(val), false, nil
+		case []string:
+			b, _ := toJson(val)
+			return string(b), false, nil
 		case float32:
-			result = strconv.AppendFloat(nil, float64(val), 'g', -1, 64)
+			return strconv.FormatFloat(float64(val), 'g', -1, 64), true, nil
 		case float64:
-			result = strconv.AppendFloat(nil, val, 'g', -1, 64)
+			return strconv.FormatFloat(val, 'g', -1, 64), true, nil
 		case int:
-			result = strconv.AppendInt(nil, int64(val), 10)
+			return strconv.FormatInt(int64(val), 10), true, nil
 		case uint:
-			result = strconv.AppendUint(nil, uint64(val), 10)
+			return strconv.FormatUint(uint64(val), 10), true, nil
 		case int8:
-			result = strconv.AppendInt(nil, int64(val), 10)
+			return strconv.FormatInt(int64(val), 10), true, nil
 		case uint8:
-			result = strconv.AppendUint(nil, uint64(val), 10)
+			return strconv.FormatUint(uint64(val), 10), true, nil
 		case int16:
-			result = strconv.AppendInt(nil, int64(val), 10)
+			return strconv.FormatInt(int64(val), 10), true, nil
 		case uint16:
-			result = strconv.AppendUint(nil, uint64(val), 10)
+			return strconv.FormatUint(uint64(val), 10), true, nil
 		case int32:
-			result = strconv.AppendInt(nil, int64(val), 10)
+			return strconv.FormatInt(int64(val), 10), true, nil
 		case uint32:
-			result = strconv.AppendUint(nil, uint64(val), 10)
+			return strconv.FormatUint(uint64(val), 10), true, nil
 		case int64:
-			result = strconv.AppendInt(nil, val, 10)
+			return strconv.FormatInt(val, 10), true, nil
 		case uint64:
-			result = strconv.AppendUint(nil, val, 10)
+			return strconv.FormatUint(val, 10), true, nil
 		case uintptr:
-			result = strconv.AppendUint(nil, uint64(val), 10)
+			return strconv.FormatUint(uint64(val), 10), true, nil
+		case time.Time:
+			return strconv.FormatInt(val.UnixMilli()/1000, 10), true, nil
 		}
 	}
-	if len(result) == 0 {
-		return nil, &userAttrMissingError{attr: attr}
+	return "", false, &userAttrMissingError{attr: attr}
+}
+
+func (t *userTypeInfo) getBytes(v reflect.Value, attr string) ([]byte, bool, error) {
+	info, ok := t.fields[attr]
+	if ok && info.asBytes != nil {
+		result, converted := info.asBytes(v)
+		if len(result) == 0 && isPredefined(attr) {
+			return nil, false, &userAttrMissingError{attr: attr}
+		}
+		return result, converted, nil
+	} else if t.getAttribute != nil {
+		res := t.getAttribute(v, attr)
+		if res == nil {
+			return nil, false, &userAttrMissingError{attr: attr}
+		}
+		switch val := res.(type) {
+		case string:
+			return []byte(val), false, nil
+		case []byte:
+			return val, false, nil
+		case []string:
+			b, _ := toJson(val)
+			return b, false, nil
+		case float32:
+			return strconv.AppendFloat(nil, float64(val), 'g', -1, 64), true, nil
+		case float64:
+			return strconv.AppendFloat(nil, val, 'g', -1, 64), true, nil
+		case int:
+			return strconv.AppendInt(nil, int64(val), 10), true, nil
+		case uint:
+			return strconv.AppendUint(nil, uint64(val), 10), true, nil
+		case int8:
+			return strconv.AppendInt(nil, int64(val), 10), true, nil
+		case uint8:
+			return strconv.AppendUint(nil, uint64(val), 10), true, nil
+		case int16:
+			return strconv.AppendInt(nil, int64(val), 10), true, nil
+		case uint16:
+			return strconv.AppendUint(nil, uint64(val), 10), true, nil
+		case int32:
+			return strconv.AppendInt(nil, int64(val), 10), true, nil
+		case uint32:
+			return strconv.AppendUint(nil, uint64(val), 10), true, nil
+		case int64:
+			return strconv.AppendInt(nil, val, 10), true, nil
+		case uint64:
+			return strconv.AppendUint(nil, val, 10), true, nil
+		case uintptr:
+			return strconv.AppendUint(nil, uint64(val), 10), true, nil
+		case time.Time:
+			return strconv.AppendInt(nil, val.UnixMilli()/1000, 10), true, nil
+		}
 	}
-	return result, nil
+	return nil, false, &userAttrMissingError{attr: attr}
 }
 
 func (t *userTypeInfo) getSemver(v reflect.Value, attr string) (*semver.Version, error) {
@@ -539,14 +582,14 @@ func (t *userTypeInfo) getSemver(v reflect.Value, attr string) (*semver.Version,
 		return ver, nil
 	} else if t.getAttribute != nil {
 		if res, ok := t.getAttribute(v, attr).([]byte); ok {
-			ver, err := parseSemver(string(res))
+			ver, err := parseSemver(strings.TrimSpace(string(res)))
 			if err != nil {
 				return nil, &userAttrError{attr: attr, err: err}
 			}
 			return ver, nil
 		}
 		if res, ok := t.getAttribute(v, attr).(string); ok {
-			ver, err := parseSemver(res)
+			ver, err := parseSemver(strings.TrimSpace(res))
 			if err != nil {
 				return nil, &userAttrError{attr: attr, err: err}
 			}
@@ -572,13 +615,13 @@ func (t *userTypeInfo) getFloat(v reflect.Value, attr string) (float64, error) {
 		case float32:
 			return float64(val), nil
 		case string:
-			res, err := parseFloat(val)
+			res, err := parseFloat(strings.TrimSpace(val))
 			if err != nil {
 				return 0, &userAttrError{attr: attr, err: err}
 			}
 			return res, nil
 		case []byte:
-			res, err := parseFloat(string(val))
+			res, err := parseFloat(strings.TrimSpace(string(val)))
 			if err != nil {
 				return 0, &userAttrError{attr: attr, err: err}
 			}
@@ -606,7 +649,7 @@ func (t *userTypeInfo) getFloat(v reflect.Value, attr string) (float64, error) {
 		case uintptr:
 			return float64(val), nil
 		case time.Time:
-			return float64(val.UnixMilli() / 1000), nil
+			return float64(val.UnixMilli()) / 1000, nil
 		default:
 			return 0, &userAttrError{attr: attr, err: fmt.Errorf("cannot convert '%v' to float64", val)}
 		}
@@ -647,19 +690,24 @@ func (t *userTypeInfo) getSlice(v reflect.Value, attr string) ([]string, error) 
 }
 
 func parseSemver(s string) (*semver.Version, error) {
-	if s == "" {
-		return nil, nil
-	}
-	vers, err := semver.Parse(s)
+	ver, err := semver.Parse(s)
 	if err != nil {
 		return nil, err
 	}
-	return &vers, nil
+	return &ver, nil
 }
 
 func parseStringSliceJson(s string) ([]string, error) {
 	var res []string
 	err := json.Unmarshal([]byte(s), &res)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func toJson(v interface{}) ([]byte, error) {
+	res, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
@@ -682,19 +730,19 @@ func keyValuesForRootNode(root *ConfigJson) map[string]keyValue {
 		}
 	}
 	for key, setting := range root.Settings {
-		add(setting.VariationID, key, fromSettingValue(setting.Type, setting.Value))
+		add(setting.VariationID, key, setting.Value.Value)
 		for _, rule := range setting.TargetingRules {
 			if rule.ServedValue != nil {
-				add(rule.ServedValue.VariationID, key, fromSettingValue(setting.Type, rule.ServedValue.Value))
+				add(rule.ServedValue.VariationID, key, rule.ServedValue.Value.Value)
 			}
 			if len(rule.PercentageOptions) > 0 {
 				for _, option := range rule.PercentageOptions {
-					add(option.VariationID, key, fromSettingValue(setting.Type, option.Value))
+					add(option.VariationID, key, option.Value.Value)
 				}
 			}
 		}
 		for _, rule := range setting.PercentageOptions {
-			add(rule.VariationID, key, fromSettingValue(setting.Type, rule.Value))
+			add(rule.VariationID, key, rule.Value.Value)
 		}
 	}
 	return m
@@ -707,19 +755,4 @@ func keysForRootNode(root *ConfigJson) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func fromSettingValue(settingType SettingType, v *SettingValue) interface{} {
-	switch settingType {
-	case BoolSetting:
-		return v.BoolValue
-	case StringSetting:
-		return v.StringValue
-	case IntSetting:
-		return v.IntValue
-	case FloatSetting:
-		return v.DoubleValue
-	default:
-		return nil
-	}
 }

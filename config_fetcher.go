@@ -27,6 +27,16 @@ func (f *fetcherError) Error() string {
 	return f.Err.Error()
 }
 
+type fetcher interface {
+	refreshIfOlder(ctx context.Context, before time.Time, wait bool) error
+	close()
+	current() *config
+	isOffline() bool
+	setMode(offline bool)
+	context() context.Context
+	doneInitGet() chan struct{}
+}
+
 type configFetcher struct {
 	sdkKey            string
 	cacheKey          string
@@ -64,7 +74,7 @@ type configFetcher struct {
 }
 
 // newConfigFetcher returns a
-func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) *configFetcher {
+func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) fetcher {
 	f := &configFetcher{
 		sdkKey:    cfg.SDKKey,
 		cache:     cfg.Cache,
@@ -119,6 +129,14 @@ func (f *configFetcher) setMode(offline bool) {
 		atomic.StoreUint32(&f.offline, 0)
 		f.logger.Infof(5200, "switched to ONLINE mode")
 	}
+}
+
+func (f *configFetcher) context() context.Context {
+	return f.ctx
+}
+
+func (f *configFetcher) doneInitGet() chan struct{} {
+	return f.doneInitialGet
 }
 
 func (f *configFetcher) close() {
@@ -415,4 +433,42 @@ func pollingModeToIdentifier(pollingMode PollingMode) string {
 	default:
 		return "-"
 	}
+}
+
+type emptyFetcher struct {
+	doneInitialGet chan struct{}
+}
+
+func newEmptyFetcher() fetcher {
+	f := &emptyFetcher{doneInitialGet: make(chan struct{})}
+	close(f.doneInitialGet)
+	return f
+}
+
+func (e *emptyFetcher) refreshIfOlder(_ context.Context, _ time.Time, _ bool) error {
+	return errors.New("config fetch failed: SDK Key is invalid")
+}
+
+func (e *emptyFetcher) close() {
+	// no action
+}
+
+func (e *emptyFetcher) current() *config {
+	return nil
+}
+
+func (e *emptyFetcher) isOffline() bool {
+	return true
+}
+
+func (e *emptyFetcher) setMode(_ bool) {
+	// no action
+}
+
+func (e *emptyFetcher) context() context.Context {
+	return context.TODO()
+}
+
+func (e *emptyFetcher) doneInitGet() chan struct{} {
+	return e.doneInitialGet
 }

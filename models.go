@@ -1,5 +1,7 @@
 package configcat
 
+import "encoding/json"
+
 // ConfigJson describes a ConfigCat config JSON.
 type ConfigJson struct {
 	// Settings is the map of the available feature flags and settings.
@@ -26,7 +28,6 @@ type Setting struct {
 	PercentageOptions []*PercentageOption `json:"p"`
 
 	valueID           int32
-	keyBytes          []byte
 	prerequisiteCycle []string
 	saltBytes         []byte
 }
@@ -113,7 +114,7 @@ type PrerequisiteFlagCondition struct {
 	// Comparator is the operator which defines the relation between the evaluated value of the prerequisite flag and the comparison value.
 	Comparator PrerequisiteComparator `json:"c"`
 	// Value that the evaluated value of the prerequisite flag is compared to.
-	Value *SettingValue `json:"v"`
+	Value *settingValueJson `json:"v"`
 
 	valueID                 int32
 	prerequisiteSettingType SettingType
@@ -121,14 +122,47 @@ type PrerequisiteFlagCondition struct {
 
 // SettingValue describes the possible values of a feature flag or setting.
 type SettingValue struct {
+	// Value holds the feature flag's value.
+	Value interface{}
+
+	invalidValue interface{}
+}
+
+type settingValueJson struct {
 	// BoolValue holds a bool feature flag's value.
-	BoolValue bool `json:"b"`
+	BoolValue *bool `json:"b"`
 	// StringValue holds a string setting's value.
-	StringValue string `json:"s"`
+	StringValue *string `json:"s"`
 	// IntValue holds a whole number setting's value.
-	IntValue int `json:"i"`
+	IntValue *int `json:"i"`
 	// DoubleValue holds a decimal number setting's value.
-	DoubleValue float64 `json:"d"`
+	DoubleValue *float64 `json:"d"`
+}
+
+func (s *SettingValue) MarshalJSON() ([]byte, error) {
+	var valJson *settingValueJson
+	switch val := s.Value.(type) {
+	case bool:
+		valJson = &settingValueJson{BoolValue: &val}
+	case string:
+		valJson = &settingValueJson{StringValue: &val}
+	case float64:
+		valJson = &settingValueJson{DoubleValue: &val}
+	case int:
+		valJson = &settingValueJson{IntValue: &val}
+	default:
+		valJson = nil
+	}
+	return json.Marshal(valJson)
+}
+
+func (s *SettingValue) UnmarshalJSON(b []byte) error {
+	valJson := &settingValueJson{}
+	if err := json.Unmarshal(b, &valJson); err != nil {
+		return err
+	}
+	s.Value = valueFor(valJson)
+	return nil
 }
 
 type Preferences struct {
@@ -166,10 +200,11 @@ const (
 type SettingType int8
 
 const (
-	BoolSetting   SettingType = 0
-	StringSetting SettingType = 1
-	IntSetting    SettingType = 2
-	FloatSetting  SettingType = 3
+	UnknownSetting SettingType = -1
+	BoolSetting    SettingType = 0
+	StringSetting  SettingType = 1
+	IntSetting     SettingType = 2
+	FloatSetting   SettingType = 3
 )
 
 type Comparator uint8
@@ -335,4 +370,34 @@ func (op SegmentComparator) String() string {
 		return ""
 	}
 	return opSegmentStrings[op]
+}
+
+func valueFor(v *settingValueJson) interface{} {
+	switch {
+	case v.BoolValue != nil:
+		return *v.BoolValue
+	case v.IntValue != nil:
+		return *v.IntValue
+	case v.DoubleValue != nil:
+		return *v.DoubleValue
+	case v.StringValue != nil:
+		return *v.StringValue
+	default:
+		return nil
+	}
+}
+
+func settingTypeFor(v *settingValueJson) SettingType {
+	switch {
+	case v.BoolValue != nil:
+		return BoolSetting
+	case v.IntValue != nil:
+		return IntSetting
+	case v.DoubleValue != nil:
+		return FloatSetting
+	case v.StringValue != nil:
+		return StringSetting
+	default:
+		return UnknownSetting
+	}
 }

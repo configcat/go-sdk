@@ -63,8 +63,8 @@ func (f *FlagOverrides) loadEntries(logger *leveledLogger) {
 		f.settings = make(map[string]*Setting, len(f.Values))
 		for key, value := range f.Values {
 			f.settings[key] = &Setting{
-				Value: f.fromAnyValue(value, key, logger),
-				Type:  f.getSettingType(value, key, logger),
+				Value: fromAnyValue(value),
+				Type:  getSettingType(value),
 			}
 		}
 	}
@@ -82,8 +82,8 @@ func (f *FlagOverrides) loadEntriesFromFile(logger *leveledLogger) {
 		f.settings = make(map[string]*Setting, len(simplified.Flags))
 		for key, value := range simplified.Flags {
 			f.settings[key] = &Setting{
-				Value: f.fromAnyValue(value, key, logger),
-				Type:  f.getSettingType(value, key, logger),
+				Value: fromAnyValue(value),
+				Type:  getSettingType(value),
 			}
 		}
 		return
@@ -98,8 +98,8 @@ func (f *FlagOverrides) loadEntriesFromFile(logger *leveledLogger) {
 	f.settings = root.Settings
 }
 
-func (f *FlagOverrides) getSettingType(value interface{}, key string, logger *leveledLogger) SettingType {
-	switch value := value.(type) {
+func getSettingType(value interface{}) SettingType {
+	switch value.(type) {
 	case bool:
 		return BoolSetting
 	case string:
@@ -109,25 +109,22 @@ func (f *FlagOverrides) getSettingType(value interface{}, key string, logger *le
 	case int:
 		return IntSetting
 	default:
-		logger.Errorf(0, "ignoring override value for flag %q with unexpected type %T (%#v); must be bool, int, float64 or string", key, value, value)
-		delete(f.settings, key)
-		return -1
+		return UnknownSetting
 	}
 }
 
-func (f *FlagOverrides) fromAnyValue(value interface{}, key string, logger *leveledLogger) *SettingValue {
-	switch v := value.(type) {
-	case bool:
-		return &SettingValue{BoolValue: v}
-	case string:
-		return &SettingValue{StringValue: v}
-	case float64:
-		return &SettingValue{DoubleValue: v}
-	case int:
-		return &SettingValue{IntValue: v}
-	default:
-		logger.Errorf(0, "ignoring override value for flag %q with unexpected type %T (%#v); must be bool, int, float64 or string", key, value, value)
-		delete(f.settings, key)
-		return nil
+func fromAnyValue(v interface{}) *SettingValue {
+	if !isValidValue(v) {
+		return &SettingValue{Value: nil, invalidValue: v}
+	} else {
+		return &SettingValue{Value: v}
 	}
+}
+
+func isValidValue(v interface{}) bool {
+	switch v.(type) {
+	case bool, string, float64, int:
+		return true
+	}
+	return false
 }

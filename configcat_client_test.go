@@ -3,9 +3,11 @@ package configcat
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/configcat/go-sdk/v9/configcatcache"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -16,11 +18,11 @@ import (
 var variationConfig = &ConfigJson{
 	Settings: map[string]*Setting{
 		"first": {
-			Value:       &SettingValue{BoolValue: false},
+			Value:       &SettingValue{Value: false},
 			VariationID: "fakeIDFirst",
 		},
 		"second": {
-			Value:       &SettingValue{BoolValue: true},
+			Value:       &SettingValue{Value: true},
 			VariationID: "fakeIDSecond",
 		},
 	},
@@ -34,13 +36,13 @@ func TestClient_Refresh(t *testing.T) {
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value", StringSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value"))
 	client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 
 	c.Assert(result, qt.Equals, "value")
 
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value2", StringSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
 	client.Refresh(context.Background())
 	result = client.GetStringValue("key", "default", nil)
 	if result != "value2" {
@@ -56,13 +58,13 @@ func TestClient_Refresh_Canceled(t *testing.T) {
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	srv.setResponseJSON(rootNodeWithKeyValue("key", "value", StringSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", "value"))
 	client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value")
 
 	srv.setResponse(configResponse{
-		body:  marshalJSON(rootNodeWithKeyValue("key", "value", StringSetting)),
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value")),
 		sleep: time.Second,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
@@ -86,7 +88,7 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 	defer client.Close()
 
 	srv.setResponse(configResponse{
-		body:  marshalJSON(rootNodeWithKeyValue("key", "value", StringSetting)),
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value")),
 		sleep: 20 * time.Millisecond,
 	})
 	client.Refresh(context.Background())
@@ -97,7 +99,7 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 func TestClient_Float(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213, FloatSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213.0))
 	client.Refresh(context.Background())
 	result := client.GetFloatValue("key", 0, nil)
 	c.Assert(result, qt.Equals, 3213.0)
@@ -110,7 +112,7 @@ func TestClient_KeyNotFound(t *testing.T) {
 	// path when precalculated slots has no entry for a key.
 	Bool("k1", false)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("k2", 3213, IntSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("k2", 3213))
 	client.Refresh(context.Background())
 	result := client.GetIntValue("k1", 0, nil)
 	c.Assert(result, qt.Equals, 0)
@@ -122,7 +124,7 @@ func TestClient_Get_IsOneOf_Does_Not_Use_Contains_Semantics(t *testing.T) {
 	srv.setResponseJSON(&ConfigJson{
 		Settings: map[string]*Setting{
 			"feature": {
-				Value:       &SettingValue{BoolValue: false},
+				Value:       &SettingValue{Value: false},
 				VariationID: "a377be39",
 				TargetingRules: []*TargetingRule{{
 					Conditions: []*Condition{{
@@ -133,7 +135,7 @@ func TestClient_Get_IsOneOf_Does_Not_Use_Contains_Semantics(t *testing.T) {
 						},
 					}},
 					ServedValue: &ServedValue{
-						Value:       &SettingValue{BoolValue: true},
+						Value:       &SettingValue{Value: true},
 						VariationID: "8bcf8608",
 					},
 				}},
@@ -169,7 +171,7 @@ func TestClient_Get_Default(t *testing.T) {
 func TestClient_Get_Latest(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213, FloatSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213.0))
 	client.Refresh(context.Background())
 
 	result := client.GetFloatValue("key", 0, nil)
@@ -192,7 +194,7 @@ func TestClient_Get_WithFailingCacheSet(t *testing.T) {
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213, FloatSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213.0))
 	client.Refresh(context.Background())
 	result := client.GetFloatValue("key", 0, nil)
 	c.Assert(result, qt.Equals, 3213.0)
@@ -202,7 +204,7 @@ func TestClient_Get_WithEmptySDKKey(t *testing.T) {
 	c := qt.New(t)
 	client := NewClient("")
 	err := client.Refresh(context.Background())
-	c.Assert(err, qt.ErrorMatches, `config fetch failed: empty SDK key in configcat configuration`)
+	c.Assert(err, qt.ErrorMatches, `config fetch failed: SDK Key is invalid`)
 }
 
 func TestClient_Get_WithEmptyKey(t *testing.T) {
@@ -308,7 +310,7 @@ func TestClient_GetWithRedirectSuccess(t *testing.T) {
 			Redirect: &redirect,
 		},
 	})
-	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value", StringSetting))
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value"))
 	client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value")
@@ -334,12 +336,12 @@ func TestClient_GetWithDifferentURLAndNoRedirect(t *testing.T) {
 		},
 		Settings: map[string]*Setting{
 			"key": {
-				Value: &SettingValue{StringValue: "value1"},
+				Value: &SettingValue{Value: "value1"},
 				Type:  StringSetting,
 			},
 		},
 	})
-	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2", StringSetting))
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
 	client.Refresh(context.Background())
 
 	// Check that the value still comes from the same server and
@@ -363,12 +365,12 @@ func TestClient_GetWithRedirectToSameURL(t *testing.T) {
 		},
 		Settings: map[string]*Setting{
 			"key": {
-				Value: &SettingValue{StringValue: "value1"},
+				Value: &SettingValue{Value: "value1"},
 				Type:  StringSetting,
 			},
 		},
 	})
-	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2", StringSetting))
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
 	client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value1")
@@ -389,7 +391,7 @@ func TestClient_GetWithCustomURLAndShouldRedirect(t *testing.T) {
 			Redirect: &redirect,
 		},
 	})
-	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2", StringSetting))
+	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
 	err := client.Refresh(context.Background())
 	c.Assert(err, qt.ErrorMatches, "config fetch failed: refusing to redirect from custom URL without forced redirection")
 
@@ -413,9 +415,9 @@ func TestClient_GetWithStandardURLAndShouldRedirect(t *testing.T) {
 			Redirect: &redirect,
 		},
 	}))
-	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value", StringSetting)))
+	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value")))
 	client := NewCustomClient(Config{
-		SDKKey:    "fakeKey",
+		SDKKey:    randomSdkKey(),
 		Logger:    newTestLogger(t),
 		LogLevel:  LogLevelDebug,
 		Transport: transport,
@@ -441,13 +443,13 @@ func TestClient_GetWithStandardURLAndNoRedirect(t *testing.T) {
 		},
 		Settings: map[string]*Setting{
 			"key": {
-				Value: &SettingValue{StringValue: "value1"},
+				Value: &SettingValue{Value: "value1"},
 				Type:  StringSetting,
 			},
 		},
 	}))
 	client := NewCustomClient(Config{
-		SDKKey:    "fakeKey",
+		SDKKey:    randomSdkKey(),
 		Logger:    newTestLogger(t),
 		LogLevel:  LogLevelDebug,
 		Transport: transport,
@@ -456,7 +458,7 @@ func TestClient_GetWithStandardURLAndNoRedirect(t *testing.T) {
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value1")
 
-	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value2", StringSetting)))
+	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value2")))
 	// The next request should go to the redirected server.
 	client.Refresh(context.Background())
 
@@ -506,7 +508,7 @@ func TestClient_GetWithInvalidConfig(t *testing.T) {
 func TestClient_GetInt(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 99, IntSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 99))
 	client.Refresh(context.Background())
 	c.Check(client.GetIntValue("key", 0, nil), qt.Equals, 99)
 }
@@ -529,7 +531,7 @@ func TestClient_DefaultUser(t *testing.T) {
 	srv.setResponseJSON(&ConfigJson{
 		Settings: map[string]*Setting{
 			"foo": {
-				Value: &SettingValue{StringValue: "default"},
+				Value: &SettingValue{Value: "default"},
 				Type:  StringSetting,
 				TargetingRules: []*TargetingRule{{
 					Conditions: []*Condition{{
@@ -540,7 +542,7 @@ func TestClient_DefaultUser(t *testing.T) {
 						},
 					}},
 					ServedValue: &ServedValue{
-						Value: &SettingValue{StringValue: "somewhere-match"},
+						Value: &SettingValue{Value: "somewhere-match"},
 					},
 				}},
 			},
@@ -565,117 +567,15 @@ func TestClient_DefaultUser(t *testing.T) {
 	c.Check(fooFlag.Get(snap), qt.Equals, "default")
 }
 
-func TestLog(t *testing.T) {
-	type user struct {
-		Cluster string `configcat:"cluster"`
-		Role    string
-		Version string
-	}
-	c := qt.New(t)
-	srv := newConfigServer(t)
-	cfg := srv.config()
-	cfg.PollingMode = Manual
-	u := &user{
-		Cluster: "somewhere",
-		Role:    "Admin",
-		Version: "wrong_semver",
-	}
-	cfg.DefaultUser = u
-	cfg.LogLevel = LogLevelInfo
-	client := NewCustomClient(cfg)
-	t.Cleanup(client.Close)
-
-	srv.setResponseJSON(&ConfigJson{
-		Segments: []*Segment{{
-			Name: "Beta users (kaki)",
-			Conditions: []*UserCondition{
-				{
-					ComparisonAttribute: "Role",
-					Comparator:          OpOneOf,
-					StringArrayValue:    []string{"Admin"},
-				},
-			},
-		}},
-		Settings: map[string]*Setting{
-			"bool": {
-				Value: &SettingValue{BoolValue: false},
-				Type:  BoolSetting,
-				TargetingRules: []*TargetingRule{{
-					Conditions: []*Condition{{
-						UserCondition: &UserCondition{
-							ComparisonAttribute: "cluster",
-							Comparator:          OpOneOf,
-							StringArrayValue:    []string{"somewhere"},
-						},
-					}, {
-						UserCondition: &UserCondition{
-							ComparisonAttribute: "Role",
-							Comparator:          OpOneOf,
-							StringArrayValue:    []string{"Admin"},
-						},
-					}, {
-						UserCondition: &UserCondition{
-							ComparisonAttribute: "Version",
-							Comparator:          OpOneOfSemver,
-							StringArrayValue:    []string{"1.2.3"},
-						},
-					}},
-					ServedValue: &ServedValue{Value: &SettingValue{BoolValue: true}},
-				}},
-			},
-			"foo": {
-				Value: &SettingValue{StringValue: "default"},
-				Type:  StringSetting,
-				TargetingRules: []*TargetingRule{{
-					Conditions: []*Condition{{
-						UserCondition: &UserCondition{
-							ComparisonAttribute: "cluster",
-							Comparator:          OpOneOf,
-							StringArrayValue:    []string{"somewhere"},
-						},
-					}, {
-						SegmentCondition: &SegmentCondition{
-							Comparator: OpSegmentIsIn,
-							Index:      0,
-						},
-					}, {
-						PrerequisiteFlagCondition: &PrerequisiteFlagCondition{
-							FlagKey:    "bool",
-							Comparator: OpPrerequisiteEq,
-							Value:      &SettingValue{BoolValue: true},
-						},
-					}},
-					PercentageOptions: []*PercentageOption{{
-						Percentage: 50,
-						Value:      &SettingValue{StringValue: "somewhere-match-1"},
-					}, {
-						Percentage: 50,
-						Value:      &SettingValue{StringValue: "somewhere-match-2"},
-					}},
-				}},
-				PercentageOptions: []*PercentageOption{{
-					Percentage: 50,
-					Value:      &SettingValue{StringValue: "somewhere-match-1"},
-				}, {
-					Percentage: 50,
-					Value:      &SettingValue{StringValue: "somewhere-match-2"},
-				}},
-			},
-		},
-	})
-	client.Refresh(context.Background())
-	c.Check(client.GetStringValue("foo", "", nil), qt.Equals, "somewhere-match-2")
-}
-
 func TestSnapshot_Get(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 99, IntSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 99))
 	client.Refresh(context.Background())
 	snap := client.Snapshot(nil)
 	c.Check(snap.GetValue("key"), qt.Equals, 99)
 	c.Check(snap.FetchTime(), qt.Not(qt.Equals), time.Time{})
-	srv.setResponseJSON(rootNodeWithKeyValue("key", 101, IntSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("key", 101))
 	time.Sleep(1 * time.Millisecond) // wait a bit to ensure fetch times don't collide
 	client.Refresh(context.Background())
 	c.Check(snap.GetValue("key"), qt.Equals, 99)
@@ -1058,6 +958,54 @@ func TestCacheKey(t *testing.T) {
 	c.Assert(configcatcache.ProduceCacheKey("test2", configcatcache.ConfigJSONName, configcatcache.ConfigJSONCacheVersion), qt.Equals, "a78b7e323ef543a272c74540387566a22415148a")
 }
 
+func TestSdkKeyValidation(t *testing.T) {
+	tests := []struct {
+		key    string
+		custom bool
+		valid  bool
+	}{
+		{"sdk-key-90123456789012", false, false},
+		{"sdk-key-9012345678901/1234567890123456789012", false, false},
+		{"sdk-key-90123456789012/123456789012345678901", false, false},
+		{"sdk-key-90123456789012/12345678901234567890123", false, false},
+		{"sdk-key-901234567890123/1234567890123456789012", false, false},
+		{"sdk-key-90123456789012/1234567890123456789012", false, true},
+		{"configcat-sdk-1/sdk-key-90123456789012", false, false},
+		{"configcat-sdk-1/sdk-key-9012345678901/1234567890123456789012", false, false},
+		{"configcat-sdk-1/sdk-key-90123456789012/123456789012345678901", false, false},
+		{"configcat-sdk-1/sdk-key-90123456789012/12345678901234567890123", false, false},
+		{"configcat-sdk-1/sdk-key-901234567890123/1234567890123456789012", false, false},
+		{"configcat-sdk-1/sdk-key-90123456789012/1234567890123456789012", false, true},
+		{"configcat-sdk-2/sdk-key-90123456789012/1234567890123456789012", false, false},
+		{"configcat-proxy/", false, false},
+		{"configcat-proxy/", true, false},
+		{"configcat-proxy/sdk-key-90123456789012", false, false},
+		{"configcat-proxy/sdk-key-90123456789012", true, true},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+			cfg := Config{
+				SDKKey:      test.key,
+				PollingMode: Manual,
+				Logger:      newTestLogger(t),
+				LogLevel:    LogLevelError,
+			}
+			if test.custom {
+				cfg.BaseURL = "https://my-configcat-proxy"
+			}
+			client := NewCustomClient(cfg)
+			if test.valid {
+				qt.Assert(t, reflect.TypeOf(client.fetcher), qt.Equals, reflect.TypeOf((*configFetcher)(nil)))
+			} else {
+				qt.Assert(t, reflect.TypeOf(client.fetcher), qt.Equals, reflect.TypeOf(&emptyFetcher{}))
+			}
+
+			client.Close()
+		})
+	}
+}
+
 type failingCache struct{}
 
 // get reads the configuration from the cache.
@@ -1068,23 +1016,6 @@ func (cache failingCache) Get(ctx context.Context, key string) ([]byte, error) {
 // set writes the configuration into the cache.
 func (cache failingCache) Set(ctx context.Context, key string, value []byte) error {
 	return errors.New("fake failing cache fails to set")
-}
-
-type preConfCache struct {
-	initial []byte
-}
-
-func newCacheForSdkKey(sdkKey string) *preConfCache {
-	data := []byte(contentForIntegrationTestKey(sdkKey))
-	return &preConfCache{initial: data}
-}
-
-func (cache *preConfCache) Get(ctx context.Context, key string) ([]byte, error) {
-	return cache.initial, nil
-}
-
-func (cache *preConfCache) Set(ctx context.Context, key string, value []byte) error {
-	return nil
 }
 
 func getTestClients(t *testing.T) (*configServer, *Client) {
@@ -1098,36 +1029,24 @@ func getTestClients(t *testing.T) (*configServer, *Client) {
 	return srv, client
 }
 
-func rootNodeWithKeyValue(key string, value interface{}, typ SettingType) *ConfigJson {
+func rootNodeWithKeyValue(key string, value interface{}) *ConfigJson {
 	return &ConfigJson{
 		Settings: map[string]*Setting{
 			key: {
-				Value: fromAnyValue(value, typ),
-				Type:  typ,
+				Value: &SettingValue{Value: value},
 			},
 		},
 	}
 }
 
-func fromAnyValue(value interface{}, settingType SettingType) *SettingValue {
-	switch settingType {
-	case BoolSetting:
-		return &SettingValue{BoolValue: value.(bool)}
-	case StringSetting:
-		return &SettingValue{StringValue: value.(string)}
-	case FloatSetting:
-		switch v := value.(type) {
-		case float64:
-			return &SettingValue{DoubleValue: v}
-		case int:
-			return &SettingValue{DoubleValue: float64(v)}
-		default:
-			return nil
-		}
-	case IntSetting:
-		return &SettingValue{IntValue: value.(int)}
-	default:
-		return nil
+func rootNodeWithKeyValueType(key string, value interface{}, t SettingType) *ConfigJson {
+	return &ConfigJson{
+		Settings: map[string]*Setting{
+			key: {
+				Value: &SettingValue{Value: value},
+				Type:  t,
+			},
+		},
 	}
 }
 

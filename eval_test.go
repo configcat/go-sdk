@@ -193,6 +193,130 @@ func TestOpSemverWithString(t *testing.T) {
 	}
 }
 
+func TestCompValMismatch(t *testing.T) {
+	tests := []struct {
+		key       string
+		prereq    string
+		prereqVal interface{}
+		exp       interface{}
+	}{
+		{"stringDependsOnBool", "mainBoolFlag", true, "Dog"},
+		{"stringDependsOnBool", "mainBoolFlag", false, "Cat"},
+		{"stringDependsOnBool", "mainBoolFlag", "1", nil},
+		{"stringDependsOnBool", "mainBoolFlag", 1, nil},
+		{"stringDependsOnBool", "mainBoolFlag", 1.0, nil},
+		{"stringDependsOnBool", "mainBoolFlag", []bool{true}, nil},
+		{"stringDependsOnBool", "mainBoolFlag", nil, nil},
+		{"stringDependsOnString", "mainStringFlag", "private", "Dog"},
+		{"stringDependsOnString", "mainStringFlag", "Private", "Cat"},
+		{"stringDependsOnString", "mainStringFlag", true, nil},
+		{"stringDependsOnString", "mainStringFlag", 1, nil},
+		{"stringDependsOnString", "mainStringFlag", 1.0, nil},
+		{"stringDependsOnString", "mainStringFlag", []string{"private"}, nil},
+		{"stringDependsOnString", "mainStringFlag", nil, nil},
+		{"stringDependsOnInt", "mainIntFlag", 2, "Dog"},
+		{"stringDependsOnInt", "mainIntFlag", 1, "Cat"},
+		{"stringDependsOnInt", "mainIntFlag", "2", nil},
+		{"stringDependsOnInt", "mainIntFlag", true, nil},
+		{"stringDependsOnInt", "mainIntFlag", 2.0, "Dog"},
+		{"stringDependsOnInt", "mainIntFlag", []int{2}, nil},
+		{"stringDependsOnInt", "mainIntFlag", nil, nil},
+		{"stringDependsOnDouble", "mainDoubleFlag", 0.1, "Dog"},
+		{"stringDependsOnDouble", "mainDoubleFlag", 0.11, "Cat"},
+		{"stringDependsOnDouble", "mainDoubleFlag", "0.1", nil},
+		{"stringDependsOnDouble", "mainDoubleFlag", true, nil},
+		{"stringDependsOnDouble", "mainDoubleFlag", 1, nil},
+		{"stringDependsOnDouble", "mainDoubleFlag", []float64{0.1}, nil},
+		{"stringDependsOnDouble", "mainDoubleFlag", nil, nil},
+	}
+
+	sdkKey := "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/JoGwdqJZQ0K2xDy7LnbyOg"
+	srv := newConfigServerWithKey(t, sdkKey)
+	srv.setResponse(configResponse{body: contentForIntegrationTestKey(sdkKey)})
+	logger := newTestLogger(t).(*testLogger)
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+			logger.Clear()
+			cfg := srv.config()
+			cfg.PollingMode = Manual
+			cfg.Logger = logger
+			cfg.LogLevel = LogLevelError
+			cfg.FlagOverrides = &FlagOverrides{
+				Behavior: LocalOverRemote,
+				Values:   map[string]interface{}{test.prereq: test.prereqVal},
+			}
+			client := NewCustomClient(cfg)
+			_ = client.Refresh(context.Background())
+
+			val := client.Snapshot(nil).GetValue(test.key)
+			qt.Assert(t, val, qt.Equals, test.exp)
+
+			if test.exp == nil {
+				if test.prereqVal == nil {
+					qt.Assert(t, logger.Logs()[0], qt.Contains, "setting value is nil")
+				} else if !isValidValue(test.prereqVal) {
+					qt.Assert(t, logger.Logs()[0], qt.Contains, fmt.Sprintf("setting value '%v' is of an unsupported type", test.prereqVal))
+				} else {
+					qt.Assert(t, logger.Logs()[0], qt.Contains, "type mismatch between comparison value")
+				}
+			}
+
+			client.Close()
+		})
+	}
+}
+
+func TestMatchedEvaluationRuleAndPercentageOption(t *testing.T) {
+	tests := []struct {
+		key        string
+		userId     string
+		email      string
+		percBase   interface{}
+		exp        interface{}
+		expRuleSet bool
+		expPercSet bool
+	}{
+		{"stringMatchedTargetingRuleAndOrPercentageOption", "", "", nil, "Cat", false, false},
+		{"stringMatchedTargetingRuleAndOrPercentageOption", "12345", "", nil, "Cat", false, false},
+		{"stringMatchedTargetingRuleAndOrPercentageOption", "12345", "a@example.com", nil, "Dog", true, false},
+		{"stringMatchedTargetingRuleAndOrPercentageOption", "12345", "a@configcat.com", nil, "Cat", false, false},
+		{"stringMatchedTargetingRuleAndOrPercentageOption", "12345", "a@configcat.com", "", "Frog", true, true},
+		{"stringMatchedTargetingRuleAndOrPercentageOption", "12345", "a@configcat.com", "US", "Fish", true, true},
+		{"stringMatchedTargetingRuleAndOrPercentageOption", "12345", "b@configcat.com", nil, "Cat", false, false},
+		{"stringMatchedTargetingRuleAndOrPercentageOption", "12345", "b@configcat.com", "", "Falcon", false, true},
+		{"stringMatchedTargetingRuleAndOrPercentageOption", "12345", "b@configcat.com", "US", "Spider", false, true},
+	}
+
+	cfg := Config{
+		SDKKey:      "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/P4e3fAz_1ky2-Zg2e4cbkw",
+		PollingMode: Manual,
+		Logger:      newTestLogger(t),
+		LogLevel:    LogLevelInfo,
+	}
+	client := NewCustomClient(cfg)
+	_ = client.Refresh(context.Background())
+	defer client.Close()
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+			user := &UserData{Identifier: test.userId, Email: test.email, Custom: map[string]interface{}{"PercentageBase": test.percBase}}
+			details := client.Snapshot(user).GetValueDetails(test.key)
+			qt.Assert(t, details.Value, qt.Equals, test.exp)
+			ruleCmp := qt.IsNotNil
+			if !test.expRuleSet {
+				ruleCmp = qt.IsNil
+			}
+			qt.Assert(t, details.Data.MatchedTargetingRule, ruleCmp)
+			percCmp := qt.IsNotNil
+			if !test.expPercSet {
+				percCmp = qt.IsNil
+			}
+			qt.Assert(t, details.Data.MatchedPercentageOption, percCmp)
+		})
+	}
+}
+
 func TestNoUser(t *testing.T) {
 	c := qt.New(t)
 	ectx := newEvalTestContext(c)
@@ -295,14 +419,14 @@ func (test *opTest) run(c *qt.C, ectx *evalTestContext, user User) {
 				"key": {
 					Type:        StringSetting,
 					VariationID: "testFallback",
-					Value:       &SettingValue{StringValue: "false"},
+					Value:       &SettingValue{Value: "false"},
 					TargetingRules: []*TargetingRule{{
 						Conditions: []*Condition{{
 							UserCondition: cond,
 						}},
 						ServedValue: &ServedValue{
 							VariationID: "test",
-							Value:       &SettingValue{StringValue: "true"},
+							Value:       &SettingValue{Value: "true"},
 						},
 					}},
 				},
@@ -343,7 +467,7 @@ func stringOneOfTests(s string) []opTest {
 		testName: "empty-string",
 		op:       OpOneOf,
 		cmpVal:   "",
-		want:     false,
+		want:     s == "",
 	}}
 	// Add tests for opNotOneOf.
 	for _, test := range tests {
@@ -353,12 +477,6 @@ func stringOneOfTests(s string) []opTest {
 			cmpVal:   test.cmpVal,
 			want:     !test.want,
 		})
-	}
-	// When the comparison string is empty, all comparisons are false.
-	if s == "" {
-		for i := range tests {
-			tests[i].want = false
-		}
 	}
 	return tests
 }
@@ -458,11 +576,30 @@ func newEvalTestContext(c *qt.C) *evalTestContext {
 
 // newTestStruct returns a struct with field X holding v.
 func newTestStruct(v reflect.Value) User {
+	return newTestStructWithAttr(v, "X")
+}
+
+// newTestStruct returns a struct with field `attr => v`.
+func newTestStructWithAttr(v reflect.Value, attr string) User {
 	userv := reflect.New(reflect.StructOf([]reflect.StructField{{
-		Name: "X",
+		Name: attr,
 		Type: v.Type(),
 	}}))
 	userv.Elem().Field(0).Set(v)
+	return userv.Interface()
+}
+
+// newTestStruct returns a struct with fields `attr => v` and `Identifier => id`.
+func newTestStructWithAttrAndId(v reflect.Value, attr string, id string) User {
+	userv := reflect.New(reflect.StructOf([]reflect.StructField{{
+		Name: attr,
+		Type: v.Type(),
+	}, {
+		Name: "Identifier",
+		Type: reflect.TypeOf(""),
+	}}))
+	userv.Elem().Field(0).Set(v)
+	userv.Elem().Field(1).Set(reflect.ValueOf(id))
 	return userv.Interface()
 }
 

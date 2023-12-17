@@ -123,7 +123,7 @@ func TestFlagOverrides_Values_Ignored_On_Wrong_Behavior(t *testing.T) {
 func TestFlagOverrides_Values_LocalOverRemote(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, BoolSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false))
 	cfg := srv.config()
 
 	cfg.FlagOverrides = &FlagOverrides{
@@ -146,7 +146,7 @@ func TestFlagOverrides_Values_LocalOverRemote(t *testing.T) {
 func TestFlagOverrides_Values_LocalOverRemoteRespectsRemoteIntType(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("intKey", 5, IntSetting))
+	srv.setResponseJSON(rootNodeWithKeyValueType("intKey", 5, IntSetting))
 	cfg := srv.config()
 
 	// Even though the value has been specified as float locally,
@@ -172,7 +172,7 @@ func TestFlagOverrides_Values_LocalOverRemoteRespectsRemoteIntType(t *testing.T)
 func TestFlagOverrides_Values_RemoteOverLocal(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, BoolSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false))
 	cfg := srv.config()
 
 	cfg.FlagOverrides = &FlagOverrides{
@@ -195,7 +195,7 @@ func TestFlagOverrides_Values_RemoteOverLocal(t *testing.T) {
 func TestFlagOverrides_Values_Remote_Invalid(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, BoolSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false))
 	cfg := srv.config()
 
 	cfg.FlagOverrides = &FlagOverrides{
@@ -218,7 +218,7 @@ func TestFlagOverrides_Values_Remote_Invalid(t *testing.T) {
 func TestFlagOverrides_Values_Local_Invalid(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false, BoolSetting))
+	srv.setResponseJSON(rootNodeWithKeyValue("fakeKey", false))
 	cfg := srv.config()
 
 	cfg.FlagOverrides = &FlagOverrides{

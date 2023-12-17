@@ -143,16 +143,16 @@ func (c *config) keys() []string {
 // fixup populates the valueID fields in conf.root and presets related fields.
 func (c *config) fixup(valueMap map[interface{}]valueID) {
 	for _, setting := range c.root.Settings {
-		setting.valueID = c.idForValue(setting.Value, setting.Type, valueMap)
+		setting.valueID = c.idForValue(setting.Value.Value, valueMap)
 		for _, rule := range setting.TargetingRules {
 			if rule.ServedValue != nil {
-				rule.ServedValue.valueID = c.idForValue(rule.ServedValue.Value, setting.Type, valueMap)
+				rule.ServedValue.valueID = c.idForValue(rule.ServedValue.Value.Value, valueMap)
 			}
 			if rule.Conditions != nil {
 				for _, condition := range rule.Conditions {
 					if condition.PrerequisiteFlagCondition != nil {
 						if prerequisite, ok := c.root.Settings[condition.PrerequisiteFlagCondition.FlagKey]; ok {
-							condition.PrerequisiteFlagCondition.valueID = c.idForValue(condition.PrerequisiteFlagCondition.Value, prerequisite.Type, valueMap)
+							condition.PrerequisiteFlagCondition.valueID = c.idForValue(valueFor(condition.PrerequisiteFlagCondition.Value), valueMap)
 							condition.PrerequisiteFlagCondition.prerequisiteSettingType = prerequisite.Type
 						}
 					}
@@ -160,26 +160,25 @@ func (c *config) fixup(valueMap map[interface{}]valueID) {
 			}
 			if rule.PercentageOptions != nil {
 				for _, option := range rule.PercentageOptions {
-					option.valueID = c.idForValue(option.Value, setting.Type, valueMap)
+					option.valueID = c.idForValue(option.Value.Value, valueMap)
 				}
 			}
 		}
 		for _, rule := range setting.PercentageOptions {
-			rule.valueID = c.idForValue(rule.Value, setting.Type, valueMap)
+			rule.valueID = c.idForValue(rule.Value.Value, valueMap)
 		}
 	}
 }
 
-func (c *config) idForValue(v *SettingValue, settingType SettingType, valueMap map[interface{}]valueID) valueID {
-	actualValue := valueForSettingType(v, settingType)
-	if id, ok := valueMap[actualValue]; ok {
+func (c *config) idForValue(val interface{}, valueMap map[interface{}]valueID) valueID {
+	if id, ok := valueMap[val]; ok {
 		return id
 	}
 	// Start at 1 so the zero value always means "not known yet"
 	// so we can rely on zero-initialization of the evaluation context.
 	id := valueID(len(c.values) + 1)
-	valueMap[actualValue] = id
-	c.values = append(c.values, actualValue)
+	valueMap[val] = id
+	c.values = append(c.values, val)
 	return id
 }
 
@@ -273,24 +272,32 @@ func mergeWithOverrides(root *ConfigJson, overrides *FlagOverrides) {
 
 func changeToInt(setting *Setting) {
 	setting.Type = IntSetting
-	setting.Value.IntValue = int(setting.Value.DoubleValue)
+	setting.Value.Value = toIntVal(setting.Value.Value)
 	if len(setting.TargetingRules) > 0 {
 		for _, rule := range setting.TargetingRules {
 			if rule.ServedValue != nil {
-				rule.ServedValue.Value.IntValue = int(rule.ServedValue.Value.DoubleValue)
+				rule.ServedValue.Value.Value = toIntVal(rule.ServedValue.Value.Value)
 			}
 			if len(rule.PercentageOptions) > 0 {
 				for _, opt := range rule.PercentageOptions {
-					opt.Value.IntValue = int(opt.Value.DoubleValue)
+					opt.Value.Value = toIntVal(opt.Value.Value)
 				}
 			}
 		}
 		if len(setting.PercentageOptions) > 0 {
 			for _, opt := range setting.PercentageOptions {
-				opt.Value.IntValue = int(opt.Value.DoubleValue)
+				opt.Value.Value = toIntVal(opt.Value.Value)
 			}
 		}
 	}
+}
+
+func toIntVal(v interface{}) interface{} {
+	f, ok := v.(float64)
+	if !ok {
+		return v
+	}
+	return int(f)
 }
 
 func fixupSegmentsAndSalt(root *ConfigJson) {
@@ -300,9 +307,8 @@ func fixupSegmentsAndSalt(root *ConfigJson) {
 	} else {
 		saltBytes = make([]byte, 0)
 	}
-	for key, setting := range root.Settings {
+	for _, setting := range root.Settings {
 		setting.saltBytes = saltBytes
-		setting.keyBytes = []byte(key)
 		for _, rule := range setting.TargetingRules {
 			if rule.Conditions != nil {
 				for _, condition := range rule.Conditions {
@@ -314,28 +320,4 @@ func fixupSegmentsAndSalt(root *ConfigJson) {
 			}
 		}
 	}
-}
-
-func valueForSettingType(v *SettingValue, settingType SettingType) interface{} {
-	switch settingType {
-	case BoolSetting:
-		return v.BoolValue
-	case IntSetting:
-		return v.IntValue
-	case FloatSetting:
-		return v.DoubleValue
-	case StringSetting:
-		return v.StringValue
-	default:
-		return nil
-	}
-}
-
-func contains[T comparable](s []T, e T) bool {
-	for _, v := range s {
-		if v == e {
-			return true
-		}
-	}
-	return false
 }
