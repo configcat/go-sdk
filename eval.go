@@ -484,7 +484,7 @@ func (t *userTypeInfo) getString(v reflect.Value, attr string) (string, bool, er
 			return string(val), false, nil
 		case []string:
 			b, _ := toJson(val)
-			return string(b), false, nil
+			return string(b), true, nil
 		case float32:
 			return strconv.FormatFloat(float64(val), 'g', -1, 64), true, nil
 		case float64:
@@ -512,7 +512,7 @@ func (t *userTypeInfo) getString(v reflect.Value, attr string) (string, bool, er
 		case uintptr:
 			return strconv.FormatUint(uint64(val), 10), true, nil
 		case time.Time:
-			return strconv.FormatInt(val.UnixMilli()/1000, 10), true, nil
+			return strconv.FormatFloat(float64(val.UnixMilli())/1000.0, 'f', -1, 64), true, nil
 		}
 	}
 	return "", false, &userAttrMissingError{attr: attr}
@@ -538,7 +538,7 @@ func (t *userTypeInfo) getBytes(v reflect.Value, attr string) ([]byte, bool, err
 			return val, false, nil
 		case []string:
 			b, _ := toJson(val)
-			return b, false, nil
+			return b, true, nil
 		case float32:
 			return strconv.AppendFloat(nil, float64(val), 'g', -1, 64), true, nil
 		case float64:
@@ -566,7 +566,7 @@ func (t *userTypeInfo) getBytes(v reflect.Value, attr string) ([]byte, bool, err
 		case uintptr:
 			return strconv.AppendUint(nil, uint64(val), 10), true, nil
 		case time.Time:
-			return strconv.AppendInt(nil, val.UnixMilli()/1000, 10), true, nil
+			return strconv.AppendFloat(nil, float64(val.UnixMilli())/1000.0, 'f', -1, 64), true, nil
 		}
 	}
 	return nil, false, &userAttrMissingError{attr: attr}
