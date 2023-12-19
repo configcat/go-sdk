@@ -12,7 +12,7 @@ type ConfigJson struct {
 	Preferences *Preferences `json:"p"`
 }
 
-// Setting holds all the metadata of a ConfigCat feature flag or setting.
+// Setting describes a feature flag or setting.
 type Setting struct {
 	// PercentageOptionsAttribute is the User Object attribute which serves as the basis of percentage options evaluation.
 	PercentageOptionsAttribute string `json:"a"`
