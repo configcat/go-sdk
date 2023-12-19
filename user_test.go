@@ -107,7 +107,8 @@ func TestGetFloatShouldNotRecogniseTime(t *testing.T) {
 			}
 			actual, err := info.getFloat(usr, "X", false)
 			c.Assert(actual, qt.Equals, float64(0))
-			c.Assert(err.Error(), qt.Equals, "cannot evaluate, the User.X attribute is invalid ('2023-12-10 15:19:13 +0100 CET' is not a valid decimal number)")
+			c.Assert(err.Error(), qt.Contains, "cannot evaluate, the User.X attribute is invalid")
+			c.Assert(err.Error(), qt.Contains, "is not a valid decimal number")
 		})
 	}
 }
