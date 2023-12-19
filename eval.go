@@ -433,10 +433,10 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 	case reflect.Float32, reflect.Float64:
 		return attrInfo{
 			asString: func(v reflect.Value) (string, bool) {
-				return strconv.FormatFloat(v.FieldByIndex(field.Index).Float(), 'g', -1, 64), true
+				return strconv.FormatFloat(v.FieldByIndex(field.Index).Float(), 'f', -1, 64), true
 			},
 			asBytes: func(v reflect.Value) ([]byte, bool) {
-				return strconv.AppendFloat(nil, v.FieldByIndex(field.Index).Float(), 'g', -1, 64), true
+				return strconv.AppendFloat(nil, v.FieldByIndex(field.Index).Float(), 'f', -1, 64), true
 			},
 			asFloat: func(v reflect.Value) (float64, error) {
 				return v.FieldByIndex(field.Index).Float(), nil
@@ -486,9 +486,9 @@ func (t *userTypeInfo) getString(v reflect.Value, attr string) (string, bool, er
 			b, _ := toJson(val)
 			return string(b), true, nil
 		case float32:
-			return strconv.FormatFloat(float64(val), 'g', -1, 64), true, nil
+			return strconv.FormatFloat(float64(val), 'f', -1, 64), true, nil
 		case float64:
-			return strconv.FormatFloat(val, 'g', -1, 64), true, nil
+			return strconv.FormatFloat(val, 'f', -1, 64), true, nil
 		case int:
 			return strconv.FormatInt(int64(val), 10), true, nil
 		case uint:
@@ -540,9 +540,9 @@ func (t *userTypeInfo) getBytes(v reflect.Value, attr string) ([]byte, bool, err
 			b, _ := toJson(val)
 			return b, true, nil
 		case float32:
-			return strconv.AppendFloat(nil, float64(val), 'g', -1, 64), true, nil
+			return strconv.AppendFloat(nil, float64(val), 'f', -1, 64), true, nil
 		case float64:
-			return strconv.AppendFloat(nil, val, 'g', -1, 64), true, nil
+			return strconv.AppendFloat(nil, val, 'f', -1, 64), true, nil
 		case int:
 			return strconv.AppendInt(nil, int64(val), 10), true, nil
 		case uint:

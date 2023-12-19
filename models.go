@@ -32,11 +32,11 @@ type Setting struct {
 	saltBytes         []byte
 }
 
-// TargetingRule describes a targeting rule used in the flag evaluation process.
+// TargetingRule represents a targeting rule used in the flag evaluation process.
 type TargetingRule struct {
 	// ServedValue is the value associated with the targeting rule or nil if the targeting rule has percentage options THEN part.
 	ServedValue *ServedValue `json:"s"`
-	// Conditions is the list of conditions (where there is a logical AND relation between the items).
+	// Conditions is the list of conditions that are combined with the AND logical operator.
 	Conditions []*Condition `json:"c"`
 	// PercentageOptions is the list of percentage options associated with the targeting rule or nil if the targeting rule has a served value THEN part.
 	PercentageOptions []*PercentageOption `json:"p"`
@@ -51,7 +51,7 @@ type ServedValue struct {
 	valueID int32
 }
 
-// PercentageOption describes a percentage option used in targeting rules.
+// PercentageOption represents a percentage option.
 type PercentageOption struct {
 	// Value is the served value of the percentage option.
 	Value *SettingValue `json:"v"`
@@ -73,7 +73,7 @@ type Segment struct {
 	nameBytes []byte
 }
 
-// Condition is a discriminated union of UserCondition, SegmentCondition, and PrerequisiteFlagCondition.
+// Condition is the discriminated union of UserCondition, SegmentCondition, and PrerequisiteFlagCondition.
 type Condition struct {
 	// UserCondition describes a condition that works with User Object attributes.
 	UserCondition *UserCondition `json:"u"`
@@ -120,7 +120,7 @@ type PrerequisiteFlagCondition struct {
 	prerequisiteSettingType SettingType
 }
 
-// SettingValue describes the possible values of a feature flag or setting.
+// SettingValue describes the value of a feature flag or setting.
 type SettingValue struct {
 	// Value holds the feature flag's value.
 	Value interface{}
@@ -166,6 +166,7 @@ func (s *SettingValue) UnmarshalJSON(b []byte) error {
 }
 
 type Preferences struct {
+	// Salt is used to hash sensitive comparison values.
 	Salt     string           `json:"s"`
 	URL      string           `json:"u"`
 	Redirect *RedirectionKind `json:"r"` // NoRedirect, ShouldRedirect or ForceRedirect
@@ -201,64 +202,111 @@ type SettingType int8
 
 const (
 	UnknownSetting SettingType = -1
-	BoolSetting    SettingType = 0
-	StringSetting  SettingType = 1
-	IntSetting     SettingType = 2
-	FloatSetting   SettingType = 3
+	// BoolSetting is the On/off type (feature flag).
+	BoolSetting SettingType = 0
+	// StringSetting represents a text setting.
+	StringSetting SettingType = 1
+	// IntSetting is the whole number type.
+	IntSetting SettingType = 2
+	// FloatSetting is the decimal number type.
+	FloatSetting SettingType = 3
 )
 
+// Comparator is the User Object attribute comparison operator used during the evaluation process.
 type Comparator uint8
 
 const (
-	OpOneOf                       Comparator = 0
-	OpNotOneOf                    Comparator = 1
-	OpContains                    Comparator = 2
-	OpNotContains                 Comparator = 3
-	OpOneOfSemver                 Comparator = 4
-	OpNotOneOfSemver              Comparator = 5
-	OpLessSemver                  Comparator = 6
-	OpLessEqSemver                Comparator = 7
-	OpGreaterSemver               Comparator = 8
-	OpGreaterEqSemver             Comparator = 9
-	OpEqNum                       Comparator = 10
-	OpNotEqNum                    Comparator = 11
-	OpLessNum                     Comparator = 12
-	OpLessEqNum                   Comparator = 13
-	OpGreaterNum                  Comparator = 14
-	OpGreaterEqNum                Comparator = 15
-	OpOneOfHashed                 Comparator = 16
-	OpNotOneOfHashed              Comparator = 17
-	OpBeforeDateTime              Comparator = 18
-	OpAfterDateTime               Comparator = 19
-	OpEqHashed                    Comparator = 20
-	OpNotEqHashed                 Comparator = 21
-	OpStartsWithAnyOfHashed       Comparator = 22
-	OpNotStartsWithAnyOfHashed    Comparator = 23
-	OpEndsWithAnyOfHashed         Comparator = 24
-	OpNotEndsWithAnyOfHashed      Comparator = 25
-	OpArrayContainsAnyOfHashed    Comparator = 26
+	// OpOneOf matches when the comparison attribute is equal to any of the comparison values.
+	OpOneOf Comparator = 0
+	// OpNotOneOf matches when the comparison attribute is not equal to any of the comparison values.
+	OpNotOneOf Comparator = 1
+	// OpContains matches when the comparison attribute contains any comparison values as a substring.
+	OpContains Comparator = 2
+	// OpNotContains matches when the comparison attribute does not contain any comparison values as a substring.
+	OpNotContains Comparator = 3
+	// OpOneOfSemver matches when the comparison attribute interpreted as a semantic version is equal to any of the comparison values.
+	OpOneOfSemver Comparator = 4
+	// OpNotOneOfSemver matches when the comparison attribute interpreted as a semantic version is not equal to any of the comparison values.
+	OpNotOneOfSemver Comparator = 5
+	// OpLessSemver matches when the comparison attribute interpreted as a semantic version is less than the comparison value.
+	OpLessSemver Comparator = 6
+	// OpLessEqSemver matches when the comparison attribute interpreted as a semantic version is less than or equal to the comparison value.
+	OpLessEqSemver Comparator = 7
+	// OpGreaterSemver matches when the comparison attribute interpreted as a semantic version is greater than the comparison value.
+	OpGreaterSemver Comparator = 8
+	// OpGreaterEqSemver matches when the comparison attribute interpreted as a semantic version is greater than or equal to the comparison value.
+	OpGreaterEqSemver Comparator = 9
+	// OpEqNum  when the comparison attribute interpreted as a decimal number is equal to the comparison value.
+	OpEqNum Comparator = 10
+	// OpNotEqNum matches when the comparison attribute interpreted as a decimal number is not equal to the comparison value.
+	OpNotEqNum Comparator = 11
+	// OpLessNum matches when the comparison attribute interpreted as a decimal number is less than the comparison value.
+	OpLessNum Comparator = 12
+	// OpLessEqNum matches when the comparison attribute interpreted as a decimal number is less than or equal to the comparison value.
+	OpLessEqNum Comparator = 13
+	// OpGreaterNum matches when the comparison attribute interpreted as a decimal number is greater than the comparison value.
+	OpGreaterNum Comparator = 14
+	// OpGreaterEqNum matches when the comparison attribute interpreted as a decimal number is greater than or equal to the comparison value.
+	OpGreaterEqNum Comparator = 15
+	// OpOneOfHashed matches when the comparison attribute is equal to any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	OpOneOfHashed Comparator = 16
+	// OpNotOneOfHashed matches when the comparison attribute is not equal to any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	OpNotOneOfHashed Comparator = 17
+	// OpBeforeDateTime matches when the comparison attribute interpreted as the seconds elapsed since Unix Epoch is less than the comparison value.
+	OpBeforeDateTime Comparator = 18
+	// OpAfterDateTime matches when the comparison attribute interpreted as the seconds elapsed since Unix Epoch is greater than the comparison value.
+	OpAfterDateTime Comparator = 19
+	// OpEqHashed matches when the comparison attribute is equal to the comparison value (where the comparison is performed using the salted SHA256 hashes of the values).
+	OpEqHashed Comparator = 20
+	// OpNotEqHashed matches when the comparison attribute is not equal to the comparison value (where the comparison is performed using the salted SHA256 hashes of the values).
+	OpNotEqHashed Comparator = 21
+	// OpStartsWithAnyOfHashed matches when the comparison attribute starts with any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	OpStartsWithAnyOfHashed Comparator = 22
+	// OpNotStartsWithAnyOfHashed matches when the comparison attribute does not start with any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	OpNotStartsWithAnyOfHashed Comparator = 23
+	// OpEndsWithAnyOfHashed matches when the comparison attribute ends with any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	OpEndsWithAnyOfHashed Comparator = 24
+	// OpNotEndsWithAnyOfHashed matches when the comparison attribute does not end with any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	OpNotEndsWithAnyOfHashed Comparator = 25
+	// OpArrayContainsAnyOfHashed matches when the comparison attribute interpreted as a string list contains any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	OpArrayContainsAnyOfHashed Comparator = 26
+	// OpArrayNotContainsAnyOfHashed matches when the comparison attribute interpreted as a string list does not contain any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
 	OpArrayNotContainsAnyOfHashed Comparator = 27
-	OpEq                          Comparator = 28
-	OpNotEq                       Comparator = 29
-	OpStartsWithAnyOf             Comparator = 30
-	OpNotStartsWithAnyOf          Comparator = 31
-	OpEndsWithAnyOf               Comparator = 32
-	OpNotEndsWithAnyOf            Comparator = 33
-	OpArrayContainsAnyOf          Comparator = 34
-	OpArrayNotContainsAnyOf       Comparator = 35
+	// OpEq matches when the comparison attribute is equal to the comparison value.
+	OpEq Comparator = 28
+	// OpNotEq matches when the comparison attribute is not equal to the comparison value.
+	OpNotEq Comparator = 29
+	// OpStartsWithAnyOf matches when the comparison attribute starts with any of the comparison values.
+	OpStartsWithAnyOf Comparator = 30
+	// OpNotStartsWithAnyOf matches when the comparison attribute does not start with any of the comparison values.
+	OpNotStartsWithAnyOf Comparator = 31
+	// OpEndsWithAnyOf matches when the comparison attribute ends with any of the comparison values.
+	OpEndsWithAnyOf Comparator = 32
+	// OpNotEndsWithAnyOf matches when the comparison attribute does not end with any of the comparison values.
+	OpNotEndsWithAnyOf Comparator = 33
+	// OpArrayContainsAnyOf matches when the comparison attribute interpreted as a string list contains any of the comparison values.
+	OpArrayContainsAnyOf Comparator = 34
+	// OpArrayNotContainsAnyOf matches when the comparison attribute interpreted as a string list does not contain any of the comparison values.
+	OpArrayNotContainsAnyOf Comparator = 35
 )
 
+// PrerequisiteComparator is the prerequisite flag comparison operator used during the evaluation process.
 type PrerequisiteComparator uint8
 
 const (
-	OpPrerequisiteEq    PrerequisiteComparator = 0
+	// OpPrerequisiteEq matches when the evaluated value of the specified prerequisite flag is equal to the comparison value.
+	OpPrerequisiteEq PrerequisiteComparator = 0
+	// OpPrerequisiteNotEq matches when the evaluated value of the specified prerequisite flag is not equal to the comparison value.
 	OpPrerequisiteNotEq PrerequisiteComparator = 1
 )
 
+// SegmentComparator is the segment comparison operator used during the evaluation process.
 type SegmentComparator uint8
 
 const (
-	OpSegmentIsIn    SegmentComparator = 0
+	// OpSegmentIsIn matches when the conditions of the specified segment are evaluated to true.
+	OpSegmentIsIn SegmentComparator = 0
+	// OpSegmentIsNotIn matches when the conditions of the specified segment are evaluated to false.
 	OpSegmentIsNotIn SegmentComparator = 1
 )
 
