@@ -43,7 +43,6 @@ func TestGetStringOrBytes(t *testing.T) {
 		{uint16(1), "1"},
 		{uint32(1), "1"},
 		{uint64(1), "1"},
-		{uintptr(1), "1"},
 		{-1, "-1"},
 		{1.5, "1.5"},
 		{float32(1.5), "1.5"},
@@ -78,7 +77,6 @@ func TestGetFloat(t *testing.T) {
 		{uint16(1), float64(1)},
 		{uint32(1), float64(1)},
 		{uint64(1), float64(1)},
-		{uintptr(1), float64(1)},
 		{-1, float64(-1)},
 		{1.5, 1.5},
 		{float32(1.5), 1.5},
@@ -89,9 +87,28 @@ func TestGetFloat(t *testing.T) {
 	for _, test := range tests {
 		for _, user := range testUsers(test.attr, "X") {
 			runTest(fmt.Sprintf("%v-%v", user, test.attr), user, test.exp, t, func(info *userTypeInfo, value reflect.Value) (interface{}, error) {
-				return info.getFloat(value, "X")
+				return info.getFloat(value, "X", true)
 			})
 		}
+	}
+}
+
+func TestGetFloatShouldNotRecogniseTime(t *testing.T) {
+	c := qt.New(t)
+	val := time.UnixMilli(1702217953 * 1000)
+	for _, user := range testUsers(val, "X") {
+		t.Run(fmt.Sprintf("%v", user), func(t *testing.T) {
+			userVal := reflect.ValueOf(user)
+			info, err := newUserTypeInfo(userVal.Type())
+			c.Assert(err, qt.IsNil)
+			usr := userVal
+			if info.deref {
+				usr = userVal.Elem()
+			}
+			actual, err := info.getFloat(usr, "X", false)
+			c.Assert(actual, qt.Equals, float64(0))
+			c.Assert(err.Error(), qt.Equals, "cannot evaluate, the User.X attribute is invalid ('2023-12-10 15:19:13 +0100 CET' is not a valid decimal number)")
+		})
 	}
 }
 

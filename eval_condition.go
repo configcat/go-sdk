@@ -151,13 +151,19 @@ func segmentConditionMatcher(segmentCondition *SegmentCondition, key string, con
 		if builder != nil {
 			builder.newLineString("Segment evaluation result: ")
 			if resErr != nil {
-				builder.append(resErr.Error())
+				builder.append(resErr.Error() + ".")
 			} else {
 				resOp := OpSegmentIsNotIn
 				if result {
 					resOp = OpSegmentIsIn
 				}
-				builder.append(fmt.Sprintf("User %s", resOp.String()))
+				builder.append(fmt.Sprintf("User %s.", resOp.String()))
+			}
+			builder.newLineString(fmt.Sprintf("Condition (User %s '%s')", op.String(), name))
+			if resErr != nil {
+				builder.append(" failed to evaluate.")
+			} else {
+				builder.append(fmt.Sprintf(" evaluates to %v.", result == needsTrue))
 			}
 			builder.decIndent().newLineString(")")
 		}
@@ -608,7 +614,7 @@ func numberCompareMatcher(comparisonAttribute string, comparisonValue *float64, 
 		if info == nil {
 			return false, noUser
 		}
-		userVal, err := info.getFloat(user, comparisonAttribute)
+		userVal, err := info.getFloat(user, comparisonAttribute, false)
 		if err != nil {
 			return false, err
 		}
@@ -628,7 +634,7 @@ func dateTimeMatcher(comparisonAttribute string, comparisonValue *float64, op Co
 		if info == nil {
 			return false, noUser
 		}
-		userVal, err := info.getFloat(user, comparisonAttribute)
+		userVal, err := info.getFloat(user, comparisonAttribute, true)
 		if err != nil || math.IsNaN(userVal) {
 			return false, err
 		}

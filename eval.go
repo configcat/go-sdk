@@ -259,7 +259,7 @@ type attrInfo struct {
 	asString      func(v reflect.Value) (string, bool)
 	asBytes       func(v reflect.Value) ([]byte, bool)
 	asSemver      func(v reflect.Value) (*semver.Version, error)
-	asFloat       func(v reflect.Value) (float64, error)
+	asFloat       func(v reflect.Value, acceptTime bool) (float64, error)
 	asStringSlice func(v reflect.Value) ([]string, error)
 }
 
@@ -349,7 +349,7 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 			asSemver: func(v reflect.Value) (*semver.Version, error) {
 				return parseSemver(strings.TrimSpace(v.FieldByIndex(field.Index).String()))
 			},
-			asFloat: func(v reflect.Value) (float64, error) {
+			asFloat: func(v reflect.Value, _ bool) (float64, error) {
 				return parseFloat(strings.TrimSpace(v.FieldByIndex(field.Index).String()))
 			},
 			asStringSlice: func(v reflect.Value) ([]string, error) {
@@ -368,7 +368,7 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 				asSemver: func(v reflect.Value) (*semver.Version, error) {
 					return parseSemver(strings.TrimSpace(string(v.FieldByIndex(field.Index).Bytes())))
 				},
-				asFloat: func(v reflect.Value) (float64, error) {
+				asFloat: func(v reflect.Value, _ bool) (float64, error) {
 					return parseFloat(strings.TrimSpace(string(v.FieldByIndex(field.Index).Bytes())))
 				},
 				asStringSlice: func(v reflect.Value) ([]string, error) {
@@ -414,11 +414,11 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 			asBytes: func(v reflect.Value) ([]byte, bool) {
 				return strconv.AppendInt(nil, v.FieldByIndex(field.Index).Int(), 10), true
 			},
-			asFloat: func(v reflect.Value) (float64, error) {
+			asFloat: func(v reflect.Value, _ bool) (float64, error) {
 				return float64(v.FieldByIndex(field.Index).Int()), nil
 			},
 		}, nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return attrInfo{
 			asString: func(v reflect.Value) (string, bool) {
 				return strconv.FormatUint(v.FieldByIndex(field.Index).Uint(), 10), true
@@ -426,7 +426,7 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 			asBytes: func(v reflect.Value) ([]byte, bool) {
 				return strconv.AppendUint(nil, v.FieldByIndex(field.Index).Uint(), 10), true
 			},
-			asFloat: func(v reflect.Value) (float64, error) {
+			asFloat: func(v reflect.Value, _ bool) (float64, error) {
 				return float64(v.FieldByIndex(field.Index).Uint()), nil
 			},
 		}, nil
@@ -438,15 +438,20 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 			asBytes: func(v reflect.Value) ([]byte, bool) {
 				return strconv.AppendFloat(nil, v.FieldByIndex(field.Index).Float(), 'f', -1, 64), true
 			},
-			asFloat: func(v reflect.Value) (float64, error) {
+			asFloat: func(v reflect.Value, _ bool) (float64, error) {
 				return v.FieldByIndex(field.Index).Float(), nil
 			},
 		}, nil
 	case reflect.Struct:
 		if field.Type == timeType {
 			return attrInfo{
-				asFloat: func(v reflect.Value) (float64, error) {
-					return float64(v.FieldByIndex(field.Index).Interface().(time.Time).UnixMilli()) / 1000, nil
+				asFloat: func(v reflect.Value, acceptTime bool) (float64, error) {
+					if acceptTime {
+						return float64(v.FieldByIndex(field.Index).Interface().(time.Time).UnixMilli()) / 1000, nil
+					} else {
+						val := v.FieldByIndex(field.Index).Interface().(time.Time)
+						return 0, fmt.Errorf("'%v' is not a valid decimal number", val)
+					}
 				},
 			}, nil
 		}
@@ -509,8 +514,6 @@ func (t *userTypeInfo) getString(v reflect.Value, attr string) (string, bool, er
 			return strconv.FormatInt(val, 10), true, nil
 		case uint64:
 			return strconv.FormatUint(val, 10), true, nil
-		case uintptr:
-			return strconv.FormatUint(uint64(val), 10), true, nil
 		case time.Time:
 			return strconv.FormatFloat(float64(val.UnixMilli())/1000.0, 'f', -1, 64), true, nil
 		}
@@ -563,8 +566,6 @@ func (t *userTypeInfo) getBytes(v reflect.Value, attr string) ([]byte, bool, err
 			return strconv.AppendInt(nil, val, 10), true, nil
 		case uint64:
 			return strconv.AppendUint(nil, val, 10), true, nil
-		case uintptr:
-			return strconv.AppendUint(nil, uint64(val), 10), true, nil
 		case time.Time:
 			return strconv.AppendFloat(nil, float64(val.UnixMilli())/1000.0, 'f', -1, 64), true, nil
 		}
@@ -599,10 +600,10 @@ func (t *userTypeInfo) getSemver(v reflect.Value, attr string) (*semver.Version,
 	return nil, &userAttrMissingError{attr: attr}
 }
 
-func (t *userTypeInfo) getFloat(v reflect.Value, attr string) (float64, error) {
+func (t *userTypeInfo) getFloat(v reflect.Value, attr string, acceptTime bool) (float64, error) {
 	info, ok := t.fields[attr]
 	if ok && info.asFloat != nil {
-		res, err := info.asFloat(v)
+		res, err := info.asFloat(v, acceptTime)
 		if err != nil {
 			return 0, &userAttrError{attr: attr, err: err}
 		}
@@ -646,10 +647,12 @@ func (t *userTypeInfo) getFloat(v reflect.Value, attr string) (float64, error) {
 			return float64(val), nil
 		case uint64:
 			return float64(val), nil
-		case uintptr:
-			return float64(val), nil
 		case time.Time:
-			return float64(val.UnixMilli()) / 1000, nil
+			if acceptTime {
+				return float64(val.UnixMilli()) / 1000, nil
+			} else {
+				return 0, &userAttrError{attr: attr, err: fmt.Errorf("'%v' is not a valid decimal number", val)}
+			}
 		default:
 			return 0, &userAttrError{attr: attr, err: fmt.Errorf("cannot convert '%v' to float64", val)}
 		}

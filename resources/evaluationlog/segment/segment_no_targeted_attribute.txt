@@ -5,7 +5,8 @@ Evaluating targeting rules and applying the first match if any:
   (
     Evaluating segment 'Beta users (cleartext)':
     - IF User.Email IS ONE OF ['jane@example.com', 'john@example.com'] => false, skipping the remaining AND conditions
-    Segment evaluation result: cannot evaluate, the User.Email attribute is missing
+    Segment evaluation result: cannot evaluate, the User.Email attribute is missing.
+    Condition (User IS NOT IN SEGMENT 'Beta users (cleartext)') failed to evaluate.
   ) => true
   THEN 'true' => cannot evaluate, the User.Email attribute is missing
   The current targeting rule is ignored and the evaluation continues with the next rule.

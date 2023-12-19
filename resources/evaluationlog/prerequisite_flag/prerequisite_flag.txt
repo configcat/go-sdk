@@ -11,13 +11,15 @@ Evaluating targeting rules and applying the first match if any:
       (
         Evaluating segment 'Beta Users':
         - IF User.Email IS ONE OF [<2 hashed values>] => false, skipping the remaining AND conditions
-        Segment evaluation result: User IS NOT IN SEGMENT
+        Segment evaluation result: User IS NOT IN SEGMENT.
+        Condition (User IS NOT IN SEGMENT 'Beta Users') evaluates to true.
       ) => true
       AND User IS NOT IN SEGMENT 'Developers'
       (
         Evaluating segment 'Developers':
         - IF User.Email IS ONE OF [<2 hashed values>] => false, skipping the remaining AND conditions
-        Segment evaluation result: User IS NOT IN SEGMENT
+        Segment evaluation result: User IS NOT IN SEGMENT.
+        Condition (User IS NOT IN SEGMENT 'Developers') evaluates to true.
       ) => true
       THEN 'target' => MATCH, applying rule
     Returning 'target'.
