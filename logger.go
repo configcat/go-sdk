@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	LogLevelDebug = -2
-	LogLevelInfo  = -1
-	LogLevelWarn  = 0
-	LogLevelError = 1
-	LogLevelNone  = 2
+	LogLevelDebug LogLevel = -2
+	LogLevelInfo  LogLevel = -1
+	LogLevelWarn  LogLevel = 0
+	LogLevelError LogLevel = 1
+	LogLevelNone  LogLevel = 2
 )
 
 type LogLevel int
