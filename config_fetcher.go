@@ -78,7 +78,7 @@ func newConfigFetcher(cfg Config, logger *leveledLogger, defaultUser User) fetch
 	f := &configFetcher{
 		sdkKey:    cfg.SDKKey,
 		cache:     cfg.Cache,
-		cacheKey:  configcatcache.ProduceCacheKey(cfg.SDKKey, configcatcache.ConfigJSONCacheVersion, configcatcache.ConfigJSONName),
+		cacheKey:  configcatcache.ProduceCacheKey(cfg.SDKKey, configcatcache.ConfigJSONName, configcatcache.ConfigJSONCacheVersion),
 		overrides: cfg.FlagOverrides,
 		hooks:     cfg.Hooks,
 		logger:    logger,

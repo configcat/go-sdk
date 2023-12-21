@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/configcat/go-sdk/v9/configcatcache"
 	"io/ioutil"
 	"net/http"
 	"reflect"
@@ -954,8 +953,21 @@ func TestClient_OfflineOnlineMode(t *testing.T) {
 
 func TestCacheKey(t *testing.T) {
 	c := qt.New(t)
-	c.Assert(configcatcache.ProduceCacheKey("test1", configcatcache.ConfigJSONName, configcatcache.ConfigJSONCacheVersion), qt.Equals, "7f845c43ecc95e202b91e271435935e6d1391e5d")
-	c.Assert(configcatcache.ProduceCacheKey("test2", configcatcache.ConfigJSONName, configcatcache.ConfigJSONCacheVersion), qt.Equals, "a78b7e323ef543a272c74540387566a22415148a")
+	tests := []struct {
+		key      string
+		cacheKey string
+	}{
+		{"test1", "7f845c43ecc95e202b91e271435935e6d1391e5d"},
+		{"test2", "a78b7e323ef543a272c74540387566a22415148a"},
+	}
+
+	l := newTestLogger(t)
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+			f := newConfigFetcher(Config{SDKKey: test.key, PollingMode: Manual}, newLeveledLogger(l, LogLevelWarn, nil), nil).(*configFetcher)
+			c.Assert(f.cacheKey, qt.Equals, test.cacheKey)
+		})
+	}
 }
 
 func TestSdkKeyValidation(t *testing.T) {
