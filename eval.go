@@ -279,7 +279,7 @@ func newUserTypeInfo(userType reflect.Type) (*userTypeInfo, error) {
 	if userType == nil {
 		return nil, nil
 	}
-	if userType.AssignableTo(anyMapType) {
+	if userType == anyMapType {
 		return &userTypeInfo{
 			getAttribute: func(v reflect.Value, attr string) interface{} {
 				return v.Interface().(map[string]interface{})[attr]
