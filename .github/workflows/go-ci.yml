@@ -42,7 +42,10 @@ jobs:
         go-version: 1.x
         
     - name: Run Coverage
-      run: go test -coverprofile=coverage.txt -covermode=atomic
-    
-    - name: Upload Report
-      run: bash <(curl -s https://codecov.io/bash)
+      run: go test -coverprofile=coverage.out -covermode=atomic ./...
+
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

@@ -9,9 +9,9 @@ ConfigCat is a <a target="_blank" href="https://configcat.com">hosted feature fl
 
 [![Build Status](https://github.com/configcat/go-sdk/actions/workflows/go-ci.yml/badge.svg?branch=v9)](https://github.com/configcat/go-sdk/actions/workflows/go-ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/configcat/go-sdk/v9)](https://goreportcard.com/report/github.com/configcat/go-sdk/v9)
-[![codecov](https://codecov.io/gh/configcat/go-sdk/branch/v9/graph/badge.svg)](https://codecov.io/gh/configcat/go-sdk)
 [![GoDoc](https://godoc.org/github.com/configcat/go-sdk?status.svg)](https://pkg.go.dev/github.com/configcat/go-sdk/v9)
-![License](https://img.shields.io/github/license/configcat/go-sdk.svg)
+[![Sonar Coverage](https://img.shields.io/sonar/coverage/configcat_go-sdk?logo=SonarCloud&server=https%3A%2F%2Fsonarcloud.io)](https://sonarcloud.io/project/overview?id=configcat_go-sdk)
+[![Sonar Quality Gate](https://img.shields.io/sonar/quality_gate/configcat_go-sdk?logo=sonarcloud&server=https%3A%2F%2Fsonarcloud.io)](https://sonarcloud.io/project/overview?id=configcat_go-sdk)
 
 ## Getting started
 
