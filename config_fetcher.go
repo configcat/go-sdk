@@ -394,7 +394,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 		if os.IsTimeout(err) {
 			return nil, &fetcherError{EventId: 1102, Err: fmt.Errorf("request timed out while trying to fetch config JSON. (timeout value: %dms) %v", f.timeout.Milliseconds(), err)}
 		} else {
-			return nil, &fetcherError{EventId: 1103, Err: fmt.Errorf("unexpected error occurred while trying to fetch config JSON: %v", err)}
+			return nil, &fetcherError{EventId: 1103, Err: fmt.Errorf("unexpected error occurred while trying to fetch config JSON; it is most likely due to a local network issue; please make sure your application can reach the ConfigCat CDN servers (or your proxy server) over HTTP: %v", err)}
 		}
 	}
 	defer response.Body.Close()
@@ -407,7 +407,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 	if response.StatusCode >= 200 && response.StatusCode < 300 {
 		body, err := io.ReadAll(response.Body)
 		if err != nil {
-			return nil, &fetcherError{EventId: 1103, Err: fmt.Errorf("unexpected error occurred while trying to fetch config JSON; read failed: %v", err)}
+			return nil, &fetcherError{EventId: 1103, Err: fmt.Errorf("unexpected error occurred while trying to fetch config JSON; it is most likely due to a local network issue; please make sure your application can reach the ConfigCat CDN servers (or your proxy server) over HTTP: %v", err)}
 		}
 		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now(), f.logger, f.defaultUser, f.overrides, f.hooks)
 		if err != nil {

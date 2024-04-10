@@ -90,6 +90,48 @@ func TestHandlerWithUser(t *testing.T) {
 	})), qt.Equals, 99)
 }
 
+func TestHandlerWithPercentage(t *testing.T) {
+	c := qt.New(t)
+	k := configcattest.RandomSDKKey()
+	var h configcattest.Handler
+	err := h.SetFlags(k, map[string]*configcattest.Flag{
+		"someflag": {
+			PercentageEvalAttribute: "foo",
+			Default:                 99,
+			Percentages: []configcattest.PercentageOption{{
+				Percentage: 30,
+				Value:      30,
+			}, {
+				Percentage: 70,
+				Value:      70,
+			}},
+		},
+	})
+	c.Assert(err, qt.IsNil)
+	srv := httptest.NewServer(&h)
+	defer srv.Close()
+	client := configcat.NewCustomClient(configcat.Config{
+		BaseURL: srv.URL,
+		SDKKey:  k,
+	})
+	defer client.Close()
+	flag := configcat.Int("someflag", 1)
+	c.Assert(flag.Get(client.Snapshot(nil)), qt.Equals, 99)
+
+	type user struct {
+		Foo string `configcat:"foo"`
+	}
+	c.Assert(flag.Get(client.Snapshot(&user{
+		Foo: "something",
+	})), qt.Equals, 70)
+	c.Assert(flag.Get(client.Snapshot(&user{
+		Foo: "dwvhyauiwdvyiu",
+	})), qt.Equals, 70)
+	c.Assert(flag.Get(client.Snapshot(&user{
+		Foo: "pjhiboub;ib",
+	})), qt.Equals, 30)
+}
+
 var invalidFlagsTests = []struct {
 	testName    string
 	flag        *configcattest.Flag
