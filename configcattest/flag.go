@@ -117,11 +117,12 @@ func (f *Flag) entry(key string) (*configcat.Setting, error) {
 		})
 	}
 	if len(f.Percentages) > 0 {
-		for _, p := range f.Percentages {
+		for i, p := range f.Percentages {
 			e.TargetingRules = append(e.TargetingRules, &configcat.TargetingRule{
 				PercentageOptions: []*configcat.PercentageOption{{
-					Percentage: p.Percentage,
-					Value:      &configcat.SettingValue{Value: p.Value},
+					Percentage:  p.Percentage,
+					Value:       &configcat.SettingValue{Value: p.Value},
+					VariationID: fmt.Sprintf("v%d_%s", i, key),
 				}},
 			})
 		}
