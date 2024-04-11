@@ -504,6 +504,18 @@ func TestClient_GetWithInvalidConfig(t *testing.T) {
 	c.Assert(result, qt.Equals, "default")
 }
 
+func TestClient_GetDetails_WithInvalidConfig(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponse(configResponse{body: "invalid-json"})
+	client.Refresh(context.Background())
+	result := client.GetStringValueDetails("key", "default", nil)
+	_, ok := result.Data.Error.(ErrConfigJsonMissing)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(result.Data.IsDefaultValue, qt.IsTrue)
+	c.Assert(result.Value, qt.Equals, "default")
+}
+
 func TestClient_GetInt(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
@@ -747,6 +759,66 @@ func TestClient_GetFloatDetails_NotExist(t *testing.T) {
 
 	details := client.GetFloatValueDetails("non-existent", 0, nil)
 	_, ok := details.Data.Error.(ErrKeyNotFound)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(details.Value, qt.Equals, float64(0))
+}
+
+func TestClient_GetBoolDetails_TypeMismatch(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	details := client.GetBoolValueDetails("integerDefaultOne", false, nil)
+	_, ok := details.Data.Error.(ErrSettingTypeMismatch)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(details.Value, qt.IsFalse)
+}
+
+func TestClient_GetStringDetails_TypeMismatch(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	details := client.GetStringValueDetails("integerDefaultOne", "", nil)
+	_, ok := details.Data.Error.(ErrSettingTypeMismatch)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(details.Value, qt.Equals, "")
+}
+
+func TestClient_GetIntDetails_TypeMismatch(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	details := client.GetIntValueDetails("boolDefaultTrue", 0, nil)
+	_, ok := details.Data.Error.(ErrSettingTypeMismatch)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(details.Value, qt.Equals, 0)
+}
+
+func TestClient_GetFloatDetails_TypeMismatch(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	details := client.GetFloatValueDetails("boolDefaultTrue", 0, nil)
+	_, ok := details.Data.Error.(ErrSettingTypeMismatch)
 	c.Assert(ok, qt.IsTrue)
 	c.Assert(details.Value, qt.Equals, float64(0))
 }
