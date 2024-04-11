@@ -78,7 +78,7 @@ func TestOpCmpNumWithInvalidCmpVal(t *testing.T) {
 				testName: fmt.Sprintf("%T-%v", tv, op),
 				op:       op,
 				cmpVal:   "badnum",
-				want:     false,
+				isDef:    true,
 			}).run(c, ectx, newTestStruct(reflect.ValueOf(tv)))
 		}
 	}
@@ -580,6 +580,8 @@ type opTest struct {
 	cmpVal string
 	// want holds the expected result of the test.
 	want bool
+	// isDef indicates whether we expect the default value.
+	isDef bool
 }
 
 func (test *opTest) run(c *qt.C, ectx *evalTestContext, user User) {
@@ -627,6 +629,9 @@ func (test *opTest) run(c *qt.C, ectx *evalTestContext, user User) {
 		want := "false"
 		if test.want {
 			want = "true"
+		}
+		if test.isDef {
+			want = ""
 		}
 		c.Check(ectx.client.GetStringValue("key", "", user), qt.Equals, want, qt.Commentf("user: %#v", user))
 	})

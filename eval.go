@@ -119,6 +119,9 @@ func settingEvaluator(setting *Setting, key string, salt []byte, evaluators []se
 						logger.Warnf(3004, "cannot evaluate certain targeting rules of setting '%s' (the User.%s attribute is invalid (%s)); please check the User.%s attribute and make sure that its value corresponds to the comparison operator", key, attrErr.attr, attrErr.err.Error(), attrErr.attr)
 					case errors.As(err, &cmpValErr):
 						logger.Warnf(3004, "cannot evaluate certain targeting rules of setting '%s' (%s)", key, cmpValErr.Error())
+						if cmpValErr.fatal {
+							return 0, "", nil, nil, err
+						}
 					case errors.As(err, &fatalEvalErr):
 						return 0, "", nil, nil, err
 					}
