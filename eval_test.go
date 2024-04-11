@@ -583,6 +583,35 @@ func TestNilCompValues(t *testing.T) {
 	}
 }
 
+func TestFatalEvalNoUser(t *testing.T) {
+	c := qt.New(t)
+	ectx := newEvalTestContext(c)
+	ectx.srv.setResponseJSON(&ConfigJson{
+		Settings: map[string]*Setting{
+			"key": {
+				Type:  StringSetting,
+				Value: &SettingValue{Value: "false"},
+				TargetingRules: []*TargetingRule{{
+					Conditions: []*Condition{{
+						UserCondition: &UserCondition{
+							ComparisonAttribute: "Identifier",
+							Comparator:          OpOneOf,
+						},
+					}},
+					ServedValue: &ServedValue{
+						VariationID: "test",
+						Value:       &SettingValue{Value: "true"},
+					},
+				}},
+			},
+		},
+	})
+	ectx.client.Refresh(context.Background())
+
+	val := ectx.client.GetStringValue("key", "default", nil)
+	c.Assert(val, qt.Equals, "false")
+}
+
 func TestNoUser(t *testing.T) {
 	c := qt.New(t)
 	ectx := newEvalTestContext(c)

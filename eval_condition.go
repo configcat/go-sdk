@@ -714,6 +714,9 @@ func falseWithCompErrorMatcher(comparisonAttribute string, comparisonValue inter
 		if builder != nil {
 			builder.appendUserCondition(comparisonAttribute, op, comparisonValue)
 		}
+		if info == nil {
+			return false, noUser
+		}
 		return false, &comparisonValueError{value: comparisonValue, attr: comparisonAttribute, err: err, fatal: fatal}
 	}
 }
