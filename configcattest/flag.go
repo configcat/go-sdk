@@ -33,6 +33,12 @@ type Flag struct {
 	// If any rule is satisfied, its associated value is used,
 	// otherwise the default value is used.
 	Rules []Rule
+
+	// Percentages holds a set of percentage options to evaluate.
+	Percentages []PercentageOption
+
+	// PercentageEvalAttribute is the User Object attribute which serves as the basis of percentage options evaluation.
+	PercentageEvalAttribute string
 }
 
 type Rule struct {
@@ -55,17 +61,24 @@ type Rule struct {
 	Value interface{}
 }
 
+type PercentageOption struct {
+	Percentage int64
+	Value      interface{}
+}
+
 func (f *Flag) entry(key string) (*configcat.Setting, error) {
 	ft := typeOf(f.Default)
 	if ft == invalidType {
 		return nil, fmt.Errorf("invalid type %T for default value %#v", f.Default, f.Default)
 	}
 	e := &configcat.Setting{
-		VariationID:    "v_" + key,
-		Type:           ft,
-		Value:          &configcat.SettingValue{Value: f.Default},
-		TargetingRules: make([]*configcat.TargetingRule, 0, len(f.Rules)),
+		PercentageOptionsAttribute: f.PercentageEvalAttribute,
+		VariationID:                "v_" + key,
+		Type:                       ft,
+		Value:                      &configcat.SettingValue{Value: f.Default},
+		TargetingRules:             make([]*configcat.TargetingRule, 0, len(f.Rules)),
 	}
+
 	for i, rule := range f.Rules {
 		if rule.Comparator.String() == "" {
 			return nil, fmt.Errorf("invalid comparator value %d", rule.Comparator)
@@ -102,6 +115,16 @@ func (f *Flag) entry(key string) (*configcat.Setting, error) {
 				VariationID: fmt.Sprintf("v%d_%s", i, key),
 			},
 		})
+	}
+	if len(f.Percentages) > 0 {
+		for _, p := range f.Percentages {
+			e.TargetingRules = append(e.TargetingRules, &configcat.TargetingRule{
+				PercentageOptions: []*configcat.PercentageOption{{
+					Percentage: p.Percentage,
+					Value:      &configcat.SettingValue{Value: p.Value},
+				}},
+			})
+		}
 	}
 	return e, nil
 }

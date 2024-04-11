@@ -133,8 +133,8 @@ func TestRolloutIntegration(t *testing.T) {
 		}
 		qt.Assert(t, val, qt.Equals, test.expect)
 	}
-	runIntegrationTests(t, integration, LogLevelWarn, integrationTestSuites, testFunc)
-	runIntegrationTests(t, integration, LogLevelWarn, integrationTestSuitesV2, testFunc)
+	runIntegrationTests(t, integration, integrationTestSuites, testFunc)
+	runIntegrationTests(t, integration, integrationTestSuitesV2, testFunc)
 }
 
 func TestRolloutConcurrent(t *testing.T) {
@@ -164,8 +164,8 @@ func TestRolloutConcurrent(t *testing.T) {
 		wg.Wait()
 	}
 	// Test that the caching works OK by running all the tests
-	runIntegrationTests(t, false, LogLevelWarn, integrationTestSuites, testFunc)
-	runIntegrationTests(t, false, LogLevelWarn, integrationTestSuitesV2, testFunc)
+	runIntegrationTests(t, false, integrationTestSuites, testFunc)
+	runIntegrationTests(t, false, integrationTestSuitesV2, testFunc)
 }
 
 func TestGenerateFiles(t *testing.T) {
@@ -173,12 +173,12 @@ func TestGenerateFiles(t *testing.T) {
 	generateJsonContentFile("resources/content-by-key.json", append(integrationTestSuites, integrationTestSuitesV2...))
 }
 
-func runIntegrationTests(t *testing.T, integration bool, logLevel LogLevel, suite []integrationTestSuite, runTest func(t *testing.T, test integrationTest)) {
+func runIntegrationTests(t *testing.T, integration bool, suite []integrationTestSuite, runTest func(t *testing.T, test integrationTest)) {
 	for _, test := range suite {
 		test := test
 		t.Run(test.fileName, func(t *testing.T) {
 			t.Parallel()
-			test.runTests(t, integration, logLevel, runTest)
+			test.runTests(t, integration, runTest)
 		})
 	}
 }
@@ -196,7 +196,7 @@ type integrationTest struct {
 	expect interface{}
 }
 
-func (test integrationTestSuite) runTests(t *testing.T, integration bool, logLevel LogLevel, runTest func(t *testing.T, test integrationTest)) {
+func (test integrationTestSuite) runTests(t *testing.T, integration bool, runTest func(t *testing.T, test integrationTest)) {
 	var cfg Config
 	if !integration {
 		srv := newConfigServerWithKey(t, test.sdkKey)
@@ -205,7 +205,6 @@ func (test integrationTestSuite) runTests(t *testing.T, integration bool, logLev
 	}
 	tlogger := newTestLogger(t).(*testLogger)
 	cfg.Logger = tlogger
-	cfg.LogLevel = logLevel
 	cfg.SDKKey = test.sdkKey
 	client := NewCustomClient(cfg)
 	defer client.Close()
@@ -250,7 +249,7 @@ func (test integrationTestSuite) runTests(t *testing.T, integration bool, logLev
 				}
 				user = userVal
 			}
-			if logLevel <= LogLevelInfo {
+			if cfg.LogLevel <= LogLevelInfo {
 				t.Logf("user %#v", user)
 			}
 

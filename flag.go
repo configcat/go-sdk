@@ -1,7 +1,6 @@
 package configcat
 
 import (
-	"fmt"
 	"sync"
 )
 
@@ -84,7 +83,7 @@ func (f BoolFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
 	}
 	boolVal, ok := details.Value.(bool)
 	if !ok {
-		return produceDetailsWithError(f.key, f.defaultValue, snap, fmt.Errorf("could not convert %s to bool", details.Value))
+		return produceDetailsWithError(f.key, f.defaultValue, snap, ErrSettingTypeMismatch{Key: f.key, ExpectedType: "bool", Value: details.Value})
 	}
 	details.Value = boolVal
 	return details
@@ -144,7 +143,7 @@ func (f IntFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
 	}
 	intVal, ok := convertInt(details.Value)
 	if !ok {
-		return produceDetailsWithError(f.key, f.defaultValue, snap, fmt.Errorf("could not convert %s to int", details.Value))
+		return produceDetailsWithError(f.key, f.defaultValue, snap, ErrSettingTypeMismatch{Key: f.key, ExpectedType: "int", Value: details.Value})
 	}
 	details.Value = intVal
 	return details
@@ -204,7 +203,7 @@ func (f StringFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
 	}
 	stringVal, ok := details.Value.(string)
 	if !ok {
-		return produceDetailsWithError(f.key, f.defaultValue, snap, fmt.Errorf("could not convert %s to string", details.Value))
+		return produceDetailsWithError(f.key, f.defaultValue, snap, ErrSettingTypeMismatch{Key: f.key, ExpectedType: "string", Value: details.Value})
 	}
 	details.Value = stringVal
 	return details
@@ -264,7 +263,7 @@ func (f FloatFlag) GetValueDetails(snap *Snapshot) EvaluationDetails {
 	}
 	floatVal, ok := details.Value.(float64)
 	if !ok {
-		return produceDetailsWithError(f.key, f.defaultValue, snap, fmt.Errorf("could not convert %s to float64", details.Value))
+		return produceDetailsWithError(f.key, f.defaultValue, snap, ErrSettingTypeMismatch{Key: f.key, ExpectedType: "float", Value: details.Value})
 	}
 	details.Value = floatVal
 	return details

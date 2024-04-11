@@ -504,6 +504,18 @@ func TestClient_GetWithInvalidConfig(t *testing.T) {
 	c.Assert(result, qt.Equals, "default")
 }
 
+func TestClient_GetDetails_WithInvalidConfig(t *testing.T) {
+	c := qt.New(t)
+	srv, client := getTestClients(t)
+	srv.setResponse(configResponse{body: "invalid-json"})
+	client.Refresh(context.Background())
+	result := client.GetStringValueDetails("key", "default", nil)
+	_, ok := result.Data.Error.(ErrConfigJsonMissing)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(result.Data.IsDefaultValue, qt.IsTrue)
+	c.Assert(result.Value, qt.Equals, "default")
+}
+
 func TestClient_GetInt(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
@@ -751,6 +763,70 @@ func TestClient_GetFloatDetails_NotExist(t *testing.T) {
 	c.Assert(details.Value, qt.Equals, float64(0))
 }
 
+func TestClient_GetBoolDetails_TypeMismatch(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	details := client.GetBoolValueDetails("integerDefaultOne", false, nil)
+	err, ok := details.Data.Error.(ErrSettingTypeMismatch)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(details.Value, qt.IsFalse)
+	c.Assert(err.Error(), qt.Equals, "the type of the setting 'integerDefaultOne' doesn't match with the expected type; setting's type was 'int' but the expected type was 'bool'")
+}
+
+func TestClient_GetStringDetails_TypeMismatch(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	details := client.GetStringValueDetails("integerDefaultOne", "", nil)
+	err, ok := details.Data.Error.(ErrSettingTypeMismatch)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(details.Value, qt.Equals, "")
+	c.Assert(err.Error(), qt.Equals, "the type of the setting 'integerDefaultOne' doesn't match with the expected type; setting's type was 'int' but the expected type was 'string'")
+}
+
+func TestClient_GetIntDetails_TypeMismatch(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	details := client.GetIntValueDetails("boolDefaultTrue", 0, nil)
+	err, ok := details.Data.Error.(ErrSettingTypeMismatch)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(details.Value, qt.Equals, 0)
+	c.Assert(err.Error(), qt.Equals, "the type of the setting 'boolDefaultTrue' doesn't match with the expected type; setting's type was 'bool' but the expected type was 'int'")
+}
+
+func TestClient_GetFloatDetails_TypeMismatch(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	srv.setResponse(configResponse{
+		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+	})
+	client := NewCustomClient(srv.config())
+	client.Refresh(context.Background())
+
+	details := client.GetFloatValueDetails("boolDefaultTrue", 0, nil)
+	err, ok := details.Data.Error.(ErrSettingTypeMismatch)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(details.Value, qt.Equals, float64(0))
+	c.Assert(err.Error(), qt.Equals, "the type of the setting 'boolDefaultTrue' doesn't match with the expected type; setting's type was 'bool' but the expected type was 'float'")
+}
+
 func TestClient_GetDetails_Reflected_User(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
@@ -957,8 +1033,8 @@ func TestCacheKey(t *testing.T) {
 		key      string
 		cacheKey string
 	}{
-		{"test1", "7f845c43ecc95e202b91e271435935e6d1391e5d"},
-		{"test2", "a78b7e323ef543a272c74540387566a22415148a"},
+		{"configcat-sdk-1/TEST_KEY-0123456789012/1234567890123456789012", "f83ba5d45bceb4bb704410f51b704fb6dfa19942"},
+		{"configcat-sdk-1/TEST_KEY2-123456789012/1234567890123456789012", "da7bfd8662209c8ed3f9db96daed4f8d91ba5876"},
 	}
 
 	l := newTestLogger(t)

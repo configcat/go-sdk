@@ -1,11 +1,13 @@
 package configcat
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"strconv"
@@ -117,6 +119,9 @@ func settingEvaluator(setting *Setting, key string, salt []byte, evaluators []se
 						logger.Warnf(3004, "cannot evaluate certain targeting rules of setting '%s' (the User.%s attribute is invalid (%s)); please check the User.%s attribute and make sure that its value corresponds to the comparison operator", key, attrErr.attr, attrErr.err.Error(), attrErr.attr)
 					case errors.As(err, &cmpValErr):
 						logger.Warnf(3004, "cannot evaluate certain targeting rules of setting '%s' (%s)", key, cmpValErr.Error())
+						if cmpValErr.fatal {
+							return 0, "", nil, nil, err
+						}
 					case errors.As(err, &fatalEvalErr):
 						return 0, "", nil, nil, err
 					}
@@ -433,10 +438,10 @@ func attrInfoForStructField(field reflect.StructField) (attrInfo, error) {
 	case reflect.Float32, reflect.Float64:
 		return attrInfo{
 			asString: func(v reflect.Value) (string, bool) {
-				return strconv.FormatFloat(v.FieldByIndex(field.Index).Float(), 'f', -1, 64), true
+				return strconv.FormatFloat(v.FieldByIndex(field.Index).Float(), 'g', 16, 64), true
 			},
 			asBytes: func(v reflect.Value) ([]byte, bool) {
-				return strconv.AppendFloat(nil, v.FieldByIndex(field.Index).Float(), 'f', -1, 64), true
+				return strconv.AppendFloat(nil, v.FieldByIndex(field.Index).Float(), 'g', 16, 64), true
 			},
 			asFloat: func(v reflect.Value, _ bool) (float64, error) {
 				return v.FieldByIndex(field.Index).Float(), nil
@@ -491,9 +496,18 @@ func (t *userTypeInfo) getString(v reflect.Value, attr string) (string, bool, er
 			b, _ := toJson(val)
 			return string(b), true, nil
 		case float32:
-			return strconv.FormatFloat(float64(val), 'f', -1, 64), true, nil
+			return strconv.FormatFloat(float64(val), 'g', 16, 64), true, nil
 		case float64:
-			return strconv.FormatFloat(val, 'f', -1, 64), true, nil
+			if math.IsNaN(val) {
+				return "NaN", true, nil
+			}
+			if math.IsInf(val, 1) {
+				return "Infinity", true, nil
+			}
+			if math.IsInf(val, -1) {
+				return "-Infinity", true, nil
+			}
+			return strconv.FormatFloat(val, 'g', 16, 64), true, nil
 		case int:
 			return strconv.FormatInt(int64(val), 10), true, nil
 		case uint:
@@ -543,9 +557,18 @@ func (t *userTypeInfo) getBytes(v reflect.Value, attr string) ([]byte, bool, err
 			b, _ := toJson(val)
 			return b, true, nil
 		case float32:
-			return strconv.AppendFloat(nil, float64(val), 'f', -1, 64), true, nil
+			return strconv.AppendFloat(nil, float64(val), 'g', 16, 64), true, nil
 		case float64:
-			return strconv.AppendFloat(nil, val, 'f', -1, 64), true, nil
+			if math.IsNaN(val) {
+				return []byte("NaN"), true, nil
+			}
+			if math.IsInf(val, 1) {
+				return []byte("Infinity"), true, nil
+			}
+			if math.IsInf(val, -1) {
+				return []byte("-Infinity"), true, nil
+			}
+			return strconv.AppendFloat(nil, val, 'g', 16, 64), true, nil
 		case int:
 			return strconv.AppendInt(nil, int64(val), 10), true, nil
 		case uint:
@@ -616,17 +639,36 @@ func (t *userTypeInfo) getFloat(v reflect.Value, attr string, acceptTime bool) (
 		case float32:
 			return float64(val), nil
 		case string:
-			res, err := parseFloat(strings.TrimSpace(val))
-			if err != nil {
-				return 0, &userAttrError{attr: attr, err: err}
+			switch val {
+			case "Infinity", "+Infinity":
+				return math.Inf(1), nil
+			case "-Infinity":
+				return math.Inf(-1), nil
+			case "NaN":
+				return math.NaN(), nil
+			default:
+				res, err := parseFloat(strings.TrimSpace(val))
+				if err != nil {
+					return 0, &userAttrError{attr: attr, err: err}
+				}
+				return res, nil
 			}
-			return res, nil
 		case []byte:
-			res, err := parseFloat(strings.TrimSpace(string(val)))
-			if err != nil {
-				return 0, &userAttrError{attr: attr, err: err}
+			stringVal := string(val)
+			switch stringVal {
+			case "Infinity", "+Infinity":
+				return math.Inf(1), nil
+			case "-Infinity":
+				return math.Inf(-1), nil
+			case "NaN":
+				return math.NaN(), nil
+			default:
+				res, err := parseFloat(strings.TrimSpace(stringVal))
+				if err != nil {
+					return 0, &userAttrError{attr: attr, err: err}
+				}
+				return res, nil
 			}
-			return res, nil
 		case int:
 			return float64(val), nil
 		case uint:
@@ -710,11 +752,14 @@ func parseStringSliceJson(s string) ([]string, error) {
 }
 
 func toJson(v interface{}) ([]byte, error) {
-	res, err := json.Marshal(v)
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(v)
 	if err != nil {
 		return nil, err
 	}
-	return res, nil
+	return bytes.TrimRight(buffer.Bytes(), "\n"), nil
 }
 
 type keyValue struct {

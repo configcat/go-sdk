@@ -4,29 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
-
-// ErrKeyNotFound is returned when a key is not found in the configuration.
-type ErrKeyNotFound struct {
-	Key           string
-	AvailableKeys []string
-}
-
-func (e ErrKeyNotFound) Error() string {
-	var availableKeys = ""
-	if len(e.AvailableKeys) > 0 {
-		availableKeys = "'" + strings.Join(e.AvailableKeys, "', '") + "'"
-	}
-	return fmt.Sprintf(
-		"failed to evaluate setting '%s' (the key was not found in config JSON); available keys: [%s]",
-		e.Key,
-		availableKeys,
-	)
-}
 
 // Snapshot holds a snapshot of the ConfigCat configuration.
 // A snapshot is immutable once taken.
@@ -223,6 +204,11 @@ func (snap *Snapshot) valueFromDetails(id keyID, key string) interface{} {
 func (snap *Snapshot) details(id keyID, key string) (interface{}, string, *TargetingRule, *PercentageOption, error) {
 	if snap == nil {
 		return nil, "", nil, nil, errors.New("snapshot is nil")
+	}
+	if snap.evaluators == nil {
+		err := ErrConfigJsonMissing{Key: key}
+		snap.logger.Errorf(1000, err.Error())
+		return nil, "", nil, nil, err
 	}
 	var eval settingEvalFunc
 	if int(id) < len(snap.evaluators) {

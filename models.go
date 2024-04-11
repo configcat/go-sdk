@@ -216,77 +216,77 @@ const (
 type Comparator uint8
 
 const (
-	// OpOneOf matches when the comparison attribute is equal to any of the comparison values.
+	// OpOneOf Checks whether the comparison attribute is equal to any of the comparison values.
 	OpOneOf Comparator = 0
-	// OpNotOneOf matches when the comparison attribute is not equal to any of the comparison values.
+	// OpNotOneOf Checks whether the comparison attribute is not equal to any of the comparison values.
 	OpNotOneOf Comparator = 1
-	// OpContains matches when the comparison attribute contains any comparison values as a substring.
+	// OpContains Checks whether the comparison attribute contains any comparison values as a substring.
 	OpContains Comparator = 2
-	// OpNotContains matches when the comparison attribute does not contain any comparison values as a substring.
+	// OpNotContains Checks whether the comparison attribute does not contain any comparison values as a substring.
 	OpNotContains Comparator = 3
-	// OpOneOfSemver matches when the comparison attribute interpreted as a semantic version is equal to any of the comparison values.
+	// OpOneOfSemver Checks whether the comparison attribute interpreted as a semantic version is equal to any of the comparison values.
 	OpOneOfSemver Comparator = 4
-	// OpNotOneOfSemver matches when the comparison attribute interpreted as a semantic version is not equal to any of the comparison values.
+	// OpNotOneOfSemver Checks whether the comparison attribute interpreted as a semantic version is not equal to any of the comparison values.
 	OpNotOneOfSemver Comparator = 5
-	// OpLessSemver matches when the comparison attribute interpreted as a semantic version is less than the comparison value.
+	// OpLessSemver Checks whether the comparison attribute interpreted as a semantic version is less than the comparison value.
 	OpLessSemver Comparator = 6
-	// OpLessEqSemver matches when the comparison attribute interpreted as a semantic version is less than or equal to the comparison value.
+	// OpLessEqSemver Checks whether the comparison attribute interpreted as a semantic version is less than or equal to the comparison value.
 	OpLessEqSemver Comparator = 7
-	// OpGreaterSemver matches when the comparison attribute interpreted as a semantic version is greater than the comparison value.
+	// OpGreaterSemver Checks whether the comparison attribute interpreted as a semantic version is greater than the comparison value.
 	OpGreaterSemver Comparator = 8
-	// OpGreaterEqSemver matches when the comparison attribute interpreted as a semantic version is greater than or equal to the comparison value.
+	// OpGreaterEqSemver Checks whether the comparison attribute interpreted as a semantic version is greater than or equal to the comparison value.
 	OpGreaterEqSemver Comparator = 9
-	// OpEqNum  when the comparison attribute interpreted as a decimal number is equal to the comparison value.
+	// OpEqNum Checks whether the comparison attribute interpreted as a decimal number is equal to the comparison value.
 	OpEqNum Comparator = 10
-	// OpNotEqNum matches when the comparison attribute interpreted as a decimal number is not equal to the comparison value.
+	// OpNotEqNum Checks whether the comparison attribute interpreted as a decimal number is not equal to the comparison value.
 	OpNotEqNum Comparator = 11
-	// OpLessNum matches when the comparison attribute interpreted as a decimal number is less than the comparison value.
+	// OpLessNum Checks whether the comparison attribute interpreted as a decimal number is less than the comparison value.
 	OpLessNum Comparator = 12
-	// OpLessEqNum matches when the comparison attribute interpreted as a decimal number is less than or equal to the comparison value.
+	// OpLessEqNum Checks whether the comparison attribute interpreted as a decimal number is less than or equal to the comparison value.
 	OpLessEqNum Comparator = 13
-	// OpGreaterNum matches when the comparison attribute interpreted as a decimal number is greater than the comparison value.
+	// OpGreaterNum Checks whether the comparison attribute interpreted as a decimal number is greater than the comparison value.
 	OpGreaterNum Comparator = 14
-	// OpGreaterEqNum matches when the comparison attribute interpreted as a decimal number is greater than or equal to the comparison value.
+	// OpGreaterEqNum Checks whether the comparison attribute interpreted as a decimal number is greater than or equal to the comparison value.
 	OpGreaterEqNum Comparator = 15
-	// OpOneOfHashed matches when the comparison attribute is equal to any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	// OpOneOfHashed Checks whether the comparison attribute is equal to any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
 	OpOneOfHashed Comparator = 16
-	// OpNotOneOfHashed matches when the comparison attribute is not equal to any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	// OpNotOneOfHashed Checks whether the comparison attribute is not equal to any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
 	OpNotOneOfHashed Comparator = 17
-	// OpBeforeDateTime matches when the comparison attribute interpreted as the seconds elapsed since Unix Epoch is less than the comparison value.
+	// OpBeforeDateTime Checks whether the comparison attribute interpreted as the seconds elapsed since Unix Epoch is less than the comparison value.
 	OpBeforeDateTime Comparator = 18
-	// OpAfterDateTime matches when the comparison attribute interpreted as the seconds elapsed since Unix Epoch is greater than the comparison value.
+	// OpAfterDateTime Checks whether the comparison attribute interpreted as the seconds elapsed since Unix Epoch is greater than the comparison value.
 	OpAfterDateTime Comparator = 19
-	// OpEqHashed matches when the comparison attribute is equal to the comparison value (where the comparison is performed using the salted SHA256 hashes of the values).
+	// OpEqHashed Checks whether the comparison attribute is equal to the comparison value (where the comparison is performed using the salted SHA256 hashes of the values).
 	OpEqHashed Comparator = 20
-	// OpNotEqHashed matches when the comparison attribute is not equal to the comparison value (where the comparison is performed using the salted SHA256 hashes of the values).
+	// OpNotEqHashed Checks whether the comparison attribute is not equal to the comparison value (where the comparison is performed using the salted SHA256 hashes of the values).
 	OpNotEqHashed Comparator = 21
-	// OpStartsWithAnyOfHashed matches when the comparison attribute starts with any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	// OpStartsWithAnyOfHashed Checks whether the comparison attribute starts with any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
 	OpStartsWithAnyOfHashed Comparator = 22
-	// OpNotStartsWithAnyOfHashed matches when the comparison attribute does not start with any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	// OpNotStartsWithAnyOfHashed Checks whether the comparison attribute does not start with any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
 	OpNotStartsWithAnyOfHashed Comparator = 23
-	// OpEndsWithAnyOfHashed matches when the comparison attribute ends with any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	// OpEndsWithAnyOfHashed Checks whether the comparison attribute ends with any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
 	OpEndsWithAnyOfHashed Comparator = 24
-	// OpNotEndsWithAnyOfHashed matches when the comparison attribute does not end with any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	// OpNotEndsWithAnyOfHashed Checks whether the comparison attribute does not end with any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
 	OpNotEndsWithAnyOfHashed Comparator = 25
-	// OpArrayContainsAnyOfHashed matches when the comparison attribute interpreted as a string list contains any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	// OpArrayContainsAnyOfHashed Checks whether the comparison attribute interpreted as a string list contains any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
 	OpArrayContainsAnyOfHashed Comparator = 26
-	// OpArrayNotContainsAnyOfHashed matches when the comparison attribute interpreted as a string list does not contain any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
+	// OpArrayNotContainsAnyOfHashed Checks whether the comparison attribute interpreted as a string list does not contain any of the comparison values (where the comparison is performed using the salted SHA256 hashes of the values).
 	OpArrayNotContainsAnyOfHashed Comparator = 27
-	// OpEq matches when the comparison attribute is equal to the comparison value.
+	// OpEq Checks whether the comparison attribute is equal to the comparison value.
 	OpEq Comparator = 28
-	// OpNotEq matches when the comparison attribute is not equal to the comparison value.
+	// OpNotEq Checks whether the comparison attribute is not equal to the comparison value.
 	OpNotEq Comparator = 29
-	// OpStartsWithAnyOf matches when the comparison attribute starts with any of the comparison values.
+	// OpStartsWithAnyOf Checks whether the comparison attribute starts with any of the comparison values.
 	OpStartsWithAnyOf Comparator = 30
-	// OpNotStartsWithAnyOf matches when the comparison attribute does not start with any of the comparison values.
+	// OpNotStartsWithAnyOf Checks whether the comparison attribute does not start with any of the comparison values.
 	OpNotStartsWithAnyOf Comparator = 31
-	// OpEndsWithAnyOf matches when the comparison attribute ends with any of the comparison values.
+	// OpEndsWithAnyOf Checks whether the comparison attribute ends with any of the comparison values.
 	OpEndsWithAnyOf Comparator = 32
-	// OpNotEndsWithAnyOf matches when the comparison attribute does not end with any of the comparison values.
+	// OpNotEndsWithAnyOf Checks whether the comparison attribute does not end with any of the comparison values.
 	OpNotEndsWithAnyOf Comparator = 33
-	// OpArrayContainsAnyOf matches when the comparison attribute interpreted as a string list contains any of the comparison values.
+	// OpArrayContainsAnyOf Checks whether the comparison attribute interpreted as a string list contains any of the comparison values.
 	OpArrayContainsAnyOf Comparator = 34
-	// OpArrayNotContainsAnyOf matches when the comparison attribute interpreted as a string list does not contain any of the comparison values.
+	// OpArrayNotContainsAnyOf Checks whether the comparison attribute interpreted as a string list does not contain any of the comparison values.
 	OpArrayNotContainsAnyOf Comparator = 35
 )
 

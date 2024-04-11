@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -77,7 +78,7 @@ func TestOpCmpNumWithInvalidCmpVal(t *testing.T) {
 				testName: fmt.Sprintf("%T-%v", tv, op),
 				op:       op,
 				cmpVal:   "badnum",
-				want:     false,
+				isDef:    true,
 			}).run(c, ectx, newTestStruct(reflect.ValueOf(tv)))
 		}
 	}
@@ -291,8 +292,6 @@ func TestMatchedEvaluationRuleAndPercentageOption(t *testing.T) {
 	cfg := Config{
 		SDKKey:      "configcat-sdk-1/JcPbCGl_1E-K9M-fJOyKyQ/P4e3fAz_1ky2-Zg2e4cbkw",
 		PollingMode: Manual,
-		Logger:      newTestLogger(t),
-		LogLevel:    LogLevelInfo,
 	}
 	client := NewCustomClient(cfg)
 	_ = client.Refresh(context.Background())
@@ -313,6 +312,273 @@ func TestMatchedEvaluationRuleAndPercentageOption(t *testing.T) {
 				percCmp = qt.IsNil
 			}
 			qt.Assert(t, details.Data.MatchedPercentageOption, percCmp)
+		})
+	}
+}
+
+func TestSpecChar(t *testing.T) {
+	tests := []struct {
+		key    string
+		userId string
+		exp    interface{}
+	}{
+		{"specialCharacters", "äöüÄÖÜçéèñışğâ¢™✓😀", "äöüÄÖÜçéèñışğâ¢™✓😀"},
+		{"specialCharactersHashed", "äöüÄÖÜçéèñışğâ¢™✓😀", "äöüÄÖÜçéèñışğâ¢™✓😀"},
+	}
+
+	cfg := Config{
+		SDKKey:      "configcat-sdk-1/PKDVCLf-Hq-h-kCzMp-L7Q/u28_1qNyZ0Wz-ldYHIU7-g",
+		PollingMode: Manual,
+	}
+	client := NewCustomClient(cfg)
+	_ = client.Refresh(context.Background())
+	defer client.Close()
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+			user := &UserData{Identifier: test.userId}
+			val := client.Snapshot(user).GetValue(test.key)
+			qt.Assert(t, val, qt.Equals, test.exp)
+		})
+	}
+}
+
+func TestComparisonAttributeConversionToCanonicalStringRepresentation(t *testing.T) {
+	tests := []struct {
+		key  string
+		attr interface{}
+		exp  string
+	}{
+		{"numberToStringConversion", 0.12345, "1"},
+		{"numberToStringConversionInt", int8(125), "4"},
+		{"numberToStringConversionInt", uint8(125), "4"},
+		{"numberToStringConversionInt", int8(125), "4"},
+		{"numberToStringConversionInt", uint16(125), "4"},
+		{"numberToStringConversionInt", 125, "4"},
+		{"numberToStringConversionInt", uint(125), "4"},
+		{"numberToStringConversionInt", int64(125), "4"},
+		{"numberToStringConversionInt", uint64(125), "4"},
+		{"numberToStringConversionPositiveExp", -1.23456789e96, "2"},
+		{"numberToStringConversionNegativeExp", -12345.6789e-100, "4"},
+		{"numberToStringConversionNaN", math.NaN(), "3"},
+		{"numberToStringConversionPositiveInf", math.Inf(1), "4"},
+		{"numberToStringConversionNegativeInf", math.Inf(-1), "3"},
+		{"dateToStringConversion", parseTime("2023-03-31T23:59:59.999"), "3"},
+		{"dateToStringConversion", 1680307199.999, "3"},
+		{"dateToStringConversionNaN", math.NaN(), "3"},
+		{"dateToStringConversionPositiveInf", math.Inf(1), "1"},
+		{"dateToStringConversionNegativeInf", math.Inf(-1), "5"},
+		{"stringArrayToStringConversion", []string{"read", "Write", " eXecute "}, "4"},
+		{"stringArrayToStringConversionEmpty", []string{}, "5"},
+		{"stringArrayToStringConversionSpecialChars", []string{"+<>%\"'\\/\t\r\n"}, "3"},
+		{"stringArrayToStringConversionUnicode", []string{"äöüÄÖÜçéèñışğâ¢™✓😀"}, "2"},
+	}
+
+	cfg := Config{
+		FlagOverrides: &FlagOverrides{
+			FilePath: filepath.Join("resources", "comparison_attribute_conversion.json"),
+			Behavior: LocalOnly,
+		},
+	}
+	client := NewCustomClient(cfg)
+	defer client.Close()
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+			user := &UserData{Identifier: "12345", Custom: map[string]interface{}{"Custom1": test.attr}}
+			val := client.Snapshot(user).GetValue(test.key)
+			qt.Assert(t, val, qt.Equals, test.exp)
+		})
+	}
+}
+
+func TestComparisonAttributeTrimming(t *testing.T) {
+	tests := []struct {
+		key string
+		exp string
+	}{
+		{"isoneof", "no trim"},
+		{"isnotoneof", "no trim"},
+		{"isoneofhashed", "no trim"},
+		{"isnotoneofhashed", "no trim"},
+		{"equalshashed", "no trim"},
+		{"notequalshashed", "no trim"},
+		{"arraycontainsanyofhashed", "no trim"},
+		{"arraynotcontainsanyofhashed", "no trim"},
+		{"equals", "no trim"},
+		{"notequals", "no trim"},
+		{"startwithanyof", "no trim"},
+		{"notstartwithanyof", "no trim"},
+		{"endswithanyof", "no trim"},
+		{"notendswithanyof", "no trim"},
+		{"arraycontainsanyof", "no trim"},
+		{"arraynotcontainsanyof", "no trim"},
+		{"startwithanyofhashed", "no trim"},
+		{"notstartwithanyofhashed", "no trim"},
+		{"endswithanyofhashed", "no trim"},
+		{"notendswithanyofhashed", "no trim"},
+		{"semverisoneof", "4 trim"},
+		{"semverisnotoneof", "5 trim"},
+		{"semverless", "6 trim"},
+		{"semverlessequals", "7 trim"},
+		{"semvergreater", "8 trim"},
+		{"semvergreaterequals", "9 trim"},
+		{"numberequals", "10 trim"},
+		{"numbernotequals", "11 trim"},
+		{"numberless", "12 trim"},
+		{"numberlessequals", "13 trim"},
+		{"numbergreater", "14 trim"},
+		{"numbergreaterequals", "15 trim"},
+		{"datebefore", "18 trim"},
+		{"dateafter", "19 trim"},
+		{"containsanyof", "no trim"},
+		{"notcontainsanyof", "no trim"},
+	}
+
+	cfg := Config{
+		FlagOverrides: &FlagOverrides{
+			FilePath: filepath.Join("resources", "comparison_attribute_trimming.json"),
+			Behavior: LocalOnly,
+		},
+		LogLevel: LogLevelInfo,
+	}
+	client := NewCustomClient(cfg)
+	defer client.Close()
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+			user := &UserData{Identifier: " 12345 ", Country: "[\" USA \"]", Custom: map[string]interface{}{"Version": " 1.0.0 ", "Number": " 3 ", "Date": " 1705253400 "}}
+			val := client.Snapshot(user).GetValue(test.key)
+			qt.Assert(t, val, qt.Equals, test.exp)
+		})
+	}
+}
+
+func TestComparisonValueTrimming(t *testing.T) {
+	tests := []struct {
+		key string
+		exp string
+	}{
+		{"isoneof", "no trim"},
+		{"isnotoneof", "no trim"},
+		{"containsanyof", "no trim"},
+		{"notcontainsanyof", "no trim"},
+		{"isoneofhashed", "no trim"},
+		{"isnotoneofhashed", "no trim"},
+		{"equalshashed", "no trim"},
+		{"notequalshashed", "no trim"},
+		{"arraycontainsanyofhashed", "no trim"},
+		{"arraynotcontainsanyofhashed", "no trim"},
+		{"equals", "no trim"},
+		{"notequals", "no trim"},
+		{"startwithanyof", "no trim"},
+		{"notstartwithanyof", "no trim"},
+		{"endswithanyof", "no trim"},
+		{"notendswithanyof", "no trim"},
+		{"arraycontainsanyof", "no trim"},
+		{"arraynotcontainsanyof", "no trim"},
+		{"startwithanyofhashed", "no trim"},
+		{"notstartwithanyofhashed", "no trim"},
+		{"endswithanyofhashed", "no trim"},
+		{"notendswithanyofhashed", "no trim"},
+		{"semverisoneof", "4 trim"},
+		{"semverisnotoneof", "5 trim"},
+		{"semverless", "6 trim"},
+		{"semverlessequals", "7 trim"},
+		{"semvergreater", "8 trim"},
+		{"semvergreaterequals", "9 trim"},
+	}
+
+	cfg := Config{
+		FlagOverrides: &FlagOverrides{
+			FilePath: filepath.Join("resources", "comparison_value_trimming.json"),
+			Behavior: LocalOnly,
+		},
+		LogLevel: LogLevelInfo,
+	}
+	client := NewCustomClient(cfg)
+	defer client.Close()
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+			user := &UserData{Identifier: "12345", Country: "[\"USA\"]", Custom: map[string]interface{}{"Version": "1.0.0", "Number": "3", "Date": "1705253400"}}
+			val := client.Snapshot(user).GetValue(test.key)
+			qt.Assert(t, val, qt.Equals, test.exp)
+		})
+	}
+}
+
+func TestNilCompValues(t *testing.T) {
+	c := qt.New(t)
+	tests := []struct {
+		op Comparator
+	}{
+		{OpEq},
+		{OpOneOf},
+		{OpNotOneOf},
+		{OpContains},
+		{OpNotContains},
+		{OpOneOfSemver},
+		{OpNotOneOfSemver},
+		{OpLessSemver},
+		{OpLessEqSemver},
+		{OpGreaterSemver},
+		{OpGreaterEqSemver},
+		{OpEqNum},
+		{OpNotEqNum},
+		{OpLessNum},
+		{OpLessEqNum},
+		{OpGreaterNum},
+		{OpGreaterEqNum},
+		{OpOneOfHashed},
+		{OpNotOneOfHashed},
+		{OpBeforeDateTime},
+		{OpAfterDateTime},
+		{OpEqHashed},
+		{OpNotEqHashed},
+		{OpStartsWithAnyOfHashed},
+		{OpNotStartsWithAnyOfHashed},
+		{OpEndsWithAnyOfHashed},
+		{OpNotEndsWithAnyOfHashed},
+		{OpArrayContainsAnyOfHashed},
+		{OpArrayNotContainsAnyOfHashed},
+		{OpEq},
+		{OpNotEq},
+		{OpStartsWithAnyOf},
+		{OpNotStartsWithAnyOf},
+		{OpEndsWithAnyOf},
+		{OpNotEndsWithAnyOf},
+		{OpArrayContainsAnyOf},
+		{OpArrayNotContainsAnyOf},
+	}
+	ectx := newEvalTestContext(c)
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%s", test.op), func(t *testing.T) {
+			ectx.srv.setResponseJSON(&ConfigJson{
+				Settings: map[string]*Setting{
+					"key": {
+						Type:  StringSetting,
+						Value: &SettingValue{Value: "false"},
+						TargetingRules: []*TargetingRule{{
+							Conditions: []*Condition{{
+								UserCondition: &UserCondition{
+									ComparisonAttribute: "Identifier",
+									Comparator:          test.op,
+								},
+							}},
+							ServedValue: &ServedValue{
+								VariationID: "test",
+								Value:       &SettingValue{Value: "true"},
+							},
+						}},
+					},
+				},
+			})
+			ectx.client.Refresh(context.Background())
+
+			val := ectx.client.GetStringValue("key", "default", &UserData{Identifier: "a"})
+			c.Assert(val, qt.Equals, "default")
 		})
 	}
 }
@@ -389,6 +655,8 @@ type opTest struct {
 	cmpVal string
 	// want holds the expected result of the test.
 	want bool
+	// isDef indicates whether we expect the default value.
+	isDef bool
 }
 
 func (test *opTest) run(c *qt.C, ectx *evalTestContext, user User) {
@@ -436,6 +704,9 @@ func (test *opTest) run(c *qt.C, ectx *evalTestContext, user User) {
 		want := "false"
 		if test.want {
 			want = "true"
+		}
+		if test.isDef {
+			want = ""
 		}
 		c.Check(ectx.client.GetStringValue("key", "", user), qt.Equals, want, qt.Commentf("user: %#v", user))
 	})
