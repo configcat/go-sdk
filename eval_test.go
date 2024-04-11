@@ -508,6 +508,81 @@ func TestComparisonValueTrimming(t *testing.T) {
 	}
 }
 
+func TestNilCompValues(t *testing.T) {
+	c := qt.New(t)
+	tests := []struct {
+		op Comparator
+	}{
+		{OpEq},
+		{OpOneOf},
+		{OpNotOneOf},
+		{OpContains},
+		{OpNotContains},
+		{OpOneOfSemver},
+		{OpNotOneOfSemver},
+		{OpLessSemver},
+		{OpLessEqSemver},
+		{OpGreaterSemver},
+		{OpGreaterEqSemver},
+		{OpEqNum},
+		{OpNotEqNum},
+		{OpLessNum},
+		{OpLessEqNum},
+		{OpGreaterNum},
+		{OpGreaterEqNum},
+		{OpOneOfHashed},
+		{OpNotOneOfHashed},
+		{OpBeforeDateTime},
+		{OpAfterDateTime},
+		{OpEqHashed},
+		{OpNotEqHashed},
+		{OpStartsWithAnyOfHashed},
+		{OpNotStartsWithAnyOfHashed},
+		{OpEndsWithAnyOfHashed},
+		{OpNotEndsWithAnyOfHashed},
+		{OpArrayContainsAnyOfHashed},
+		{OpArrayNotContainsAnyOfHashed},
+		{OpEq},
+		{OpNotEq},
+		{OpStartsWithAnyOf},
+		{OpNotStartsWithAnyOf},
+		{OpEndsWithAnyOf},
+		{OpNotEndsWithAnyOf},
+		{OpArrayContainsAnyOf},
+		{OpArrayNotContainsAnyOf},
+	}
+	ectx := newEvalTestContext(c)
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%s", test.op), func(t *testing.T) {
+			ectx.srv.setResponseJSON(&ConfigJson{
+				Settings: map[string]*Setting{
+					"key": {
+						Type:  StringSetting,
+						Value: &SettingValue{Value: "false"},
+						TargetingRules: []*TargetingRule{{
+							Conditions: []*Condition{{
+								UserCondition: &UserCondition{
+									ComparisonAttribute: "Identifier",
+									Comparator:          test.op,
+								},
+							}},
+							ServedValue: &ServedValue{
+								VariationID: "test",
+								Value:       &SettingValue{Value: "true"},
+							},
+						}},
+					},
+				},
+			})
+			ectx.client.Refresh(context.Background())
+
+			val := ectx.client.GetStringValue("key", "default", &UserData{Identifier: "a"})
+			c.Assert(val, qt.Equals, "default")
+		})
+	}
+}
+
 func TestNoUser(t *testing.T) {
 	c := qt.New(t)
 	ectx := newEvalTestContext(c)

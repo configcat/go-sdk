@@ -32,7 +32,7 @@ type ErrSettingTypeMismatch struct {
 
 func (e ErrSettingTypeMismatch) Error() string {
 	return fmt.Sprintf(
-		"the type of the setting '%s' doesn't match with the expected type; setting's type was '%t' but the expected type was '%s'",
+		"the type of the setting '%s' doesn't match with the expected type; setting's type was '%T' but the expected type was '%s'",
 		e.Key,
 		e.Value,
 		e.ExpectedType,
