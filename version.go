@@ -1,3 +1,3 @@
 package configcat
 
-const version = "9.0.6"
+const version = "9.0.7"
