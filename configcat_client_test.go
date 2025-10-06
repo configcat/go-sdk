@@ -1138,6 +1138,73 @@ func rootNodeWithKeyValueType(key string, value interface{}, t SettingType) *Con
 	}
 }
 
+func TestClient_Hooks_OnConfigDownloaded(t *testing.T) {
+	tests := []struct {
+		name         string
+		expectError  bool
+		refreshTwice bool
+	}{
+		{
+			name:         "successful_download",
+			expectError:  false,
+			refreshTwice: false,
+		},
+		{
+			name:         "successful_download_with_refresh",
+			expectError:  false,
+			refreshTwice: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			srv := newConfigServer(t)
+			srv.setResponse(configResponse{
+				body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
+			})
+
+			downloadedChan := make(chan error, 10)
+			cfg := srv.config()
+			cfg.Hooks = &Hooks{OnConfigDownloaded: func(err error) {
+				downloadedChan <- err
+			}}
+			client := NewCustomClient(cfg)
+			defer client.Close()
+
+			// Wait for the initial config download
+			select {
+			case err := <-downloadedChan:
+				if test.expectError {
+					c.Assert(err, qt.Not(qt.IsNil))
+				} else {
+					c.Assert(err, qt.IsNil)
+				}
+			case <-time.After(time.Second):
+				t.Fatalf("timed out waiting for OnConfigDownloaded hook")
+			}
+
+			if test.refreshTwice {
+				// Trigger a refresh to get another download event
+				err := client.Refresh(context.Background())
+				c.Assert(err, qt.IsNil)
+
+				// Should get another download notification
+				select {
+				case err := <-downloadedChan:
+					if test.expectError {
+						c.Assert(err, qt.Not(qt.IsNil))
+					} else {
+						c.Assert(err, qt.IsNil)
+					}
+				case <-time.After(time.Second):
+					t.Fatalf("timed out waiting for second OnConfigDownloaded hook")
+				}
+			}
+		})
+	}
+}
+
 type mockHTTPTransport struct {
 	requests  []*http.Request
 	responses []*http.Response

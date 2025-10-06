@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/configcat/go-sdk/v9/configcatcache"
 	"io"
 	"net/http"
 	"os"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/configcat/go-sdk/v9/configcatcache"
 )
 
 const (
@@ -209,6 +210,12 @@ func (f *configFetcher) refreshIfOlder(ctx context.Context, before time.Time, wa
 func (f *configFetcher) fetcher(prevConfig *config) {
 	defer f.wg.Done()
 	config, newURL, err := f.fetchConfig(f.ctx, f.baseURL, prevConfig)
+
+	// Call OnConfigDownloaded hook only for HTTP requests (not cache or local-only)
+	if !f.isOffline() && (f.overrides == nil || f.overrides.Behavior != LocalOnly) {
+		f.callOnConfigDownloaded(err)
+	}
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err != nil {
@@ -420,6 +427,13 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 		return nil, &fetcherError{EventId: 1100, Err: fmt.Errorf("your SDK Key seems to be wrong; you can find the valid SDK Key at https://app.configcat.com/sdkkey")}
 	}
 	return nil, &fetcherError{EventId: 1101, Err: fmt.Errorf("unexpected HTTP response was received while trying to fetch config JSON: %v", response.Status)}
+}
+
+// callOnConfigDownloaded calls the OnConfigDownloaded hook if it's configured.
+func (f *configFetcher) callOnConfigDownloaded(err error) {
+	if f.hooks != nil && f.hooks.OnConfigDownloaded != nil {
+		go f.hooks.OnConfigDownloaded(err)
+	}
 }
 
 func pollingModeToIdentifier(pollingMode PollingMode) string {
