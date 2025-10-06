@@ -24,6 +24,9 @@ type Hooks struct {
 
 	// OnConfigChanged is called, when a new config.json has downloaded.
 	OnConfigChanged func()
+
+	// OnConfigDownloaded is called every time a config download attempt is made.
+	OnConfigDownloaded func(err error)
 }
 
 // Config describes configuration options for the Client.
