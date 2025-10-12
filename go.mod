@@ -1,8 +1,9 @@
-module github.com/configcat/go-sdk
+module github.com/antiv/configcat-go-sdk
 
 go 1.13
 
 require (
 	github.com/blang/semver v3.5.1+incompatible
-	github.com/sirupsen/logrus v1.4.2
+	github.com/configcat/go-sdk/v7 v7.10.1
+	github.com/sirupsen/logrus v1.9.0
 )
