@@ -30,6 +30,7 @@ func (f *fetcherError) Error() string {
 
 type fetcher interface {
 	refreshIfOlder(ctx context.Context, before time.Time, wait bool) error
+	refreshIfOlderWithContextPassthrough(ctx context.Context, before time.Time, wait bool) error
 	close()
 	current() *config
 	isOffline() bool
@@ -167,12 +168,26 @@ func (f *configFetcher) current() *config {
 
 // refreshIfOlder refreshes the configuration if it was retrieved
 // before the given time or if there is no current configuration. If the context is
-// canceled while the refresh is in progress, Refresh will return but
+// canceled while the refresh is in progress, it will return, but
 // the underlying HTTP request will not be stopped.
 //
 // If wait is false, refreshIfOlder returns immediately without waiting
 // for the refresh to complete.
 func (f *configFetcher) refreshIfOlder(ctx context.Context, before time.Time, wait bool) error {
+	return f.refreshIfOlderWithContexts(ctx, f.ctx, before, wait)
+}
+
+// refreshIfOlderWithContextPassthrough refreshes the configuration if it was retrieved
+// before the given time or if there is no current configuration. If the context is
+// canceled while the refresh is in progress, it will stop the underlying HTTP request.
+//
+// If wait is false, refreshIfOlder returns immediately without waiting
+// for the refresh to complete.
+func (f *configFetcher) refreshIfOlderWithContextPassthrough(ctx context.Context, before time.Time, wait bool) error {
+	return f.refreshIfOlderWithContexts(ctx, ctx, before, wait)
+}
+
+func (f *configFetcher) refreshIfOlderWithContexts(requestCtx context.Context, terminateCtx context.Context, before time.Time, wait bool) error {
 	f.mu.Lock()
 	prevConfig := f.current()
 	if prevConfig != nil && !prevConfig.fetchTime.Before(before) {
@@ -184,7 +199,7 @@ func (f *configFetcher) refreshIfOlder(ctx context.Context, before time.Time, wa
 		fetchDone = make(chan error, 1)
 		f.fetchDone = fetchDone
 		f.wg.Add(1)
-		go f.fetcher(ctx, prevConfig)
+		go f.fetcher(terminateCtx, prevConfig)
 	}
 	f.mu.Unlock()
 	if !wait {
@@ -196,8 +211,8 @@ func (f *configFetcher) refreshIfOlder(ctx context.Context, before time.Time, wa
 		// concurrent refresh calls can have access to it.
 		fetchDone <- err
 		return err
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-requestCtx.Done():
+		return requestCtx.Err()
 	}
 }
 
@@ -223,7 +238,7 @@ func (f *configFetcher) fetcher(ctx context.Context, prevConfig *config) {
 			go f.hooks.OnConfigChanged()
 		}
 	}
-	// Unblock any Client.getValue call that's waiting for the first configuration to be retrieved.
+	// Unblock any Client.getValue call waiting for the first configuration to be retrieved.
 	f.doneGetOnce.Do(func() {
 		close(f.doneInitialGet)
 	})
@@ -401,7 +416,6 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 	if etag != "" {
 		request.Header.Add("If-None-Match", etag)
 	}
-	request = request.WithContext(f.ctx)
 	response, err := f.client.Do(request)
 	if err != nil {
 		if os.IsTimeout(err) {
@@ -461,6 +475,10 @@ func newEmptyFetcher() fetcher {
 }
 
 func (e *emptyFetcher) refreshIfOlder(_ context.Context, _ time.Time, _ bool) error {
+	return errors.New("config fetch failed: SDK Key is invalid")
+}
+
+func (e *emptyFetcher) refreshIfOlderWithContextPassthrough(_ context.Context, _ time.Time, _ bool) error {
 	return errors.New("config fetch failed: SDK Key is invalid")
 }
 

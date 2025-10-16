@@ -5,13 +5,14 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/configcat/go-sdk/v9/configcatcache"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/configcat/go-sdk/v9/configcatcache"
 )
 
 type configServer struct {
@@ -106,7 +107,12 @@ func (srv *configServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	resp := *resp0
-	time.Sleep(resp.sleep)
+	if resp.sleep > 0 {
+		select {
+		case <-req.Context().Done():
+		case <-time.After(resp.sleep):
+		}
+	}
 	if resp.status == 0 {
 		w.Header().Set("Etag", etagOf(resp.body))
 		if req.Header.Get("If-None-Match") == etagOf(resp.body) {
@@ -119,7 +125,9 @@ func (srv *configServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(resp.status)
 	w.Write([]byte(resp.body))
 	// Record the response so that it's possible to check what went on behind the scenes later.
-	srv.responses = append(srv.responses, resp)
+	if req.Context().Err() == nil { // request was not canceled
+		srv.responses = append(srv.responses, resp)
+	}
 }
 
 var (
