@@ -30,7 +30,7 @@ func (f *fetcherError) Error() string {
 
 type fetcher interface {
 	refreshIfOlder(ctx context.Context, before time.Time, wait bool) error
-	refreshIfOlderWithContextPassthrough(ctx context.Context, before time.Time, wait bool) error
+	refreshIfOlderWithContext(ctx context.Context, before time.Time, wait bool) error
 	close()
 	current() *config
 	isOffline() bool
@@ -177,13 +177,13 @@ func (f *configFetcher) refreshIfOlder(ctx context.Context, before time.Time, wa
 	return f.refreshIfOlderWithContexts(ctx, f.ctx, before, wait)
 }
 
-// refreshIfOlderWithContextPassthrough refreshes the configuration if it was retrieved
+// refreshIfOlderWithCancel refreshes the configuration if it was retrieved
 // before the given time or if there is no current configuration. If the context is
 // canceled while the refresh is in progress, it will stop the underlying HTTP request.
 //
 // If wait is false, refreshIfOlder returns immediately without waiting
 // for the refresh to complete.
-func (f *configFetcher) refreshIfOlderWithContextPassthrough(ctx context.Context, before time.Time, wait bool) error {
+func (f *configFetcher) refreshIfOlderWithContext(ctx context.Context, before time.Time, wait bool) error {
 	return f.refreshIfOlderWithContexts(ctx, ctx, before, wait)
 }
 
@@ -478,7 +478,7 @@ func (e *emptyFetcher) refreshIfOlder(_ context.Context, _ time.Time, _ bool) er
 	return errors.New("config fetch failed: SDK Key is invalid")
 }
 
-func (e *emptyFetcher) refreshIfOlderWithContextPassthrough(_ context.Context, _ time.Time, _ bool) error {
+func (e *emptyFetcher) refreshIfOlderWithContext(_ context.Context, _ time.Time, _ bool) error {
 	return errors.New("config fetch failed: SDK Key is invalid")
 }
 

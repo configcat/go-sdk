@@ -225,11 +225,11 @@ func (client *Client) RefreshIfOlder(ctx context.Context, age time.Duration) err
 	return client.fetcher.refreshIfOlder(ctx, time.Now().Add(-age), true)
 }
 
-// RefreshWithContextPassthrough is like Refresh, but the given context is passed all the way down
+// RefreshWithContext is like Refresh, but the given context is passed all the way down
 // to the refresh operation, so whenever the context is canceled while the refresh is in progress,
 // the underlying HTTP request will also be stopped.
-func (client *Client) RefreshWithContextPassthrough(ctx context.Context) error {
-	return client.fetcher.refreshIfOlderWithContextPassthrough(ctx, time.Now().Add(1), true)
+func (client *Client) RefreshWithContext(ctx context.Context) error {
+	return client.fetcher.refreshIfOlderWithContext(ctx, time.Now().Add(1), true)
 }
 
 // SetOffline configures the SDK to not initiate HTTP requests.

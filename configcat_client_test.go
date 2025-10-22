@@ -137,7 +137,7 @@ func TestClient_Refresh_Cancel_Will_Stop_Fetch(t *testing.T) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
-	_ = client.RefreshWithContextPassthrough(ctx)
+	_ = client.RefreshWithContext(ctx)
 	duration := time.Since(start)
 	c.Assert(duration < 20*time.Millisecond, qt.IsTrue)
 
