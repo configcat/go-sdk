@@ -433,7 +433,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 		return nil, nil
 	}
 
-	if response.StatusCode >= 200 && response.StatusCode < 300 {
+	if response.StatusCode == 200 {
 		body, err := io.ReadAll(response.Body)
 		if err != nil {
 			return nil, &fetcherError{EventId: 1103, Err: fmt.Errorf("unexpected error occurred while trying to fetch config JSON; it is most likely due to a local network issue; please make sure your application can reach the ConfigCat CDN servers (or your proxy server) over HTTP: %v", err)}
@@ -441,6 +441,9 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 		config, err := parseConfig(body, response.Header.Get("Etag"), time.Now(), f.logger, f.defaultUser, f.overrides, f.hooks)
 		if err != nil {
 			return nil, &fetcherError{EventId: 1105, Err: fmt.Errorf("fetching config JSON was successful but the HTTP response content was invalid: %v", err)}
+		}
+		if config.root.Settings == nil && config.root.Segments == nil && config.root.Preferences == nil {
+			return nil, &fetcherError{EventId: 1103, Err: fmt.Errorf("invalid config JSON content: %s", body)}
 		}
 		f.logger.Debugf("config fetch succeeded: new config fetched")
 		return config, nil

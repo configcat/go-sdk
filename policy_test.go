@@ -18,7 +18,7 @@ import (
 func TestFetchFailWithCacheFallback(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponse(configResponse{body: `{"test":1}`})
+	srv.setResponse(configResponse{body: `{"f":{}}`})
 
 	// First use a client to populate the cache.
 	cfg := srv.config()
@@ -31,12 +31,12 @@ func TestFetchFailWithCacheFallback(t *testing.T) {
 
 	client := NewCustomClient(cfg)
 	defer client.Close()
-	client.Refresh(context.Background())
-	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":1}`)
+	_ = client.Refresh(context.Background())
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"f":{}}`)
 	for key := range cache.allItems() {
 		cached, _ := cache.Get(context.Background(), key)
 		_, _, b, _ := configcatcache.CacheSegmentsFromBytes(cached)
-		c.Assert(string(b), qt.Equals, `{"test":1}`)
+		c.Assert(string(b), qt.Equals, `{"f":{}}`)
 	}
 
 	// Check that the cache has been populated.
@@ -55,11 +55,11 @@ func TestFetchFailWithCacheFallback(t *testing.T) {
 	client = NewCustomClient(cfg)
 	client.Refresh(context.Background())
 	defer client.Close()
-	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"f":{}}`)
 	for key := range cache.allItems() {
 		cached, _ := cache.Get(context.Background(), key)
 		_, _, b, _ := configcatcache.CacheSegmentsFromBytes(cached)
-		c.Assert(string(b), qt.Equals, `{"test":1}`)
+		c.Assert(string(b), qt.Equals, `{"f":{}}`)
 	}
 
 	time.Sleep(20 * time.Millisecond)
@@ -67,29 +67,29 @@ func TestFetchFailWithCacheFallback(t *testing.T) {
 	// value even when the cache fails subsequently.
 	cache.setGetError(fmt.Errorf("cache failure"))
 	time.Sleep(60 * time.Millisecond)
-	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"f":{}}`)
 
 	// Check that if the cache value changes, it's still consulted.
 	cache.setGetError(nil)
 	for key := range cache.allItems() {
-		cache.Set(context.Background(), key, configcatcache.CacheSegmentsToBytes(time.Now(), "etag", []byte(`{"test":2}`)))
+		cache.Set(context.Background(), key, configcatcache.CacheSegmentsToBytes(time.Now(), "etag", []byte(`{"p":{},"f":{}}`)))
 	}
 	time.Sleep(20 * time.Millisecond)
-	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":2}`)
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"p":{},"f":{}}`)
 	for key := range cache.allItems() {
 		cached, _ := cache.Get(context.Background(), key)
 		_, _, b, _ := configcatcache.CacheSegmentsFromBytes(cached)
-		c.Assert(string(b), qt.Equals, `{"test":2}`)
+		c.Assert(string(b), qt.Equals, `{"p":{},"f":{}}`)
 	}
 
 	// Check that we still get the value from the server when it recovers.
-	srv.setResponse(configResponse{body: `{"test":99}`})
+	srv.setResponse(configResponse{body: `{"p":{},"f":{},"s":[]}`})
 	time.Sleep(20 * time.Millisecond)
-	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":99}`)
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"p":{},"f":{},"s":[]}`)
 	for key := range cache.allItems() {
 		cached, _ := cache.Get(context.Background(), key)
 		_, _, b, _ := configcatcache.CacheSegmentsFromBytes(cached)
-		c.Assert(string(b), qt.Equals, `{"test":99}`)
+		c.Assert(string(b), qt.Equals, `{"p":{},"f":{},"s":[]}`)
 	}
 }
 
@@ -149,6 +149,43 @@ test-etag
 	val := client.GetStringValue("testKey", "", nil)
 	c.Assert(val, qt.Equals, "testValue")
 	c.Assert(logger.Logs(), qt.Contains, "ERROR: [1101] config fetch failed: unexpected HTTP response was received while trying to fetch config JSON: 500 Internal Server Error")
+}
+
+func Test_Ensure_Empty_Response_Is_Not_Cached(t *testing.T) {
+	c := qt.New(t)
+	cacheEntry := `1686756435844
+test-etag
+{"p":{"u":"https://cdn-global.configcat.com","r":0,"s":"FUkC6RADjzF0vXrDSfJn7BcEBag9afw1Y6jkqjMP9BA="},"f":{"testKey":{"t":1,"v":{"s":"testValue"}}}}`
+	srv := newConfigServer(t)
+	cfg := srv.config()
+	cfg.PollingMode = Manual
+
+	cache := &simpleCache{entry: []byte(cacheEntry)}
+	cfg.Cache = cache
+
+	client := NewCustomClient(cfg)
+	defer client.Close()
+
+	tests := []struct {
+		b string
+	}{
+		{b: "null"},
+		{b: "{}"},
+		{b: ""},
+	}
+
+	for _, test := range tests {
+		t.Run(test.b, func(t *testing.T) {
+			srv.setResponse(configResponse{
+				status: http.StatusOK,
+				body:   test.b,
+			})
+
+			_ = client.Refresh(t.Context())
+			r, _ := cache.Get(t.Context(), "")
+			c.Assert(string(r), qt.Equals, cacheEntry)
+		})
+	}
 }
 
 type simpleCache struct {

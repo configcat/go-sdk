@@ -21,14 +21,14 @@ func TestManualPollingPolicy_Refresh(t *testing.T) {
 
 	c.Assert(client.fetcher.current(), qt.IsNil)
 
-	srv.setResponse(configResponse{body: `{"test":1}`})
+	srv.setResponse(configResponse{body: `{"f":{}}`})
 	client.Refresh(context.Background())
-	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":1}`)
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"f":{}}`)
 
-	srv.setResponse(configResponse{body: `{"test":2}`})
-	c.Assert(client.fetcher.current().body(), qt.Equals, `{"test":1}`)
+	srv.setResponse(configResponse{body: `{"p":{},"f":{}}`})
+	c.Assert(client.fetcher.current().body(), qt.Equals, `{"f":{}}`)
 	client.Refresh(context.Background())
-	srv.setResponse(configResponse{body: `{"test":2}`})
+	srv.setResponse(configResponse{body: `{"p":{},"f":{}}`})
 }
 
 func TestManualPollingPolicy_FetchFail(t *testing.T) {
