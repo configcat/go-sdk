@@ -181,8 +181,8 @@ test-etag
 				body:   test.b,
 			})
 
-			_ = client.Refresh(t.Context())
-			r, _ := cache.Get(t.Context(), "")
+			_ = client.Refresh(context.Background())
+			r, _ := cache.Get(context.Background(), "")
 			c.Assert(string(r), qt.Equals, cacheEntry)
 		})
 	}
