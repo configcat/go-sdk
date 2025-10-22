@@ -177,7 +177,7 @@ func (f *configFetcher) refreshIfOlder(ctx context.Context, before time.Time, wa
 	return f.refreshIfOlderWithContexts(ctx, f.ctx, before, wait)
 }
 
-// refreshIfOlderWithCancel refreshes the configuration if it was retrieved
+// refreshIfOlderWithContext refreshes the configuration if it was retrieved
 // before the given time or if there is no current configuration. If the context is
 // canceled while the refresh is in progress, it will stop the underlying HTTP request.
 //
