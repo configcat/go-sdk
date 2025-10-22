@@ -12,7 +12,7 @@ import (
 func TestAutoPollingPolicy_PollChange(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponse(configResponse{body: `{"test":1}`})
+	srv.setResponse(configResponse{body: `{"f":{}}`})
 
 	cfg := srv.config()
 	cfg.PollInterval = 10 * time.Millisecond
@@ -21,13 +21,13 @@ func TestAutoPollingPolicy_PollChange(t *testing.T) {
 	err := client.Refresh(context.Background())
 	c.Assert(err, qt.Equals, nil)
 
-	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"f":{}}`)
 
-	srv.setResponse(configResponse{body: `{"test":2}`})
-	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
+	srv.setResponse(configResponse{body: `{"p":{},"f":{}}`})
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"f":{}}`)
 
 	time.Sleep(40 * time.Millisecond)
-	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":2}`)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"p":{},"f":{}}`)
 }
 
 func TestAutoPollingPolicy_FetchFail(t *testing.T) {
@@ -61,28 +61,24 @@ func TestAutoPollingPolicy_DoubleClose(t *testing.T) {
 func TestAutoPollingPolicy_WithNotify(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
-	srv.setResponse(configResponse{body: `{"test":1}`})
+	srv.setResponse(configResponse{body: `{"f":{}}`})
 	cfg := srv.config()
 	notifyc := make(chan struct{})
 	cfg.PollInterval = time.Millisecond
 	cfg.Hooks = &Hooks{OnConfigChanged: func() { notifyc <- struct{}{} }}
 	client := NewCustomClient(cfg)
 	defer client.Close()
-	select {
-	case <-notifyc:
-	case <-time.After(time.Second):
-		t.Fatalf("timed out waiting for notification")
-	}
-	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
+	WithTimeout(time.Second, func() {
+		<-notifyc
+	})
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"f":{}}`)
 
 	// Change the content and we should see another notification.
-	srv.setResponse(configResponse{body: `{"test":2}`})
-	select {
-	case <-notifyc:
-	case <-time.After(time.Second):
-		t.Fatalf("timed out waiting for notification")
-	}
-	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":2}`)
+	srv.setResponse(configResponse{body: `{"p":{},"f":{}}`})
+	WithTimeout(time.Second, func() {
+		<-notifyc
+	})
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"p":{},"f":{}}`)
 
 	// Check that we don't see any more notifications.
 	select {

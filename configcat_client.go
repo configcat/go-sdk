@@ -215,8 +215,7 @@ func (client *Client) Refresh(ctx context.Context) error {
 }
 
 // RefreshIfOlder is like Refresh but refreshes the configuration only
-// if the most recently fetched configuration is older than the given
-// age.
+// if the most recently fetched configuration is older than the given age.
 func (client *Client) RefreshIfOlder(ctx context.Context, age time.Duration) error {
 	if client.fetcher.isOffline() {
 		var message = "client is in offline mode, it cannot initiate HTTP calls"
@@ -224,6 +223,13 @@ func (client *Client) RefreshIfOlder(ctx context.Context, age time.Duration) err
 		return fmt.Errorf(message)
 	}
 	return client.fetcher.refreshIfOlder(ctx, time.Now().Add(-age), true)
+}
+
+// RefreshWithContext is like Refresh, but the given context is passed all the way down
+// to the refresh operation, so whenever the context is canceled while the refresh is in progress,
+// the underlying HTTP request will also be stopped.
+func (client *Client) RefreshWithContext(ctx context.Context) error {
+	return client.fetcher.refreshIfOlderWithContext(ctx, time.Now().Add(1), true)
 }
 
 // SetOffline configures the SDK to not initiate HTTP requests.

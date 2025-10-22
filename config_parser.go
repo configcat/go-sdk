@@ -113,6 +113,9 @@ func (c *config) equalContent(c1 *config) bool {
 }
 
 func (c *config) withFetchTime(t time.Time) *config {
+	if c == nil {
+		return nil
+	}
 	c1 := *c
 	c1.fetchTime = t
 	return &c1

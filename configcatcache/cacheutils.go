@@ -42,7 +42,9 @@ func CacheSegmentsFromBytes(cacheBytes []byte) (fetchTime time.Time, eTag string
 
 // CacheSegmentsToBytes serializes the input parameters to a specific format used for caching by the SDK.
 func CacheSegmentsToBytes(fetchTime time.Time, eTag string, config []byte) []byte {
-	toCache := []byte(strconv.FormatInt(fetchTime.UnixMilli(), 10))
+	timeStr := strconv.FormatInt(fetchTime.UnixMilli(), 10)
+	toCache := make([]byte, 0, len(timeStr)+len(eTag)+len(config)+2)
+	toCache = append(toCache, timeStr...)
 	toCache = append(toCache, newLineByte)
 	toCache = append(toCache, eTag...)
 	toCache = append(toCache, newLineByte)

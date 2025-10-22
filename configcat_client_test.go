@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,13 +37,13 @@ func TestClient_Refresh(t *testing.T) {
 	defer client.Close()
 
 	srv.setResponseJSON(rootNodeWithKeyValue("key", "value"))
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 
 	c.Assert(result, qt.Equals, "value")
 
 	srv.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result = client.GetStringValue("key", "default", nil)
 	if result != "value2" {
 		t.Error("Expecting non default string value")
@@ -58,7 +59,7 @@ func TestClient_Refresh_Canceled(t *testing.T) {
 	defer client.Close()
 
 	srv.setResponseJSON(rootNodeWithKeyValue("key", "value"))
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value")
 
@@ -69,7 +70,7 @@ func TestClient_Refresh_Canceled(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	t0 := time.Now()
-	client.Refresh(ctx)
+	_ = client.Refresh(ctx)
 	if d := time.Since(t0); d < 10*time.Millisecond || d > 50*time.Millisecond {
 		t.Errorf("refresh returned too quickly; got %v want >10ms, <50ms", d)
 	}
@@ -90,16 +91,64 @@ func TestClient_Refresh_Timeout(t *testing.T) {
 		body:  marshalJSON(rootNodeWithKeyValue("key", "value")),
 		sleep: 20 * time.Millisecond,
 	})
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "default")
+}
+
+func TestClient_Refresh_Cancel_Wont_Stop_Fetch(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	cfg := srv.config()
+	cfg.PollingMode = Manual
+	cfg.LogLevel = LogLevelNone
+	client := NewCustomClient(cfg)
+	defer client.Close()
+
+	srv.setResponse(configResponse{
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value")),
+		sleep: 20 * time.Millisecond,
+	})
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_ = client.Refresh(ctx)
+	duration := time.Since(start)
+	c.Assert(duration < 20*time.Millisecond, qt.IsTrue)
+
+	WaitUntil(time.Second, func() bool {
+		result := client.GetStringValue("key", "default", nil)
+		return result == "value"
+	})
+}
+
+func TestClient_Refresh_Cancel_Will_Stop_Fetch(t *testing.T) {
+	c := qt.New(t)
+	srv := newConfigServer(t)
+	cfg := srv.config()
+	cfg.PollingMode = Manual
+	client := NewCustomClient(cfg)
+	defer client.Close()
+
+	srv.setResponse(configResponse{
+		body:  marshalJSON(rootNodeWithKeyValue("key", "value")),
+		sleep: 5 * time.Second,
+	})
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_ = client.RefreshWithContext(ctx)
+	duration := time.Since(start)
+	c.Assert(duration < 20*time.Millisecond, qt.IsTrue)
+
+	c.Assert(srv.allResponses(), qt.HasLen, 0)
 }
 
 func TestClient_Float(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213.0))
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetFloatValue("key", 0, nil)
 	c.Assert(result, qt.Equals, 3213.0)
 }
@@ -112,7 +161,7 @@ func TestClient_KeyNotFound(t *testing.T) {
 	Bool("k1", false)
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(rootNodeWithKeyValue("k2", 3213))
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetIntValue("k1", 0, nil)
 	c.Assert(result, qt.Equals, 0)
 }
@@ -141,7 +190,7 @@ func TestClient_Get_IsOneOf_Does_Not_Use_Contains_Semantics(t *testing.T) {
 			},
 		},
 	})
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	matchingUser := &UserData{Identifier: "mple"}
 	result := client.GetBoolValue("feature", false, matchingUser)
@@ -171,7 +220,7 @@ func TestClient_Get_Latest(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213.0))
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	result := client.GetFloatValue("key", 0, nil)
 	c.Assert(result, qt.Equals, 3213.0)
@@ -194,7 +243,7 @@ func TestClient_Get_WithFailingCacheSet(t *testing.T) {
 	defer client.Close()
 
 	srv.setResponseJSON(rootNodeWithKeyValue("key", 3213.0))
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetFloatValue("key", 0, nil)
 	c.Assert(result, qt.Equals, 3213.0)
 }
@@ -211,7 +260,7 @@ func TestClient_Get_WithEmptyKey(t *testing.T) {
 	srv := newConfigServer(t)
 	srv.setResponseJSON(variationConfig)
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	c.Assert(client.GetBoolValue("", false, nil), qt.Equals, false)
 }
 
@@ -222,7 +271,7 @@ func TestClient_Keys(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	keys := client.GetAllKeys()
 	c.Assert(keys, qt.HasLen, 16)
@@ -235,7 +284,7 @@ func TestClient_AllValues(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	keys := client.GetAllValues(nil)
 	c.Assert(keys, qt.HasLen, 16)
@@ -245,7 +294,7 @@ func TestClient_VariationID(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(variationConfig)
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetBoolValueDetails("first", false, nil)
 	c.Assert(result.Data.VariationID, qt.Equals, "fakeIDFirst")
 }
@@ -254,7 +303,7 @@ func TestClient_VariationID_Default(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(variationConfig)
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetBoolValueDetails("nonexisting", false, nil)
 	c.Assert(result.Data.VariationID, qt.Equals, "")
 }
@@ -263,7 +312,7 @@ func TestClient_GetAllVariationIDs(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(variationConfig)
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetAllValueDetails(nil)
 	c.Assert(result, qt.HasLen, 2)
 }
@@ -272,7 +321,7 @@ func TestClient_VariationIDs_Empty(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponse(configResponse{body: `{ "f": {} }`})
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetAllValueDetails(nil)
 	c.Assert(result, qt.HasLen, 0)
 }
@@ -281,7 +330,7 @@ func TestClient_GetKeyAndValue(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(variationConfig)
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	key, value := client.GetKeyValueForVariationID("fakeIDSecond")
 	c.Assert(key, qt.Equals, "second")
 	c.Assert(value, qt.Equals, true)
@@ -291,7 +340,7 @@ func TestClient_GetKeyAndValue_Empty(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(variationConfig)
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	key, value := client.GetKeyValueForVariationID("nonexisting")
 	c.Assert(key, qt.Equals, "")
 	c.Assert(value, qt.Equals, nil)
@@ -310,14 +359,14 @@ func TestClient_GetWithRedirectSuccess(t *testing.T) {
 		},
 	})
 	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value"))
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value")
 	c.Assert(srv1.allResponses(), qt.HasLen, 1)
 	c.Assert(srv2.allResponses(), qt.HasLen, 1)
 
 	// Another request should go direct to the second server.
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	c.Assert(srv1.allResponses(), qt.HasLen, 1)
 	c.Assert(srv2.allResponses(), qt.HasLen, 2)
 }
@@ -341,7 +390,7 @@ func TestClient_GetWithDifferentURLAndNoRedirect(t *testing.T) {
 		},
 	})
 	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	// Check that the value still comes from the same server and
 	// that no requests were made to the second server.
@@ -370,7 +419,7 @@ func TestClient_GetWithRedirectToSameURL(t *testing.T) {
 		},
 	})
 	srv2.setResponseJSON(rootNodeWithKeyValue("key", "value2"))
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value1")
 
@@ -421,7 +470,7 @@ func TestClient_GetWithStandardURLAndShouldRedirect(t *testing.T) {
 		LogLevel:  LogLevelDebug,
 		Transport: transport,
 	})
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value")
 	c.Assert(transport.requests, qt.HasLen, 2)
@@ -453,13 +502,13 @@ func TestClient_GetWithStandardURLAndNoRedirect(t *testing.T) {
 		LogLevel:  LogLevelDebug,
 		Transport: transport,
 	})
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value1")
 
 	transport.enqueue(200, marshalJSON(rootNodeWithKeyValue("key", "value2")))
 	// The next request should go to the redirected server.
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	result = client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "value2")
@@ -487,7 +536,7 @@ func TestClient_GetWithRedirectLoop(t *testing.T) {
 			Redirect: &redirect,
 		},
 	})
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "default")
@@ -499,7 +548,7 @@ func TestClient_GetWithInvalidConfig(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponse(configResponse{body: "invalid-json"})
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetStringValue("key", "default", nil)
 	c.Assert(result, qt.Equals, "default")
 }
@@ -508,7 +557,7 @@ func TestClient_GetDetails_WithInvalidConfig(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponse(configResponse{body: "invalid-json"})
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	result := client.GetStringValueDetails("key", "default", nil)
 	_, ok := result.Data.Error.(ErrConfigJsonMissing)
 	c.Assert(ok, qt.IsTrue)
@@ -520,7 +569,7 @@ func TestClient_GetInt(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(rootNodeWithKeyValue("key", 99))
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	c.Check(client.GetIntValue("key", 0, nil), qt.Equals, 99)
 }
 
@@ -559,7 +608,7 @@ func TestClient_DefaultUser(t *testing.T) {
 			},
 		},
 	})
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	c.Check(client.GetStringValue("foo", "", nil), qt.Equals, "somewhere-match")
 
 	snap := client.Snapshot(nil)
@@ -582,13 +631,13 @@ func TestSnapshot_Get(t *testing.T) {
 	c := qt.New(t)
 	srv, client := getTestClients(t)
 	srv.setResponseJSON(rootNodeWithKeyValue("key", 99))
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	snap := client.Snapshot(nil)
 	c.Check(snap.GetValue("key"), qt.Equals, 99)
 	c.Check(snap.FetchTime(), qt.Not(qt.Equals), time.Time{})
 	srv.setResponseJSON(rootNodeWithKeyValue("key", 101))
 	time.Sleep(1 * time.Millisecond) // wait a bit to ensure fetch times don't collide
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 	c.Check(snap.GetValue("key"), qt.Equals, 99)
 	c.Check(client.Snapshot(nil).GetValue("key"), qt.Equals, 101)
 	c.Check(client.Snapshot(nil).FetchTime().After(snap.FetchTime()), qt.IsTrue)
@@ -601,7 +650,7 @@ func TestClient_GetBoolDetails(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
 
@@ -625,7 +674,7 @@ func TestClient_GetStringDetails(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
 
@@ -649,7 +698,7 @@ func TestClient_GetIntDetails(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	user := &UserData{Identifier: "a@configcat.com"}
 
@@ -670,7 +719,7 @@ func TestClient_GetFloatDetails(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
 
@@ -694,7 +743,7 @@ func TestClient_GetAllDetails(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	user := &UserData{Identifier: "a@configcat.com", Email: "a@configcat.com"}
 
@@ -710,10 +759,11 @@ func TestClient_GetBoolDetails_NotExist(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	details := client.GetBoolValueDetails("non-existent", false, nil)
-	_, ok := details.Data.Error.(ErrKeyNotFound)
+	var errKeyNotFound ErrKeyNotFound
+	ok := errors.As(details.Data.Error, &errKeyNotFound)
 	c.Assert(ok, qt.IsTrue)
 	c.Assert(details.Value, qt.IsFalse)
 }
@@ -725,10 +775,11 @@ func TestClient_GetStringDetails_NotExist(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	details := client.GetStringValueDetails("non-existent", "", nil)
-	_, ok := details.Data.Error.(ErrKeyNotFound)
+	var errKeyNotFound ErrKeyNotFound
+	ok := errors.As(details.Data.Error, &errKeyNotFound)
 	c.Assert(ok, qt.IsTrue)
 	c.Assert(details.Value, qt.Equals, "")
 }
@@ -740,10 +791,11 @@ func TestClient_GetIntDetails_NotExist(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	details := client.GetIntValueDetails("non-existent", 0, nil)
-	_, ok := details.Data.Error.(ErrKeyNotFound)
+	var errKeyNotFound ErrKeyNotFound
+	ok := errors.As(details.Data.Error, &errKeyNotFound)
 	c.Assert(ok, qt.IsTrue)
 	c.Assert(details.Value, qt.Equals, 0)
 }
@@ -755,10 +807,11 @@ func TestClient_GetFloatDetails_NotExist(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	details := client.GetFloatValueDetails("non-existent", 0, nil)
-	_, ok := details.Data.Error.(ErrKeyNotFound)
+	var errKeyNotFound ErrKeyNotFound
+	ok := errors.As(details.Data.Error, &errKeyNotFound)
 	c.Assert(ok, qt.IsTrue)
 	c.Assert(details.Value, qt.Equals, float64(0))
 }
@@ -770,10 +823,11 @@ func TestClient_GetBoolDetails_TypeMismatch(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	details := client.GetBoolValueDetails("integerDefaultOne", false, nil)
-	err, ok := details.Data.Error.(ErrSettingTypeMismatch)
+	var err ErrSettingTypeMismatch
+	ok := errors.As(details.Data.Error, &err)
 	c.Assert(ok, qt.IsTrue)
 	c.Assert(details.Value, qt.IsFalse)
 	c.Assert(err.Error(), qt.Equals, "the type of the setting 'integerDefaultOne' doesn't match with the expected type; setting's type was 'int' but the expected type was 'bool'")
@@ -786,10 +840,11 @@ func TestClient_GetStringDetails_TypeMismatch(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	details := client.GetStringValueDetails("integerDefaultOne", "", nil)
-	err, ok := details.Data.Error.(ErrSettingTypeMismatch)
+	var err ErrSettingTypeMismatch
+	ok := errors.As(details.Data.Error, &err)
 	c.Assert(ok, qt.IsTrue)
 	c.Assert(details.Value, qt.Equals, "")
 	c.Assert(err.Error(), qt.Equals, "the type of the setting 'integerDefaultOne' doesn't match with the expected type; setting's type was 'int' but the expected type was 'string'")
@@ -802,10 +857,11 @@ func TestClient_GetIntDetails_TypeMismatch(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	details := client.GetIntValueDetails("boolDefaultTrue", 0, nil)
-	err, ok := details.Data.Error.(ErrSettingTypeMismatch)
+	var err ErrSettingTypeMismatch
+	ok := errors.As(details.Data.Error, &err)
 	c.Assert(ok, qt.IsTrue)
 	c.Assert(details.Value, qt.Equals, 0)
 	c.Assert(err.Error(), qt.Equals, "the type of the setting 'boolDefaultTrue' doesn't match with the expected type; setting's type was 'bool' but the expected type was 'int'")
@@ -818,10 +874,11 @@ func TestClient_GetFloatDetails_TypeMismatch(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	details := client.GetFloatValueDetails("boolDefaultTrue", 0, nil)
-	err, ok := details.Data.Error.(ErrSettingTypeMismatch)
+	var err ErrSettingTypeMismatch
+	ok := errors.As(details.Data.Error, &err)
 	c.Assert(ok, qt.IsTrue)
 	c.Assert(details.Value, qt.Equals, float64(0))
 	c.Assert(err.Error(), qt.Equals, "the type of the setting 'boolDefaultTrue' doesn't match with the expected type; setting's type was 'bool' but the expected type was 'float'")
@@ -834,7 +891,7 @@ func TestClient_GetDetails_Reflected_User(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	user := &struct{ attr string }{"a"}
 
@@ -868,15 +925,13 @@ func TestClient_Hooks_OnFlagEvaluated(t *testing.T) {
 		called <- struct{}{}
 	}}
 	client := NewCustomClient(cfg)
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	_ = client.GetFloatValue("double25Pi25E25Gr25Zero", 0.0, user)
 
-	select {
-	case <-called:
-	case <-time.After(time.Second):
-		t.Fatalf("timed out")
-	}
+	WithTimeout(time.Second, func() {
+		<-called
+	})
 }
 
 func TestClient_Ready_Signal(t *testing.T) {
@@ -891,11 +946,9 @@ func TestClient_Ready_Signal(t *testing.T) {
 	cfg := srv.config()
 	client := NewCustomClient(cfg)
 
-	select {
-	case <-client.Ready():
-	case <-time.After(time.Second):
-		t.Fatalf("timed out")
-	}
+	WithTimeout(time.Second, func() {
+		<-client.Ready()
+	})
 
 	val := client.GetFloatValue("double25Pi25E25Gr25Zero", 0.0, user)
 	c.Assert(val, qt.Equals, 5.561)
@@ -914,11 +967,9 @@ func TestClient_Ready_Signal_NoWait(t *testing.T) {
 	cfg.NoWaitForRefresh = true
 	client := NewCustomClient(cfg)
 
-	select {
-	case <-client.Ready():
-	case <-time.After(time.Second):
-		t.Fatalf("timed out")
-	}
+	WithTimeout(time.Second, func() {
+		<-client.Ready()
+	})
 
 	val := client.GetFloatValue("double25Pi25E25Gr25Zero", 0.0, user)
 	c.Assert(val, qt.Equals, 5.561)
@@ -937,16 +988,14 @@ func TestClient_Ready_Signal_Manual(t *testing.T) {
 	cfg.PollingMode = Manual
 	client := NewCustomClient(cfg)
 
-	select {
-	case <-client.Ready():
-	case <-time.After(time.Second):
-		t.Fatalf("timed out")
-	}
+	WithTimeout(time.Second, func() {
+		<-client.Ready()
+	})
 
 	val := client.GetFloatValue("double25Pi25E25Gr25Zero", 0.0, user)
 	c.Assert(val, qt.Equals, 0.0)
 
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	val = client.GetFloatValue("double25Pi25E25Gr25Zero", 0.0, user)
 	c.Assert(val, qt.Equals, 5.561)
@@ -965,11 +1014,9 @@ func TestClient_Ready_Signal_Lazy(t *testing.T) {
 	cfg.PollingMode = Lazy
 	client := NewCustomClient(cfg)
 
-	select {
-	case <-client.Ready():
-	case <-time.After(time.Second):
-		t.Fatalf("timed out")
-	}
+	WithTimeout(time.Second, func() {
+		<-client.Ready()
+	})
 
 	val := client.GetFloatValue("double25Pi25E25Gr25Zero", 0.0, user)
 	c.Assert(val, qt.Equals, 5.561)
@@ -984,18 +1031,18 @@ func TestClient_InitOffline(t *testing.T) {
 	config := srv.config()
 	config.Offline = true
 	client := NewCustomClient(config)
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	c.Assert(client.IsOffline(), qt.IsTrue)
 
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	c.Assert(srv.requestCount, qt.Equals, 0)
 
 	client.SetOnline()
 	c.Assert(client.IsOffline(), qt.IsFalse)
 
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	c.Assert(srv.requestCount, qt.Equals, 1)
 }
@@ -1007,7 +1054,7 @@ func TestClient_OfflineOnlineMode(t *testing.T) {
 		body: contentForIntegrationTestKey("PKDVCLf-Hq-h-kCzMp-L7Q/psuH7BGHoUmdONrzzUOY7A"),
 	})
 	client := NewCustomClient(srv.config())
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	c.Assert(srv.requestCount, qt.Equals, 1)
 	c.Assert(client.IsOffline(), qt.IsFalse)
@@ -1015,14 +1062,14 @@ func TestClient_OfflineOnlineMode(t *testing.T) {
 	client.SetOffline()
 	c.Assert(client.IsOffline(), qt.IsTrue)
 
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	c.Assert(srv.requestCount, qt.Equals, 1)
 
 	client.SetOnline()
 	c.Assert(client.IsOffline(), qt.IsFalse)
 
-	client.Refresh(context.Background())
+	_ = client.Refresh(context.Background())
 
 	c.Assert(srv.requestCount, qt.Equals, 2)
 }
@@ -1160,4 +1207,38 @@ func (m *mockHTTPTransport) enqueue(statusCode int, body string) {
 		StatusCode: statusCode,
 		Body:       ioutil.NopCloser(strings.NewReader(body)),
 	})
+}
+
+func WaitUntil(timeout time.Duration, f func() bool) {
+	t := time.After(timeout)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		for {
+			select {
+			case <-t:
+				panic("timeout expired")
+			default:
+				if f() {
+					wg.Done()
+					return
+				}
+			}
+		}
+	}()
+	wg.Wait()
+}
+
+func WithTimeout(timeout time.Duration, f func()) {
+	t := time.After(timeout)
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-t:
+			panic("timeout expired")
+		case <-done:
+		}
+	}()
+	f()
+	done <- struct{}{}
 }

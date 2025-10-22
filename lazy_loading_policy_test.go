@@ -85,7 +85,7 @@ func TestLazyLoadingPolicy_NotModified(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
 	srv.setResponse(configResponse{
-		body:  `{"test":1}`,
+		body:  `{"f":{}}`,
 		sleep: time.Millisecond,
 	})
 
@@ -95,14 +95,14 @@ func TestLazyLoadingPolicy_NotModified(t *testing.T) {
 	client := NewCustomClient(cfg)
 	defer client.Close()
 
-	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"f":{}}`)
 	time.Sleep(20 * time.Millisecond)
 
-	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"test":1}`)
+	c.Assert(string(client.Snapshot(nil).config.jsonBody), qt.Equals, `{"f":{}}`)
 
 	c.Assert(srv.allResponses(), deepEquals, []configResponse{{
 		status: http.StatusOK,
-		body:   `{"test":1}`,
+		body:   `{"f":{}}`,
 		sleep:  time.Millisecond,
 	}, {
 		status: http.StatusNotModified,
