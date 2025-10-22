@@ -433,7 +433,7 @@ func (f *configFetcher) fetchHTTPWithoutRedirect(ctx context.Context, baseURL st
 		return nil, nil
 	}
 
-	if response.StatusCode == 200 {
+	if response.StatusCode == http.StatusOK {
 		body, err := io.ReadAll(response.Body)
 		if err != nil {
 			return nil, &fetcherError{EventId: 1103, Err: fmt.Errorf("unexpected error occurred while trying to fetch config JSON; it is most likely due to a local network issue; please make sure your application can reach the ConfigCat CDN servers (or your proxy server) over HTTP: %v", err)}
