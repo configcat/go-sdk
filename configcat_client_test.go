@@ -238,6 +238,7 @@ func TestClient_Get_WithFailingCacheSet(t *testing.T) {
 	c := qt.New(t)
 	srv := newConfigServer(t)
 	cfg := srv.config()
+	cfg.PollingMode = Manual
 	cfg.Cache = failingCache{}
 	client := NewCustomClient(cfg)
 	defer client.Close()
